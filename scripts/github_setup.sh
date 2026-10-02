@@ -1,28 +1,27 @@
 #!/usr/bin/env bash
-# Tworzy repozytorium IRIS na GitHubie, kamienie milowe M0–M5 i zadania.
-# Uruchomić raz, z katalogu głównego iris/. Wymaga GitHub CLI (gh) zalogowanego: gh auth login
-# Użycie:  ./scripts/github_setup.sh [nazwa] [private|public]
-# Tablica GitHub Projects (opcjonalnie): CREATE_PROJECT=1 ./scripts/github_setup.sh
-#   wymaga zakresu: gh auth refresh -s project
+# Tworzy w istniejącym repozytorium etykiety, kamienie milowe M0–M5 i zadania.
+# Używa wyłącznie REST API (gh api); GraphQL (gh issue, gh project) jest niedostępny w sesjach Claude Code.
+# Uruchomić raz, z katalogu głównego repozytorium (remote origin wskazuje repozytorium docelowe).
+# Tablicy GitHub Projects nie tworzy; trzeba ją założyć ręcznie.
 set -euo pipefail
 
-REPO_NAME="${1:-iris}"
-VISIBILITY="${2:-private}"
-CREATE_PROJECT="${CREATE_PROJECT:-0}"
-
-gh auth status >/dev/null
+gh api user >/dev/null
 
 # 1. Repozytorium istnieje (remote origin); tworzenie repozytorium pominięte.
 
 # 2. Etykiety
-gh label create firmware   --color 0E8A16 --description "STM32L476"            --force
-gh label create host       --color 1D76DB --description "IRIS Core, Python"    --force
-gh label create weryfikacja --color FBCA04 --description "Pomiar lub test decyzji" --force
-gh label create decyzja    --color D93F0B --description "Kwestia otwarta"      --force
+label() {  # nazwa, kolor, opis
+  gh api "repos/{owner}/{repo}/labels" -f name="$1" -f color="$2" -f description="$3" >/dev/null
+}
+label firmware 0E8A16 "STM32L476"
+label host 1D76DB "IRIS Core, Python"
+label weryfikacja FBCA04 "Pomiar lub test decyzji"
+label decyzja D93F0B "Kwestia otwarta"
 
 # 3. Kamienie milowe
+declare -A MILESTONE_NUM
 milestone() {
-  gh api "repos/{owner}/{repo}/milestones" -f title="$1" -f description="$2" >/dev/null
+  MILESTONE_NUM["$1"]=$(gh api "repos/{owner}/{repo}/milestones" -f title="$1" -f description="$2" --jq .number)
 }
 milestone "M0 Czat tekstowy"     "OpenJarvis lokalnie, silnik Claude, czat po polsku"
 milestone "M1 Głos na hoście"     "Mikrofon laptopa, VAD, STT, agent, TTS; pomiar IR-02 i IR-04"
@@ -32,12 +31,9 @@ milestone "M4 Wybudzanie i tryb lokalny" "DF2301Q, komendy lokalne, heartbeat, m
 milestone "M5 Narzędzia"          "Czujniki, dom, przypomnienia, kalendarz"
 
 # 4. Zadania
-ISSUE_URLS=()
 issue() {  # tytuł, kamień milowy, etykieta, treść
-  local url
-  url=$(gh issue create --title "$1" --milestone "$2" --label "$3" --body "$4")
-  ISSUE_URLS+=("$url")
-  echo "$url"
+  gh api "repos/{owner}/{repo}/issues" -f title="$1" -F milestone="${MILESTONE_NUM[$2]}" \
+    -f "labels[]=$3" -f body="$4" --jq .html_url
 }
 
 issue "Uruchomić OpenJarvis lokalnie" "M0 Czat tekstowy" host \
@@ -92,12 +88,6 @@ issue "home_set z potwierdzeniem dla urządzeń o skutkach fizycznych" "M5 Narz�
   "IR-08."
 issue "Przypomnienia i kalendarz (scheduler, gcalendar)" "M5 Narzędzia" host ""
 
-# 5. Tablica GitHub Projects (opcjonalnie)
-if [ "$CREATE_PROJECT" = "1" ]; then
-  NUM=$(gh project create --owner "@me" --title "IRIS" --format json --jq .number)
-  gh project link "$NUM" --owner "@me" --repo "$REPO_NAME"
-  for url in "${ISSUE_URLS[@]}"; do
-    gh project item-add "$NUM" --owner "@me" --url "$url" >/dev/null
-  done
-  echo "Tablica IRIS: projekt nr $NUM"
-fi
+# 5. Podsumowanie
+gh api "repos/{owner}/{repo}/milestones?state=all" \
+  --jq '.[] | "\(.title): \(.open_issues) zadań"'
