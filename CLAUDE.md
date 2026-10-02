@@ -30,7 +30,13 @@ python3 host/iris_protocol.py      # test protokołu, oczekiwany wynik: OK
 gh issue list --milestone "M0 Czat tekstowy"
 ```
 
-Polecenia hosta (OpenJarvis) i firmware (STM32CubeIDE lub CMake z arm-none-eabi-gcc) uzupełnij tutaj, gdy powstaną odpowiednie katalogi.
+```bash
+# OpenJarvis (poza repozytorium): ~/src/OpenJarvis; po każdym `uv sync` zbuduj ponownie rozszerzenie Rust
+cd ~/src/OpenJarvis && uv run maturin develop -m rust/crates/openjarvis-python/Cargo.toml
+bash host/tests/run_pl_questions.sh   # 20 pytań M0 przez `jarvis ask`; wymaga ANTHROPIC_API_KEY w .env
+```
+
+Polecenia firmware (STM32CubeIDE lub CMake z arm-none-eabi-gcc) uzupełnij tutaj, gdy powstanie katalog firmware.
 
 ## Stan
 
