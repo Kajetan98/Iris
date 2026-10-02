@@ -1,0 +1,17 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+.env
+# dane lokalne hosta
+*.sqlite
+*.db
+recordings/
+# STM32CubeIDE / build
+Debug/
+Release/
+build/
+*.elf
+*.bin
+*.hex
+*.map
