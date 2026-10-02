@@ -12,14 +12,7 @@ CREATE_PROJECT="${CREATE_PROJECT:-0}"
 
 gh auth status >/dev/null
 
-# 1. Repozytorium i pierwszy commit
-if [ ! -d .git ]; then
-  git init -b main
-fi
-git add .
-git diff --cached --quiet || git commit -m "IRIS: specyfikacja v2, protokół ramek v1, rejestr decyzji"
-gh repo create "$REPO_NAME" "--$VISIBILITY" --source=. --remote=origin --push \
-  --description "IRIS: osobisty asystent głosowy po polsku (HERMES + IRIS Core)"
+# 1. Repozytorium istnieje (remote origin); tworzenie repozytorium pominięte.
 
 # 2. Etykiety
 gh label create firmware   --color 0E8A16 --description "STM32L476"            --force
@@ -108,5 +101,3 @@ if [ "$CREATE_PROJECT" = "1" ]; then
   done
   echo "Tablica IRIS: projekt nr $NUM"
 fi
-
-gh repo view --web
