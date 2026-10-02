@@ -24,7 +24,7 @@ iris/
 
 | Etap | Zakres | Sprzęt |
 |---|---|---|
-| M0 | Czat tekstowy po polsku: OpenJarvis z silnikiem Claude | nie |
+| M0 | Czat tekstowy po polsku: OpenJarvis z lokalnym modelem open source (Ollama) | nie |
 | M1 | Pełna ścieżka głosowa na hoście: mikrofon laptopa, VAD, STT, agent, TTS | nie |
 | M2 | Bramka iris-gateway i protokół ramek, symulator HERMES w Pythonie | nie |
 | M3 | Firmware: nagrywanie INMP441, odtwarzanie MAX98357A, transmisja przez ESP8266 | tak |
@@ -37,7 +37,7 @@ Szczegóły i kryteria ukończenia: [docs/spec.md](docs/spec.md), rozdział 13.
 
 - [OpenJarvis](https://github.com/open-jarvis/OpenJarvis), Apache 2.0
 - faster-whisper (STT), Piper (TTS, głosy polskie)
-- Claude API lub Ollama (LLM)
+- Ollama (MIT) z modelem open source: Bielik lub Qwen3 (LLM), zob. D-010
 
 ## Licencja
 

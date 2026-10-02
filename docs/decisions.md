@@ -55,3 +55,16 @@ Synchronizacja otwartej bazy SQLite między urządzeniami grozi jej uszkodzeniem
 Status: przyjęta.
 
 Funkcje IRIS nie mogą wpływać na alarmy fizjologiczne ani na kanał bezpieczeństwa opisany w dokumentacji HERMES rev B.
+
+## D-010. Lokalny model open source przez Ollama zamiast Claude API
+
+Status: przyjęta dla silnika; wybór modelu do weryfikacji (test 20 pytań w M0). Zastępuje ustalenie "Claude jako LLM" z wersji 2 specyfikacji.
+
+Silnik: Ollama (licencja MIT), w OpenJarvis `engine/ollama.py`, komunikacja przez `/api/chat` pod `http://localhost:11434` (lub `OLLAMA_HOST`). Nie wymaga klucza API ani opłat; dane rozmów nie opuszczają hosta.
+
+Kandydaci na model:
+
+- Bielik 11B Instruct (SpeakLeash), Apache 2.0, trenowany z naciskiem na język polski,
+- Qwen3 8B (Alibaba), Apache 2.0, model wielojęzyczny z obsługą wywołań narzędzi.
+
+Wybór rozstrzyga ten sam zbiór 20 pytań (`host/tests/pl_questions.md`) uruchomiony dla obu modeli. Ryzyko: modele tej wielkości wymagają ok. 6–8 GB pamięci przy kwantyzacji 4-bitowej (wartość szacunkowa, do pomiaru); na RPi 5 opóźnienie może przekroczyć IR-02. Pomiar w M1.

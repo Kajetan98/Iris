@@ -53,7 +53,7 @@ HERMES (STM32L476)                              HOST (IRIS Core)
 | DFPlayer: dźwięki systemowe |                 |        |                       |
 | Czujniki (I2C, UART, SPI)   |                 |   OpenJarvis: agent            |
 | GPIO / przekaźniki          |                 |     orchestrator + narzędzia   |
-| Heartbeat, tryb awaryjny    |                 |     silnik: Claude / Ollama    |
+| Heartbeat, tryb awaryjny    |                 |     silnik: Ollama (lokalny)   |
 +-----------------------------+                 |     pamięć: SQLite             |
                                                 |        |                       |
                                                 |   Piper (TTS, pl_PL)           |
@@ -108,7 +108,7 @@ Brak trzech kolejnych odpowiedzi na `HEARTBEAT` (interwał 1 s) oznacza utratę 
 |---|---|---|
 | Wykrycie końca wypowiedzi (VAD) | 0,5–0,8 s | Parametr ciszy kończącej |
 | STT (faster-whisper, model small) | 0,5–1,5 s | Silnie zależy od CPU/GPU hosta; do zmierzenia na RPi 5 i laptopie |
-| LLM do pierwszego zdania | 0,5–1,5 s | Zależy od modelu i obciążenia API |
+| LLM do pierwszego zdania | 0,5–1,5 s | Lokalny model przez Ollama; zależy od rozmiaru modelu i CPU/GPU hosta (D-010) |
 | TTS pierwszego zdania (Piper) | 0,1–0,4 s | |
 | Transmisja i start odtwarzania | 0,1–0,2 s | |
 | Razem | 1,7–4,4 s | Górna granica przekracza IR-02; decyduje wybór modelu STT i hosta |
@@ -143,7 +143,7 @@ Do sprawdzenia w projekcie płytki:
 | VAD | webrtcvad | Do integracji |
 | STT | faster-whisper (`openjarvis/speech/faster_whisper.py`) | Do testu jakości PL |
 | Agent i narzędzia | OpenJarvis `orchestrator` | Do testu z polskimi poleceniami |
-| LLM | Claude przez `engine/cloud.py` lub `engine/litellm.py`; Ollama jako zapas | Do konfiguracji |
+| LLM | Model open source przez Ollama (`engine/ollama.py`), D-010 | Do wyboru modelu (test 20 pytań) |
 | Pamięć | OpenJarvis `memory/` na SQLite | Do oceny |
 | Przypomnienia | OpenJarvis `scheduler/` | Do oceny |
 | Kalendarz | OpenJarvis `connectors/gcalendar` | Do oceny |
@@ -169,7 +169,7 @@ Backend domu (Home Assistant REST API albo bezpośrednio MQTT/Tasmota) jest kwes
 
 ## 10. Prywatność i bezpieczeństwo
 
-- Do chmurowego LLM trafia transkrypcja, historia sesji i wyniki wywołanych narzędzi. Audio nie opuszcza hosta.
+- LLM działa lokalnie przez Ollama (D-010): audio, transkrypcja, historia sesji i wyniki narzędzi nie opuszczają hosta.
 - Odczyty fizjologiczne (tętno, SpO₂) są danymi o zdrowiu; obowiązuje IR-09.
 - Bramka przyjmuje połączenia tylko z sieci lokalnej; parowanie HERMES z hostem kluczem wspólnym zapisanym w obu urządzeniach (wymiana `HELLO` z HMAC, zob. [protocol.md](protocol.md)).
 - Narzędzia z efektem fizycznym mają listę dozwolonych urządzeń; agent nie może wywołać akcji na urządzeniu spoza listy.
@@ -192,7 +192,7 @@ Jeśli IRIS miałby działać na sprzęcie rev B:
 2. Słowo budzące: wynik testu DF2301Q (IR-01) decyduje, czy potrzebny jest model KWS na MCU.
 3. TTS: wybór po teście odsłuchowym Piper, Kokoro-PL i jednej usługi chmurowej.
 4. Host minimalny: czy RPi 5 spełnia IR-02 z faster-whisper small.
-5. Model LLM i koszt miesięczny przy typowym użyciu.
+5. Model LLM: Bielik czy Qwen3 (D-010) oraz minimalny sprzęt hosta, na którym spełnia IR-02.
 6. FreeRTOS czy pętla z przerwaniami w firmware.
 7. Rozwinięcie nazwy IRIS.
 
@@ -200,7 +200,7 @@ Jeśli IRIS miałby działać na sprzęcie rev B:
 
 | Etap | Zakres | Kryterium ukończenia |
 |---|---|---|
-| M0 | OpenJarvis lokalnie, silnik Claude, czat tekstowy PL | 20 pytań testowych po polsku obsłużonych przez `jarvis ask` |
+| M0 | OpenJarvis lokalnie, silnik Ollama z modelem open source, czat tekstowy PL | 20 pytań testowych po polsku obsłużonych przez `jarvis ask` |
 | M1 | Mikrofon laptopa, webrtcvad, faster-whisper, agent, Piper | Pomiar IR-02 i IR-04 na hoście |
 | M2 | `iris-gateway`, protokół v1, symulator HERMES w Pythonie odtwarzający pliki WAV | Rozmowa przez symulator; poprawna reakcja na ramki z błędnym CRC i utratę połączenia |
 | M3 | Firmware: SAI + DMA, ADPCM, ESP8266 TCP, odtwarzanie TTS | Rozmowa przez HERMES z przyciskiem zamiast słowa budzącego |

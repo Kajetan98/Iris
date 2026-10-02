@@ -3,7 +3,7 @@
 Python 3.10+. Składa się z:
 
 - `iris-gateway`: serwer TCP przyjmujący ramki z HERMES, dekodujący audio i przekazujący je do potoku STT -> agent -> TTS,
-- konfiguracji OpenJarvis (silnik Claude, Ollama jako zapas),
+- konfiguracji OpenJarvis (silnik Ollama z lokalnym modelem open source, D-010),
 - własnych narzędzi agenta (`hermes_device_*`, dom, przypomnienia).
 
 Gotowe: `iris_protocol.py` (koder, dekoder strumieniowy z resynchronizacją, test: `python3 iris_protocol.py`).
