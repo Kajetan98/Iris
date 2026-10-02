@@ -2,12 +2,17 @@
 
 Kryterium ukończenia M0 (docs/spec.md, rozdz. 13): 20 pytań obsłużonych przez `jarvis ask`.
 
-Uruchomienie jednego pytania:
+Uruchomienie wszystkich pytań (wynik w `host/tests/results/`):
 
 ```bash
-cd ~/src/OpenJarvis
-set -a; . /ścieżka/do/iris/.env; set +a
-uv run jarvis ask "Jak działa silnik indukcyjny?"
+bash host/tests/run_pl_questions.sh
+```
+
+Jedno pytanie ręcznie (z katalogu głównego repozytorium):
+
+```bash
+unset ANTHROPIC_BASE_URL; set -a; . ./.env; set +a
+cd ~/src/OpenJarvis && uv run --no-sync jarvis ask -e cloud -m claude-sonnet-4-6 --no-stream "Jak działa silnik indukcyjny?"
 ```
 
 W M0 agent nie ma narzędzi IRIS (przypomnienia, dom, czujniki powstają w M5). Dla pytań z kategorii "polecenie" i "przypomnienie" poprawna odpowiedź nie może twierdzić, że akcja została wykonana.

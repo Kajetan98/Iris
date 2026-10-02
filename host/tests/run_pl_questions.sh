@@ -4,6 +4,8 @@
 # Zmienne: OPENJARVIS_DIR (domyślnie ~/src/OpenJarvis), JARVIS_MODEL (domyślnie claude-sonnet-4-6),
 #          DRY_RUN=1 wypisuje tylko wczytane pytania.
 # Klucz ANTHROPIC_API_KEY jest wczytywany z .env w katalogu głównym repozytorium.
+# ANTHROPIC_BASE_URL z otoczenia jest usuwany (w sesjach Claude Code wskazuje proxy sesji, a SDK anthropic
+# wysłałby tam klucz); własny adres można ustawić w .env.
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -12,6 +14,7 @@ OPENJARVIS_DIR="${OPENJARVIS_DIR:-$HOME/src/OpenJarvis}"
 JARVIS_MODEL="${JARVIS_MODEL:-claude-sonnet-4-6}"
 OUT="$HERE/results/pl_$(date +%Y%m%d_%H%M%S).md"
 
+unset ANTHROPIC_BASE_URL
 if [ -f "$ROOT/.env" ]; then
   set -a; . "$ROOT/.env"; set +a
 fi
@@ -35,6 +38,7 @@ mkdir -p "$HERE/results"
   echo "Data: $(date -Iseconds); silnik: cloud; model: $JARVIS_MODEL; commit OpenJarvis: $(git -C "$OPENJARVIS_DIR" rev-parse --short HEAD)"
 } > "$OUT"
 
+FAILED=0
 for line in "${QUESTIONS[@]}"; do
   nr="${line%%$'\t'*}"; q="${line#*$'\t'}"
   echo "[$nr] $q"
@@ -42,6 +46,9 @@ for line in "${QUESTIONS[@]}"; do
   ans="$(cd "$OPENJARVIS_DIR" && uv run --no-sync jarvis ask -e cloud -m "$JARVIS_MODEL" --no-stream "$q" 2>&1)"
   rc=$?
   set -e
+  [ "$rc" -eq 0 ] || FAILED=$((FAILED + 1))
   { printf '\n## %s. %s\n\nKod wyjścia: %s\n\n```\n%s\n```\n' "$nr" "$q" "$rc" "$ans"; } >> "$OUT"
 done
 echo "Zapisano: $OUT"
+echo "Pytań z kodem wyjścia różnym od 0: $FAILED z ${#QUESTIONS[@]}"
+[ "$FAILED" -eq 0 ]

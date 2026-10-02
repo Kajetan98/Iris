@@ -40,5 +40,5 @@ Polecenia firmware (STM32CubeIDE lub CMake z arm-none-eabi-gcc) uzupełnij tutaj
 
 ## Stan
 
-Zrobione: specyfikacja v2, protokół ramek v1 z testem, rejestr decyzji.
-Następne: M0 (OpenJarvis lokalnie, silnik Claude, 20 pytań testowych po polsku).
+Zrobione: specyfikacja v2, protokół ramek v1 z testem, rejestr decyzji. Kamienie milowe M0–M5 i 25 zadań w GitHub Issues (#1–#25).
+M0 w toku: OpenJarvis zainstalowany (`jarvis doctor` bez błędów), 20 pytań w `host/tests/pl_questions.md`, skrypt `host/tests/run_pl_questions.sh` sprawdzony do etapu uwierzytelnienia w API. Brakuje uruchomienia z prawdziwym `ANTHROPIC_API_KEY` (#2, #3).
