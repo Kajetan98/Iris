@@ -217,6 +217,15 @@ Reguły:
 - Wycinek stanu nie zawiera odczytów `gps`, `imu` ani `presence` (sekcja 7), więc nie trafiają one do żadnego silnika.
 - Fakty (sekcja 9) trafiają do kontekstu według `send_facts`: `never` (nigdy), `local_only` (tylko do silnika lokalnego, wartość początkowa), `always`. Fakty `inferred` poniżej `min_inferred_confidence` (0,5) są pomijane, pozostałe oznaczane jako przypuszczenie. W kontekście jest najwyżej `max_facts` (30) faktów, najpierw `stated`.
 - Silnik jest lokalny, gdy jego adres wskazuje na pętlę zwrotną (`localhost`, `127.0.0.1`, `::1`). Każdy inny adres, w tym sieć lokalna, liczy się jako zdalny.
+
+Silnik Claude API (`brain.llm.engine = "claude"`):
+
+- Dane trafiają do chmury Anthropic, więc silnik jest zdalny: fakty obowiązują według `send_facts`, a do żądania trafia dokładnie to, co wymienia ta sekcja (prompt, historia, blok kontekstu, wypowiedź). Odczyty `gps`, `imu` i `presence` nigdy nie opuszczają hosta.
+- Klucz API pochodzi ze zmiennych środowiskowych SDK (`ANTHROPIC_API_KEY`) i nie jest zapisywany w konfiguracji ani w logach. Brak klucza to błąd konfiguracji silnika.
+- Model domyślny to `claude-opus-5-5`; można go zmienić w `model`. Żądanie nie zawiera `temperature`, `top_p` ani `top_k` (API od 2026-10-21 je odrzuca), dlatego `temperature` w konfiguracji tego silnika jest błędem.
+- `effort` (domyślnie `low`, wartość `off` pomija parametr) steruje głębokością myślenia i opóźnieniem odpowiedzi. Tokeny myślenia liczą się do limitu odpowiedzi, więc do `max_tokens` dodawany jest zapas `thinking_headroom_tokens` (2000).
+- Dla modeli z serwerowym zapasem (`claude-fable-5-1`, `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5-5`) żądanie zawiera `fallbacks: "default"`: odmowa klasyfikatora bezpieczeństwa jest powtarzana po stronie serwera na modelu zapasowym (`fallbacks = false` to wyłącza). Odmowa, która przetrwa, kończy się błędem silnika (`POST /chat`: 422).
+- Ponowienia i limity czasu obsługuje SDK (`retries`, `timeout_s`). Błędy 429, 5xx, przeciążenie, brak połączenia i przekroczony czas to silnik niedostępny. Błędy klucza, uprawnień i nieznanego modelu to błąd konfiguracji silnika, a pozostałe odpowiedzi 4xx to zwykły błąd silnika.
 - Odpowiedź jest czytana na głos, więc z tekstu usuwane są znaczniki markdown i podziały wierszy.
 - Błąd silnika (brak połączenia, limit czasu, odmowa) jest zgłaszany wywołującemu, a historia rozmowy pozostaje bez zmian. Rdzeń, API i baza działają dalej.
 
@@ -231,4 +240,3 @@ Reguły:
 - Czy `battery_critical` może omijać limit inicjatywy.
 - Retencja i usuwanie zdarzeń, w tym zapisanych odczytów `gps` i `imu`.
 - Uwierzytelnianie API i WebSocket (ciało łączy się przez sieć, więc host będzie musiał nasłuchiwać poza 127.0.0.1).
-- Silnik Claude API (wymaga zgody na zależność `anthropic`; modele Claude odrzucają `temperature`).

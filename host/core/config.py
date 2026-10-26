@@ -92,10 +92,13 @@ class ApiConfig(_Model):
     ack_timeout_s: float = Field(2.0, gt=0)
 
 
+DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
+
+
 class LLMConfig(_Model):
-    engine: Literal["none", "ollama"] = "none"
-    model: str | None = None
-    base_url: str = "http://localhost:11434"
+    engine: Literal["none", "ollama", "claude"] = "none"
+    model: str | None = None  # dla claude domyślnie claude-opus-5-5
+    base_url: str | None = None  # domyślnie http://localhost:11434 dla ollama, adres API dla claude
     max_tokens: int = Field(300, gt=0)
     temperature: float | None = Field(None, ge=0, le=2)
     timeout_s: float = Field(30.0, gt=0)
@@ -104,10 +107,19 @@ class LLMConfig(_Model):
     send_facts: Literal["always", "local_only", "never"] = "local_only"
     max_facts: int = Field(30, ge=0)
     min_inferred_confidence: float = Field(0.5, ge=0, le=1)
+    # Tylko claude:
+    effort: Literal["off", "low", "medium", "high", "xhigh", "max"] = "low"  # off = bez parametru
+    thinking_headroom_tokens: int = Field(2000, ge=0)
+    fallbacks: bool = True
 
     @model_validator(mode="after")
-    def _model_required(self) -> "LLMConfig":
-        if self.engine != "none" and not self.model:
+    def _engine_settings(self) -> "LLMConfig":
+        if self.engine == "claude":
+            if self.temperature is not None:
+                raise ValueError("Claude API nie przyjmuje temperature")
+            if not self.model:
+                self.model = DEFAULT_CLAUDE_MODEL
+        elif self.engine != "none" and not self.model:
             raise ValueError("engine wymaga ustawienia model")
         return self
 

@@ -57,10 +57,23 @@ def build_engine(cfg: LLMConfig) -> LLMEngine | None:
         assert cfg.model is not None  # gwarantuje walidator LLMConfig
         return OllamaEngine(
             cfg.model,
-            base_url=cfg.base_url,
+            base_url=cfg.base_url or "http://localhost:11434",
             timeout_s=cfg.timeout_s,
             retries=cfg.retries,
             temperature=cfg.temperature,
+        )
+    if cfg.engine == "claude":
+        from host.brain.claude import ClaudeEngine
+
+        assert cfg.model is not None  # walidator LLMConfig ustawia model domyślny
+        return ClaudeEngine(
+            cfg.model,
+            base_url=cfg.base_url,
+            timeout_s=cfg.timeout_s,
+            retries=cfg.retries,
+            effort=cfg.effort,
+            fallbacks=cfg.fallbacks,
+            thinking_headroom_tokens=cfg.thinking_headroom_tokens,
         )
     raise LLMConfigError(f"nieznany silnik LLM: {cfg.engine!r}")
 
