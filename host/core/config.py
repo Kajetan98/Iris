@@ -92,6 +92,30 @@ class ApiConfig(_Model):
     ack_timeout_s: float = Field(2.0, gt=0)
 
 
+class LLMConfig(_Model):
+    engine: Literal["none", "ollama"] = "none"
+    model: str | None = None
+    base_url: str = "http://localhost:11434"
+    max_tokens: int = Field(300, gt=0)
+    temperature: float | None = Field(None, ge=0, le=2)
+    timeout_s: float = Field(30.0, gt=0)
+    retries: int = Field(1, ge=0, le=5)
+    history_turns: int = Field(10, ge=0)
+    send_facts: Literal["always", "local_only", "never"] = "local_only"
+    max_facts: int = Field(30, ge=0)
+    min_inferred_confidence: float = Field(0.5, ge=0, le=1)
+
+    @model_validator(mode="after")
+    def _model_required(self) -> "LLMConfig":
+        if self.engine != "none" and not self.model:
+            raise ValueError("engine wymaga ustawienia model")
+        return self
+
+
+class BrainConfig(_Model):
+    llm: LLMConfig = LLMConfig()
+
+
 class Config(_Model):
     name: str = "IRIS"
     version: str = "0.1.0"
@@ -103,6 +127,7 @@ class Config(_Model):
     prompt: PromptConfig = PromptConfig()
     store: StoreConfig = StoreConfig()
     api: ApiConfig = ApiConfig()
+    brain: BrainConfig = BrainConfig()
 
     @classmethod
     def load(cls, path: str | Path) -> "Config":

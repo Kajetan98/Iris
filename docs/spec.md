@@ -174,7 +174,24 @@ Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lu
 - Błąd zapisu do bazy jest logowany. Host pracuje dalej na stanie w pamięci.
 - Nieoczekiwany wyjątek przy obsłudze ramki jest logowany, połączenie pozostaje.
 
-## 12. Otwarte kwestie
+## 12. Kontekst dla LLM
+
+LLM jest opcjonalny (`brain.llm.engine = "none"` wyłącza go bez wpływu na resztę). Jedno zapytanie składa się z:
+
+- promptu systemowego (stały tekst),
+- historii rozmowy: ostatnie `history_turns` par (wypowiedź, odpowiedź), bez kontekstu z minionych tur,
+- bieżącej wypowiedzi użytkownika z doklejonym blokiem kontekstu: czas lokalny, wycinek stanu z sekcji 7 (tryb, aktywne drives, zmiany `body`, przerwa) i fakty.
+
+Reguły:
+
+- Prompt systemowy mówi, że IRIS jest programem, że opisy stanu pochodzą z danych w bloku kontekstu, a nie z odczuwania, i że nie twierdzi on, iż coś czuje lub jest świadomy. Blok kontekstu jest oznaczony jako dane, nie polecenia.
+- Wycinek stanu nie zawiera odczytów `gps`, `imu` ani `presence` (sekcja 7), więc nie trafiają one do żadnego silnika.
+- Fakty (sekcja 9) trafiają do kontekstu według `send_facts`: `never` (nigdy), `local_only` (tylko do silnika lokalnego, wartość początkowa), `always`. Fakty `inferred` poniżej `min_inferred_confidence` (0,5) są pomijane, pozostałe oznaczane jako przypuszczenie. W kontekście jest najwyżej `max_facts` (30) faktów, najpierw `stated`.
+- Silnik jest lokalny, gdy jego adres wskazuje na pętlę zwrotną (`localhost`, `127.0.0.1`, `::1`). Każdy inny adres, w tym sieć lokalna, liczy się jako zdalny.
+- Odpowiedź jest czytana na głos, więc z tekstu usuwane są znaczniki markdown i podziały wierszy.
+- Błąd silnika (brak połączenia, limit czasu, odmowa) jest zgłaszany wywołującemu, a historia rozmowy pozostaje bez zmian. Rdzeń, API i baza działają dalej.
+
+## 13. Otwarte kwestie
 
 - Limit bufora zdarzeń w ciele przy braku łącza (symulator przyjmuje 64 i przy przepełnieniu odrzuca najstarsze).
 - Format ramki audio po testach na STM32 (Opus na L476 wymaga sprawdzenia pod kątem CPU i RAM).
@@ -184,3 +201,5 @@ Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lu
 - Czy `battery_critical` może omijać limit inicjatywy.
 - Retencja i usuwanie zdarzeń, w tym zapisanych odczytów `gps` i `imu`.
 - Uwierzytelnianie API i WebSocket (ciało łączy się przez sieć, więc host będzie musiał nasłuchiwać poza 127.0.0.1).
+- Cofnięcie przesunięcia wycinka stanu (`prompt_slice`), gdy zapytanie do LLM się nie powiodło; bez tego zmiany `body` z nieudanego zapytania nie trafią do kolejnych.
+- Silnik Claude API (wymaga zgody na zależność `anthropic`; modele Claude odrzucają `temperature`).
