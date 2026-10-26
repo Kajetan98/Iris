@@ -80,6 +80,10 @@ class PromptConfig(_Model):
     min_downtime_s: float = Field(60, ge=0)
 
 
+class StoreConfig(_Model):
+    path: str = "iris.db"
+
+
 class Config(_Model):
     name: str = "IRIS"
     version: str = "0.1.0"
@@ -89,6 +93,7 @@ class Config(_Model):
     drives: DrivesConfig = DrivesConfig()
     initiative: InitiativeConfig = InitiativeConfig()
     prompt: PromptConfig = PromptConfig()
+    store: StoreConfig = StoreConfig()
 
     @classmethod
     def load(cls, path: str | Path) -> "Config":

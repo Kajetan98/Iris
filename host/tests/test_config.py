@@ -74,3 +74,8 @@ def test_manual_clock_moves_both_clocks():
     c.advance(90)
     assert c.monotonic() - m0 == 90
     assert (c.wall() - w0).total_seconds() == 90
+
+
+def test_store_path_default_and_override():
+    assert Config().store.path == "iris.db"
+    assert Config.model_validate({"store": {"path": "/var/lib/iris.db"}}).store.path == "/var/lib/iris.db"
