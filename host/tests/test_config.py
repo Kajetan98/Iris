@@ -158,3 +158,34 @@ def test_voice_wiring_defaults_and_validation():
     assert (b.audio.error_clip, b.audio.max_pending_turns) == ("error", 1)
     with pytest.raises(ValidationError):
         Config.model_validate({"brain": {"audio": {"max_pending_turns": 0}}})
+
+
+def test_claude_engine_config_defaults():
+    c = Config.model_validate({"brain": {"llm": {"engine": "claude"}}}).brain.llm
+    assert (c.model, c.effort, c.thinking_headroom_tokens, c.fallbacks, c.base_url) == (
+        "claude-opus-5-5", "low", 2000, True, None,
+    )
+
+
+def test_claude_engine_accepts_model_and_options_from_toml(tmp_path):
+    p = tmp_path / "iris.toml"
+    p.write_text('[brain.llm]\nengine = "claude"\nmodel = "claude-haiku-5-5"\neffort = "off"\nfallbacks = false\nthinking_headroom_tokens = 0\n')
+    c = Config.load(p).brain.llm
+    assert (c.model, c.effort, c.fallbacks, c.thinking_headroom_tokens) == ("claude-haiku-5-5", "off", False, 0)
+
+
+def test_claude_engine_rejects_temperature():
+    with pytest.raises(ValidationError, match="temperature"):
+        Config.model_validate({"brain": {"llm": {"engine": "claude", "temperature": 0.5}}})
+
+
+@pytest.mark.parametrize("bad", [{"effort": "turbo"}, {"thinking_headroom_tokens": -1}])
+def test_invalid_claude_options_are_rejected(bad):
+    with pytest.raises(ValidationError):
+        Config.model_validate({"brain": {"llm": {"engine": "claude", **bad}}})
+
+
+def test_ollama_still_requires_a_model_and_keeps_its_default_url():
+    with pytest.raises(ValidationError, match="model"):
+        Config.model_validate({"brain": {"llm": {"engine": "ollama"}}})
+    assert Config().brain.llm.base_url is None

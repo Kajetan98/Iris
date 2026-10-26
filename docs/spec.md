@@ -221,7 +221,7 @@ Reguły:
 Silnik Claude API (`brain.llm.engine = "claude"`):
 
 - Dane trafiają do chmury Anthropic, więc silnik jest zdalny: fakty obowiązują według `send_facts`, a do żądania trafia dokładnie to, co wymienia ta sekcja (prompt, historia, blok kontekstu, wypowiedź). Odczyty `gps`, `imu` i `presence` nigdy nie opuszczają hosta.
-- Klucz API pochodzi ze zmiennych środowiskowych SDK (`ANTHROPIC_API_KEY`) i nie jest zapisywany w konfiguracji ani w logach. Brak klucza to błąd konfiguracji silnika.
+- Klucz API pochodzi ze zmiennych środowiskowych SDK (`ANTHROPIC_API_KEY`) i nie jest zapisywany w konfiguracji ani w logach. Brak klucza to błąd konfiguracji silnika. Logger SDK jest ograniczony do poziomu INFO (także przy `ANTHROPIC_LOG=debug`), bo na poziomie DEBUG wypisuje całe żądanie z treścią rozmowy.
 - Model domyślny to `claude-opus-5-5`; można go zmienić w `model`. Żądanie nie zawiera `temperature`, `top_p` ani `top_k` (API od 2026-10-21 je odrzuca), dlatego `temperature` w konfiguracji tego silnika jest błędem.
 - `effort` (domyślnie `low`, wartość `off` pomija parametr) steruje głębokością myślenia i opóźnieniem odpowiedzi. Tokeny myślenia liczą się do limitu odpowiedzi, więc do `max_tokens` dodawany jest zapas `thinking_headroom_tokens` (2000).
 - Dla modeli z serwerowym zapasem (`claude-fable-5-1`, `claude-opus-5`, `claude-opus-5-5`, `claude-sonnet-5-5`) żądanie zawiera `fallbacks: "default"`: odmowa klasyfikatora bezpieczeństwa jest powtarzana po stronie serwera na modelu zapasowym (`fallbacks = false` to wyłącza). Odmowa, która przetrwa, kończy się błędem silnika (`POST /chat`: 422).

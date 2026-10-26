@@ -69,3 +69,46 @@ def ollama_stub_app(content="**Bateria** jest niska.\n"):
         )
 
     return app, state
+
+
+def anthropic_message(text="Dobrze.", *, stop_reason="end_turn", model="claude-opus-5-5", content=None,
+                      usage=None, stop_details=None):
+    """Treść odpowiedzi POST /v1/messages."""
+    return {
+        "id": "msg_test",
+        "type": "message",
+        "role": "assistant",
+        "model": model,
+        "content": content if content is not None else [{"type": "text", "text": text}],
+        "stop_reason": stop_reason,
+        "stop_sequence": None,
+        "stop_details": stop_details,
+        "usage": usage or {"input_tokens": 120, "output_tokens": 9},
+    }
+
+
+def anthropic_error(error_type, message="błąd"):
+    return {"type": "error", "error": {"type": error_type, "message": message}}
+
+
+def anthropic_stub_app():
+    """Atrapa POST /v1/messages (zwykłego i beta). state["script"]: lista (status, treść, nagłówki),
+    ostatni element powtarza się w nieskończoność; state["requests"] zbiera żądania SDK."""
+    app = FastAPI()
+    state = {"script": [(200, anthropic_message(), {})], "requests": [], "delay": 0.0}
+
+    @app.post("/v1/messages")
+    async def messages(request: Request):
+        body = await request.json()
+        state["requests"].append(
+            {"path": request.url.path, "query": str(request.url.query),
+             "headers": {k.lower(): v for k, v in request.headers.items()}, "body": body}
+        )
+        if state["delay"]:
+            await asyncio.sleep(state["delay"])
+        script = state["script"]
+        status, content, headers = script.pop(0) if len(script) > 1 else script[0]
+        # retry-after-ms skraca odstęp między ponowieniami SDK w testach
+        return JSONResponse(content, status_code=status, headers={"retry-after-ms": "10", **headers})
+
+    return app, state
