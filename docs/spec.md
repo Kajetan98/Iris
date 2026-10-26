@@ -114,10 +114,21 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 
 ## 9. Ciągłość
 
-- Przy starcie host odczytuje ostatnie zdarzenie z poprzedniej sesji i wyznacza `last_downtime_s` jako różnicę między czasem startu a czasem tego zdarzenia. Przy pierwszym uruchomieniu (brak poprzedniej sesji) `last_downtime_s` wynosi 0.
-- Zdarzenia i stany zapisywane w SQLite (tabele: `events`, `state_snapshots`, `facts`, `sessions`).
-- `facts` ma pole `source` (`stated` lub `inferred`) i `confidence`.
-- Użytkownik może wyświetlić, poprawić i usunąć fakty.
+- Przy starcie host wyznacza `last_downtime_s` jako różnicę między czasem startu a ostatnią aktywnością poprzedniej sesji (`sessions.last_seen_at`). Przy pierwszym uruchomieniu `last_downtime_s` wynosi 0.
+- Zdarzenia i stany zapisywane w SQLite (tabele: `sessions`, `events`, `state_snapshots`, `facts`). Wersja schematu w `PRAGMA user_version`; baza z nowszą wersją niż obsługiwana nie jest otwierana.
+- Czas w bazie: UTC, ISO 8601 ze stałą szerokością (`2026-03-01T12:00:00.000+00:00`), co pozwala porównywać go jako tekst. Czas bez strefy jest odrzucany.
+
+`sessions`: `id`, `started_at`, `ended_at` (ustawiane przy czystym zamknięciu), `last_seen_at`. `last_seen_at` odświeża się przy każdym zapisanym zdarzeniu i przez jawne `touch`, więc przerwa jest poprawna także wtedy, gdy nie zapisujemy heartbeatów. Sesja bez aktywności ma `last_seen_at` równe `started_at`.
+
+`events`: `id`, `session_id`, `at` (czas zegarowy hosta przy zapisie), `source` (`body` lub `host`), `type`, `ts_ms` (zegar ciała, tylko dla `body`), `boot_id` (ostatni `system.boot` ciała, łączy `ts_ms` z czasem zegarowym), `data` (JSON z `body` zdarzenia).
+
+`state_snapshots`: `id`, `session_id`, `at`, `self_json`, `body_json`. Moment zapisu wybiera warstwa api.
+
+`facts`: `id`, `text`, `source` (`stated` lub `inferred`), `confidence` (0 do 1), `created_at`, `updated_at`, `session_id` (sesja, w której fakt powstał).
+
+- Fakt `stated` ma domyślnie `confidence` 1. Fakt `inferred` wymaga podania `confidence`.
+- Użytkownik może wyświetlić, poprawić i usunąć fakty. Poprawa tekstu przez użytkownika zmienia `source` na `stated` i `confidence` na 1, chyba że podano inaczej. Usunięcie jest trwałe.
+- `continuity.known_facts` to liczba wierszy w `facts`.
 
 ## 10. REST
 
@@ -144,3 +155,4 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 - Zestaw lokalnych komend i ich wzorców.
 - Sposób ustawiania trybu ciszy (endpoint REST, komenda głosowa lub oba).
 - Czy `battery_critical` może omijać limit inicjatywy.
+- Retencja i usuwanie zdarzeń, w tym zapisanych odczytów `gps` i `imu`.
