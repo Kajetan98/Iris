@@ -1,5 +1,5 @@
 # Utrata łącza na 12 s z zdarzeniami w buforze, potem wypowiedź po powrocie.
-# Oczekiwane: link.lost po ok. 5 s ciszy, zdarzenia z bufora po powrocie, link_lost wygasa 5 s po heartbeatach.
+# Oczekiwane: link.lost po 5-6 s ciszy (tick hosta co 1 s), zdarzenia z bufora po powrocie, link_lost wygasa 5 s po heartbeatach.
 3 drop 12
 5 press
 6 local volume_up
