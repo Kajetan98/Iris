@@ -86,5 +86,13 @@ class HostCore:
     def prompt_slice(self) -> dict[str, Any]:
         return self.self_model.prompt_slice(self.drives.active(), self.body)
 
+    def rollback_prompt_slice(self) -> bool:
+        return self.self_model.rollback_prompt_slice()
+
+    def note_interaction(self) -> list[HostEvent]:
+        """Interakcja spoza ramek ciała (np. POST /chat). Kończy long_silence."""
+        self.last_interaction = self.clock.wall()
+        return self.tick()
+
     def set_known_facts(self, n: int) -> None:
         self.continuity.known_facts = n

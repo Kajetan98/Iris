@@ -30,6 +30,7 @@ class SelfModel:
         # Odniesienie dla "zmian od ostatniego zapytania", osobne dla każdego pola.
         self._reported: dict[str, Any] = {}
         self._downtime_reported = False
+        self._undo: tuple[dict[str, Any], bool] | None = None
 
     def snapshot(self, drives: list[str]) -> dict[str, Any]:
         return {
@@ -45,7 +46,10 @@ class SelfModel:
         }
 
     def prompt_slice(self, drives: list[str], body: BodyState) -> dict[str, Any]:
-        """Wycinek do promptu. Zapamiętuje raportowane wartości jako nowe odniesienie."""
+        """Wycinek do promptu. Zapamiętuje raportowane wartości jako nowe odniesienie.
+
+        Poprzednie odniesienie można przywrócić przez rollback_prompt_slice()."""
+        self._undo = (dict(self._reported), self._downtime_reported)
         out: dict[str, Any] = {"mode": mode_for(drives), "drives": drives}
         changes = self._body_changes(body.snapshot())
         if changes:
@@ -56,6 +60,16 @@ class SelfModel:
             if self.continuity.last_downtime_s >= self._cfg.prompt.min_downtime_s:
                 out["last_downtime_s"] = self.continuity.last_downtime_s
         return out
+
+    def rollback_prompt_slice(self) -> bool:
+        """Cofa ostatnio pobrany wycinek (np. po nieudanym zapytaniu do LLM).
+
+        Zwraca fałsz, gdy nie ma czego cofać. Cofnąć można tylko jeden wycinek."""
+        if self._undo is None:
+            return False
+        self._reported, self._downtime_reported = self._undo
+        self._undo = None
+        return True
 
     def _body_changes(self, snap: dict[str, Any]) -> dict[str, dict[str, Any]]:
         tolerance = self._cfg.prompt.tolerance

@@ -214,3 +214,64 @@ def test_known_facts_are_updated():
     core, _ = make()
     core.set_known_facts(9)
     assert core.self_snapshot()["self"]["continuity"]["known_facts"] == 9
+
+
+# --- cofanie wycinka i interakcje spoza ramek ---
+
+
+def test_rollback_restores_changes_and_downtime():
+    core, _ = make(prev_event=START - timedelta(hours=3))
+    core.handle_event(heartbeat(71, -58))
+    first = core.prompt_slice()
+    assert first["body_changes"]["batt_pct"]["to"] == 71 and first["last_downtime_s"] == 3 * 3600
+    assert core.rollback_prompt_slice() is True
+    assert core.prompt_slice() == first  # te same zmiany i przerwa trafiają do kolejnego wycinka
+
+
+def test_slice_taken_after_success_does_not_repeat_changes():
+    core, _ = make(prev_event=START - timedelta(hours=3))
+    core.handle_event(heartbeat(71, -58))
+    core.prompt_slice()
+    second = core.prompt_slice()
+    assert "body_changes" not in second and "last_downtime_s" not in second
+
+
+def test_rollback_keeps_changes_that_happened_meanwhile():
+    core, _ = make()
+    core.handle_event(heartbeat(71, -58))
+    core.prompt_slice()
+    core.handle_event(heartbeat(50, -58))  # dalszy spadek w trakcie zapytania
+    assert core.rollback_prompt_slice()
+    changes = core.prompt_slice()["body_changes"]
+    assert changes["batt_pct"] == {"from": None, "to": 50}  # od stanu sprzed pierwszego wycinka do bieżącego
+
+
+def test_rollback_without_slice_or_twice_is_harmless():
+    core, _ = make()
+    assert core.rollback_prompt_slice() is False
+    core.handle_event(heartbeat(71, -58))
+    core.prompt_slice()
+    assert core.rollback_prompt_slice() is True
+    assert core.rollback_prompt_slice() is False
+
+
+def test_rollback_undoes_only_the_last_slice():
+    core, _ = make()
+    core.handle_event(heartbeat(71, -58))
+    core.prompt_slice()  # A
+    core.handle_event(heartbeat(40, -58))
+    core.prompt_slice()  # B
+    core.rollback_prompt_slice()  # cofa tylko B
+    assert core.prompt_slice()["body_changes"]["batt_pct"] == {"from": 71, "to": 40}
+
+
+def test_note_interaction_ends_long_silence():
+    core, clock = make()
+    clock.advance(4 * 3600 + 1)
+    core.tick()
+    assert "long_silence" in core.drives.active()
+    events = core.note_interaction()
+    assert [(e.type, e.data["drive"]) for e in events if e.type.startswith("drive.")] == [
+        ("drive.exit", "long_silence")
+    ]
+    assert core.last_interaction == clock.wall()
