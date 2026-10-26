@@ -1,0 +1,17 @@
+[project]
+name = "iris"
+version = "0.1.0"
+description = "IRIS: asystent głosowy (host)"
+requires-python = ">=3.11"
+dependencies = [
+    "pydantic>=2.5",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["host/tests"]
