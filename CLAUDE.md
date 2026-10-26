@@ -14,7 +14,7 @@ Asystent głosowy po polsku, zbudowany z ciała (HERMES, STM32L476) i hosta (Pyt
 - Łącze ciało-host: WebSocket, ramki JSON. Audio jako ramki binarne (Opus).
 - Firmware: C (HAL/LL), FreeRTOS do rozważenia po pierwszym działającym prototypie.
 - LLM: adapter z wymiennym silnikiem (Ollama lokalnie, Claude API opcjonalnie).
-- STT: faster-whisper. TTS: Piper (polskie głosy), do zweryfikowania jakości.
+- STT: faster-whisper. TTS: Piper (polskie głosy), do zweryfikowania jakości. `piper-tts` ma licencję GPL-3.0-or-later: sprawdź zgodność przed dystrybucją hosta.
 - Pełny model `self` istnieje tylko na hoście.
 
 ## Ograniczenia
@@ -47,7 +47,7 @@ sim/             symulator ciała
 
 ## Komendy
 
-- zależności: `pip install pydantic fastapi uvicorn websockets pytest httpx`
+- zależności: `pip install pydantic fastapi uvicorn websockets pytest httpx`; głos: `pip install faster-whisper piper-tts av numpy`
 - testy: `pytest host/tests`
 - serwer: `uvicorn host.api.main:app --reload` (konfiguracja TOML ze zmiennej `IRIS_CONFIG`, bez niej wartości domyślne; baza `iris.db` w bieżącym katalogu)
 - LLM (domyślnie wyłączony), w pliku z `IRIS_CONFIG`: `[brain.llm]` z `engine = "ollama"` i `model = "..."` (opcje: `base_url`, `send_facts`, `max_tokens`; lista w `host/core/config.py`)

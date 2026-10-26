@@ -64,6 +64,23 @@ Ciało odrzuca akcję spoza listy i odsyła `ack` z `ok:false`.
 - Pola wielobajtowe nagłówka (5 bajtów) są zapisane w kolejności big-endian.
 - Od ciała host przyjmuje tylko `kind=1`. Inne wartości `kind` i ramki krótsze niż nagłówek są odrzucane (sekcja 11).
 
+Mikrofon (ciało → host):
+
+- Jedna ramka binarna to jeden pakiet Opus. `id` ramki to młodsze 16 bitów `utt_id` z `audio.utterance.start` (`utt_id` musi więc być liczbą), a `seq` rośnie od 0 co pakiet.
+- Host dekoduje pakiety niezależnie od częstotliwości próbkowania zakodowanej przez ciało (dekoder zwraca 48 kHz) i sprowadza dźwięk do 16 kHz mono na potrzeby rozpoznawania mowy.
+- Wypowiedź jest składana od `audio.utterance.start` do `audio.utterance.end`. Ramki, dla których nie trwa wypowiedź o takim `id`, są odrzucane. Powtórzony `seq` jest pomijany. Brakujący `seq` oraz pakiet, którego nie da się zdekodować, zastępuje cisza o długości poprzedniego pakietu (20 ms, gdy nie było poprzedniego). Nowe `audio.utterance.start` przed `end` porzuca niedokończoną wypowiedź. Wypowiedź jest ucinana po `max_utterance_s` (30 s), a krótsza niż `min_utterance_ms` (300 ms) jest pomijana.
+
+Odtwarzanie (host → ciało):
+
+- Host koduje mowę do Opus: mono, `playback_rate_hz` (16000), pakiety `frame_ms` (20 ms), `bitrate_bps` (24000). Wysyła ramki `kind=2` z `id` równym `audio_id` (1-65535, numerowane cyklicznie) i `seq` od 0, a po nich akcję `speak` z tym `audio_id`.
+- Ciało odtwarza dopiero po `speak`, więc cały dźwięk musi się zmieścić w jego pamięci. Host ogranicza odpowiedź do `max_speech_s` (15 s): syntezuje zdanie po zdaniu i przestaje dodawać zdania, gdy kolejne przekroczyłoby limit. Pierwsze zdanie dłuższe niż limit jest ucinane.
+
+Rozpoznawanie i synteza mowy:
+
+- STT (faster-whisper) i TTS (Piper) działają lokalnie, więc dźwięk i tekst nie opuszczają maszyny hosta. Dźwięk, transkrypcje i teksty odpowiedzi nie są zapisywane w bazie ani logowane. Logi zawierają tylko czasy i liczby.
+- Transkrypcja krótsza niż `min_text_chars` (2) znaków kończy wypowiedź bez odpowiedzi.
+- Transkrypcja jest traktowana jak tekst z `POST /chat` (sekcja 12): trafia do LLM z tym samym kontekstem, a odpowiedź jest odtwarzana na ciele.
+
 ## 7. Model stanu na hoście
 
 `body` (z ostatnich zdarzeń):
@@ -197,7 +214,8 @@ Reguły:
 ## 13. Otwarte kwestie
 
 - Limit bufora zdarzeń w ciele przy braku łącza (symulator przyjmuje 64 i przy przepełnieniu odrzuca najstarsze).
-- Format ramki audio po testach na STM32 (Opus na L476 wymaga sprawdzenia pod kątem CPU i RAM).
+- Format ramki audio po testach na STM32 (Opus na L476 wymaga sprawdzenia pod kątem CPU i RAM). Host zakłada 16 kHz, mono i pakiety 20 ms w obu kierunkach.
+- Rozmiar bufora odtwarzania w ciele; od niego zależy `max_speech_s` (15 s przy 24 kbps to ok. 45 KB).
 - Wybór między JSON a CBOR dla zdarzeń z ciała po pomiarze zużycia RAM.
 - Zestaw lokalnych komend i ich wzorców.
 - Sposób ustawiania trybu ciszy (endpoint REST, komenda głosowa lub oba).

@@ -15,6 +15,14 @@ dependencies = [
 dev = [
     "pytest>=8",
 ]
+# STT (faster-whisper) i TTS (Piper); av i numpy ciągną się za nimi, ale host.brain importuje je wprost.
+# Uwaga: piper-tts ma licencję GPL-3.0-or-later.
+voice = [
+    "faster-whisper>=1.0",
+    "piper-tts>=1.3",
+    "av>=12",
+    "numpy>=1.26",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]

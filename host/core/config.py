@@ -112,8 +112,67 @@ class LLMConfig(_Model):
         return self
 
 
+class STTConfig(_Model):
+    engine: Literal["none", "faster-whisper"] = "none"
+    model: str | None = None  # nazwa (pobierana z Hugging Face) albo katalog z modelem
+    model_dir: str | None = None
+    local_files_only: bool = False
+    language: str = "pl"
+    device: str = "cpu"
+    compute_type: str = "int8"
+    beam_size: int = Field(1, ge=1, le=10)
+    vad_filter: bool = True
+    cpu_threads: int = Field(0, ge=0)
+    min_text_chars: int = Field(2, ge=0)
+
+    @model_validator(mode="after")
+    def _model_required(self) -> "STTConfig":
+        if self.engine != "none" and not self.model:
+            raise ValueError("engine wymaga ustawienia model")
+        return self
+
+
+class TTSConfig(_Model):
+    engine: Literal["none", "piper"] = "none"
+    voice: str | None = None  # ścieżka do pliku .onnx (obok musi leżeć .onnx.json)
+    length_scale: float | None = Field(None, gt=0)
+    speaker_id: int | None = Field(None, ge=0)
+    volume: float | None = Field(None, gt=0)
+    max_chars: int = Field(1000, gt=0)
+
+    @model_validator(mode="after")
+    def _voice_required(self) -> "TTSConfig":
+        if self.engine != "none" and not self.voice:
+            raise ValueError("engine wymaga ustawienia voice")
+        return self
+
+
+OPUS_RATES = (8000, 12000, 16000, 24000, 48000)
+OPUS_FRAME_MS = (2.5, 5.0, 10.0, 20.0, 40.0, 60.0)
+
+
+class AudioConfig(_Model):
+    playback_rate_hz: int = 16000
+    frame_ms: float = 20.0
+    bitrate_bps: int = Field(24000, ge=6000, le=510000)
+    max_utterance_s: float = Field(30.0, gt=0)
+    min_utterance_ms: float = Field(300.0, ge=0)
+    max_speech_s: float = Field(15.0, gt=0)
+
+    @model_validator(mode="after")
+    def _opus_parameters(self) -> "AudioConfig":
+        if self.playback_rate_hz not in OPUS_RATES:
+            raise ValueError(f"playback_rate_hz musi być jedną z {OPUS_RATES}")
+        if self.frame_ms not in OPUS_FRAME_MS:
+            raise ValueError(f"frame_ms musi być jedną z {OPUS_FRAME_MS}")
+        return self
+
+
 class BrainConfig(_Model):
     llm: LLMConfig = LLMConfig()
+    stt: STTConfig = STTConfig()
+    tts: TTSConfig = TTSConfig()
+    audio: AudioConfig = AudioConfig()
 
 
 class Config(_Model):
