@@ -79,3 +79,9 @@ def test_manual_clock_moves_both_clocks():
 def test_store_path_default_and_override():
     assert Config().store.path == "iris.db"
     assert Config.model_validate({"store": {"path": "/var/lib/iris.db"}}).store.path == "/var/lib/iris.db"
+
+
+def test_api_defaults_match_spec():
+    a = Config().api
+    assert (a.tick_interval_s, a.touch_every_s, a.snapshot_every_s) == (1.0, 10.0, 300.0)
+    assert a.store_heartbeats is False and a.ack_timeout_s == 2.0

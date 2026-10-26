@@ -99,3 +99,21 @@ def test_encode_action_rejects_unknown_type():
 def test_encode_action_rejects_bad_body():
     with pytest.raises(ValueError, match="pattern"):
         encode_action("haptic", {"pattern": "loud"}, id="x", ts_ms=0)
+
+
+def test_decode_audio_frame_big_endian_header():
+    import struct
+
+    from host.core.protocol import decode_audio_frame
+
+    f = decode_audio_frame(struct.pack(">BHH", 1, 0x0102, 0x0304) + b"\x00\xff")
+    assert (f.kind, f.id, f.seq, f.data) == (1, 0x0102, 0x0304, b"\x00\xff")
+    assert decode_audio_frame(bytes([1, 0, 1, 0, 2])).data == b""  # sam nagłówek
+
+
+@pytest.mark.parametrize("raw", [b"", b"\x01\x00\x01\x00", bytes([2, 0, 1, 0, 1]), bytes([0, 0, 1, 0, 1])])
+def test_decode_audio_frame_rejects(raw):
+    from host.core.protocol import decode_audio_frame
+
+    with pytest.raises(FrameRejected):
+        decode_audio_frame(raw)

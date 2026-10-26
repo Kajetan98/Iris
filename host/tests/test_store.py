@@ -318,3 +318,10 @@ def test_delete_fact_is_permanent(store):
     assert store.delete_fact(f.id) is False
     assert store.get_fact(f.id) is None
     assert store.count_facts() == 0
+
+
+def test_ping(store):
+    store.ping()
+    store.close()
+    with pytest.raises(sqlite3.ProgrammingError):
+        store.ping()
