@@ -19,6 +19,7 @@ from host.brain.audio import (
     MAX_AUDIO_ID,
     STT_RATE,
     OpusDecoder,
+    RawUtterance,
     UtteranceAssembler,
     encode_speech,
     playback_frames,
@@ -85,12 +86,18 @@ class VoicePipeline:
     def on_audio(self, frame: AudioFrame) -> None:
         self.assembler.add(frame)
 
+    def take_utterance(self, utt_id: int | str, dur_ms: float | None = None) -> RawUtterance | None:
+        """Kończy składanie wypowiedzi. Wołać synchronicznie przy audio.utterance.end, zanim
+        zacznie się następna wypowiedź; dalszą obróbkę (process) można odłożyć do zadania."""
+        return self.assembler.take(utt_id, dur_ms)
+
     async def on_utterance_end(self, utt_id: int | str, dur_ms: float | None = None) -> VoiceTurn | None:
+        raw = self.take_utterance(utt_id, dur_ms)
+        return None if raw is None else await self.process(raw)
+
+    async def process(self, raw: RawUtterance) -> VoiceTurn | None:
         """Pełna tura. None, gdy wypowiedź była pusta, za krótka lub bez rozpoznanego tekstu."""
         started = time.monotonic()
-        raw = self.assembler.take(utt_id, dur_ms)
-        if raw is None:
-            return None
         utterance = await asyncio.to_thread(self.assembler.decode, raw)
         if utterance is None:
             return None

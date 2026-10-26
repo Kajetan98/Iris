@@ -24,6 +24,8 @@ def hb(batt=71):
 class FakeWS:
     def __init__(self):
         self.sent = []
+        self.sent_bytes = []
+        self.log = []  # ("text" | "bytes", dane) w kolejności wysyłki
         self.closed = None
         self.accepted = False
         self._q = asyncio.Queue()
@@ -38,6 +40,13 @@ class FakeWS:
         if self.closed:
             raise RuntimeError("socket zamknięty")
         self.sent.append(data)
+        self.log.append(("text", data))
+
+    async def send_bytes(self, data):
+        if self.closed:
+            raise RuntimeError("socket zamknięty")
+        self.sent_bytes.append(data)
+        self.log.append(("bytes", data))
 
     async def close(self, code=1000, reason=None):
         self.closed = (code, reason)

@@ -21,6 +21,8 @@ from host.core.events import HostEvent
 from host.core.protocol import (
     AckBody,
     AudioFrame,
+    AudioUtteranceEnd,
+    AudioUtteranceStart,
     DecodedAck,
     FrameRejected,
     SystemBoot,
@@ -30,8 +32,11 @@ from host.core.protocol import (
 )
 from host.store import Store, StoreError
 
-if TYPE_CHECKING:  # host.brain ładuje się dopiero, gdy LLM jest włączony
+if TYPE_CHECKING:  # host.brain ładuje się dopiero, gdy LLM lub głos jest włączony
     from host.brain.assistant import Assistant
+    from host.brain.audio import RawUtterance
+    from host.brain.speech import STTEngine, TTSEngine
+    from host.brain.voice import VoicePipeline
 
 log = logging.getLogger(__name__)
 
@@ -64,6 +69,7 @@ class WebSocketLike(Protocol):
     async def accept(self) -> None: ...
     async def receive(self) -> dict[str, Any]: ...
     async def send_text(self, data: str) -> None: ...
+    async def send_bytes(self, data: bytes) -> None: ...
     async def close(self, code: int = 1000, reason: str | None = None) -> None: ...
 
 
@@ -75,12 +81,18 @@ class HostService:
         store: Store,
         on_audio: Callable[[AudioFrame], None] | None = None,
         assistant: "Assistant | None" = None,
+        stt: "STTEngine | None" = None,
+        tts: "TTSEngine | None" = None,
     ) -> None:
         self.config = config
         self.clock = clock
         self.store = store
         self.on_audio = on_audio or (lambda frame: None)
         self.assistant = assistant
+        self.stt, self.tts = stt, tts
+        self.voice: "VoicePipeline | None" = None
+        self.voice_status = "disabled"  # disabled | ready | error
+        self._voice_tasks: set[asyncio.Task[None]] = set()
         self._chat_lock = asyncio.Lock()
         self.core: HostCore | None = None
         self.boot_id: str | None = None
@@ -100,6 +112,7 @@ class HostService:
         self._started = self._last_touch = self.clock.monotonic()
         self._persist(self.core.start())
         self._snapshot()
+        self._init_voice()
 
     def stop(self) -> None:
         core = self._require_core()
@@ -174,6 +187,7 @@ class HostService:
         if decoded.type != "body.heartbeat" or self.config.api.store_heartbeats:
             self._store(self.store.append_body_event, decoded, at=at, boot_id=self.boot_id)
         self._persist(host_events)
+        self._route_voice(decoded.body)
 
     def handle_binary(self, raw: bytes) -> None:
         try:
@@ -182,6 +196,8 @@ class HostService:
             self.rejected_frames += 1
             log.warning("ramka audio odrzucona: %s", e.reason)
             return
+        if self.voice is not None:
+            self.voice.on_audio(frame)
         self.on_audio(frame)
 
     # --- akcje ---
@@ -242,6 +258,104 @@ class HostService:
             log.warning("ack dla nieznanej lub zakończonej akcji: %s", ack.ref)
         elif not future.done():
             future.set_result(ack)
+
+    # --- głos ---
+
+    def _init_voice(self) -> None:
+        if self.stt is None or self.tts is None:
+            return
+        if self.assistant is None:
+            log.error("głos wymaga włączonego LLM (brain.llm), głos wyłączony")
+            self.voice_status = "error"
+            return
+        from host.brain.voice import VoicePipeline
+
+        self.voice = VoicePipeline(
+            stt=self.stt,
+            tts=self.tts,
+            respond=self._voice_respond,
+            send_frame=self._send_audio,
+            announce=self._announce_speech,
+            audio=self.config.brain.audio,
+            min_text_chars=self.config.brain.stt.min_text_chars,
+        )
+        self.voice_status = "ready"
+
+    def _route_voice(self, body: Any) -> None:
+        voice = self.voice
+        if voice is None:
+            return
+        if isinstance(body, AudioUtteranceStart):
+            voice.on_utterance_start(body.utt_id)
+        elif isinstance(body, AudioUtteranceEnd):
+            # Wypowiedź trzeba pobrać od razu: następny start nie może jej porzucić.
+            raw = voice.take_utterance(body.utt_id, body.dur_ms)
+            if raw is None:
+                return
+            if len(self._voice_tasks) >= self.config.brain.audio.max_pending_turns:
+                log.warning("zbyt wiele tur głosowych w toku, wypowiedź pominięta")
+                return
+            try:
+                task = asyncio.get_running_loop().create_task(self._voice_turn(raw))
+            except RuntimeError:
+                log.error("tura głosowa wymaga działającej pętli zdarzeń")
+                return
+            self._voice_tasks.add(task)
+            task.add_done_callback(self._voice_tasks.discard)
+
+    async def _voice_turn(self, raw: "RawUtterance") -> None:
+        from host.brain.audio import AudioError
+        from host.brain.speech import SpeechError
+
+        assert self.voice is not None
+        try:
+            await self.voice.process(raw)
+        except asyncio.CancelledError:
+            raise
+        except (ChatError, ChatDisabled, SpeechError, AudioError, NotConnected) as e:
+            # Komunikaty tych błędów nie zawierają treści rozmowy.
+            log.warning("tura głosowa nieudana (%s): %s", type(e).__name__, str(e)[:200])
+            await self._play_error_clip()
+        except Exception:
+            log.exception("tura głosowa: nieoczekiwany błąd")
+            await self._play_error_clip()
+
+    async def _play_error_clip(self) -> None:
+        clip = self.config.brain.audio.error_clip
+        if not clip or not self.connected:
+            return
+        try:
+            await self.send_action("speak.clip", {"clip": clip}, wait_ack=False)
+        except (NotConnected, ValueError):
+            log.debug("nie udało się odtworzyć klipu błędu", exc_info=True)
+
+    async def _voice_respond(self, text: str) -> str:
+        return (await self.chat(text))["text"]
+
+    async def _send_audio(self, frame: bytes) -> None:
+        ws = self._ws
+        if ws is None:
+            raise NotConnected()
+        try:
+            await ws.send_bytes(frame)
+        except Exception:
+            raise NotConnected() from None
+
+    async def _announce_speech(self, audio_id: int) -> None:
+        try:
+            _, ack = await self.send_action("speak", {"audio_id": audio_id}, wait_ack=True)
+        except (NotConnected, AckTimeout) as e:
+            log.warning("speak %d: %s", audio_id, type(e).__name__)
+            return
+        if ack is not None and not ack.ok:
+            log.warning("ciało odrzuciło speak %d: %s", audio_id, ack.err)
+
+    async def drain_voice(self) -> None:
+        """Przerywa trwające tury głosowe (przy zamykaniu hosta)."""
+        tasks = list(self._voice_tasks)
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     # --- rozmowa ---
 
@@ -313,6 +427,7 @@ class HostService:
                 "last_seen_ms": body["last_seen_ms"],
             },
             "store": store_status,
+            "voice": self.voice_status,
         }
 
     # --- zapis ---
