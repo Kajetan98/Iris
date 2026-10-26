@@ -1,0 +1,5 @@
+# Spadek baterii przy domyślnych progach hosta (spec, sekcja 8).
+# Oczekiwane: battery_low ok. 12 s, battery_critical ok. 27 s, wyjścia po 30 s powyżej progów.
+2 batt 19
+15 batt 9
+30 batt 30

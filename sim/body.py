@@ -50,6 +50,10 @@ class SimRunner:
         self._ws: ClientConnection | None = None
         self._stop: asyncio.Event | None = None
 
+    @property
+    def connected(self) -> bool:
+        return self._ws is not None
+
     def stop(self) -> None:
         if self._stop is not None:
             self._stop.set()
