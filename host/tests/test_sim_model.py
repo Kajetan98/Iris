@@ -3,6 +3,7 @@
 import json
 import struct
 
+import numpy as np
 import pytest
 
 from host.core.protocol import (
@@ -17,6 +18,9 @@ from host.core.protocol import (
     decode_audio_frame,
     decode_frame,
 )
+from host.brain.audio import OpusDecoder, resample
+from host.core.protocol import decode_audio_frame
+from host.tests.audio_helpers import dominant_hz, opus_packets, sine, write_wav
 from sim.model import AUDIO_HEADER, BodyModel, SimConfig, parse_script
 
 
@@ -175,20 +179,106 @@ def test_gps_fault_blocks_position():
     assert m.take_out() == []
 
 
-def test_utterance_stream_follows_spec():
-    m = make(audio_frame_ms=20, audio_frame_bytes=8)
-    m.take_out()
-    m.command("say 100", 2.0)
-    outs = m.take_out()
-    kinds = ["bin" if isinstance(o.data, bytes) else json.loads(o.data)["type"] for o in outs]
-    assert kinds == ["audio.utterance.start"] + ["bin"] * 5 + ["audio.utterance.end"]
+def mic_stream(model):
+    """(start, ramki audio, end) z take_out()."""
+    outs = model.take_out()
     start, end = decode_frame(outs[0].data), decode_frame(outs[-1].data)
-    assert start.body.utt_id == end.body.utt_id and end.body.dur_ms == 100
     frames = [decode_audio_frame(o.data) for o in outs[1:-1]]
-    assert [f.seq for f in frames] == [0, 1, 2, 3, 4]
-    assert {f.id for f in frames} == {start.body.utt_id} and {f.kind for f in frames} == {1}
-    assert all(len(f.data) == 8 for f in frames)
-    assert all(not o.bufferable for o in outs[1:-1])  # audio nie jest buforowane
+    assert all(isinstance(o.data, bytes) and not o.bufferable for o in outs[1:-1])  # audio nie jest buforowane
+    assert outs[0].bufferable and outs[-1].bufferable
+    return start, frames, end
+
+
+def decode_to_16k(frames):
+    dec = OpusDecoder()
+    out = np.concatenate([dec.decode(f.data) for f in frames])
+    return resample(out, 48000, 16000)
+
+
+def test_utterance_is_real_opus_following_spec():
+    m = make()
+    m.take_out()
+    m.command("say 1000", 2.0)
+    start, frames, end = mic_stream(m)
+    assert start.type == "audio.utterance.start" and end.type == "audio.utterance.end"
+    assert start.body.utt_id == end.body.utt_id == 1 and end.body.dur_ms == 1000
+    assert abs(len(frames) - 51) <= 2  # 1 s w pakietach po 20 ms (+ pakiet z opróżnienia kodera)
+    assert [f.seq for f in frames] == list(range(len(frames)))
+    assert {f.id for f in frames} == {1} and {f.kind for f in frames} == {1}
+    pcm = decode_to_16k(frames)
+    assert abs(pcm.size / 16000 - 1.0) < 0.1 and abs(dominant_hz(pcm) - 440) < 5
+
+
+def test_utterance_follows_audio_settings():
+    m = make(audio_rate_hz=8000, audio_frame_ms=40.0, audio_bitrate_bps=12000)
+    m.take_out()
+    m.command("say 1000", 0.0)
+    _, frames, _ = mic_stream(m)
+    assert abs(len(frames) - 26) <= 2
+
+
+def test_sayfile_encodes_a_wav_recording(tmp_path):
+    path = tmp_path / "nagranie.wav"
+    write_wav(path, sine(300, 1.5, 22050), 22050)
+    m = make()
+    m.take_out()
+    reply = m.command(f"sayfile {path}", 0.0)
+    start, frames, end = mic_stream(m)
+    assert "pakietów Opus" in reply and end.body.dur_ms == 1500
+    pcm = decode_to_16k(frames)
+    assert abs(pcm.size / 16000 - 1.5) < 0.1 and abs(dominant_hz(pcm) - 300) < 5
+
+
+def test_sayfile_downmixes_stereo(tmp_path):
+    path = tmp_path / "stereo.wav"
+    write_wav(path, sine(300, 1.0, 16000), 16000, channels=2)
+    m = make()
+    m.take_out()
+    m.command(f"sayfile {path}", 0.0)
+    _, frames, end = mic_stream(m)
+    assert end.body.dur_ms == 1000 and abs(dominant_hz(decode_to_16k(frames)) - 300) < 5
+
+
+@pytest.mark.parametrize("name", ["brak.wav", "zepsuty.wav", "niepcm.wav"])
+def test_sayfile_errors_are_reported_not_raised(tmp_path, name):
+    (tmp_path / "zepsuty.wav").write_bytes(b"to nie jest wav")
+    write_wav(tmp_path / "niepcm.wav", sine(300, 0.5, 16000), 16000, width=4)
+    m = make()
+    m.take_out()
+    assert m.command(f"sayfile {tmp_path / name}", 0.0).startswith("błąd")
+    assert m.take_out() == []
+
+
+def test_sayfile_needs_exactly_one_argument_and_respects_mic_fault(tmp_path):
+    m = make()
+    m.take_out()
+    assert m.command("sayfile", 0.0).startswith("błąd")
+    path = tmp_path / "a.wav"
+    write_wav(path, sine(300, 0.5, 16000), 16000)
+    m.command("fault mic", 0.0)
+    m.take_out()
+    assert "usterkę" in m.command(f"sayfile {path}", 0.0)
+    assert m.take_out() == []
+
+
+def test_say_rejects_unreasonable_durations():
+    m = make()
+    m.take_out()
+    for arg in ("0", "-5", "61000"):
+        assert m.command(f"say {arg}", 0.0).startswith("błąd")
+    assert m.take_out() == []
+
+
+def test_played_speech_is_kept_in_sequence_order():
+    m = make()
+    m.take_out()
+    pkts = opus_packets(300, 0.2)
+    for seq in (2, 0, 1):  # kolejność przyjścia nie jest kolejnością odtwarzania
+        m.on_host_binary(AUDIO_HEADER.pack(2, 4, seq) + pkts[seq])
+    m.on_host_text(action("speak", {"audio_id": 4}), 1.0)
+    assert ack_of(m).body.ok
+    assert m.played_audio == [(4, [pkts[0], pkts[1], pkts[2]])]
+    assert m.played == [(4, sum(len(p) for p in pkts[:3]))]
 
 
 def test_utterance_ids_increase_and_mic_fault_blocks():

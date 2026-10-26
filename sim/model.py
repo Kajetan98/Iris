@@ -13,6 +13,8 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
+from sim import audio as sim_audio
+
 PROTOCOL_VERSION = 1
 AUDIO_HEADER = struct.Struct(">BHH")  # kind, id, seq (big-endian), sekcja 6
 AUDIO_MIC = 1
@@ -20,7 +22,7 @@ AUDIO_PLAYBACK = 2
 
 SENSORS = ("mic", "imu", "temp", "presence", "gps")
 HAPTIC_PATTERNS = ("attention", "warn", "critical")
-MAX_UTTERANCE_FRAMES = 500
+MAX_UTTERANCE_S = 60
 
 HELP = """komendy:
   batt <0-100>            ustaw baterię
@@ -29,7 +31,8 @@ HELP = """komendy:
   fault <sensor> [kod]    usterka sensora (mic imu temp presence gps)
   clear <sensor>          koniec usterki
   press [long]            przycisk
-  say [dur_ms]            wypowiedź z ramkami audio z mikrofonu
+  say [dur_ms]            wypowiedź: ton 440 Hz zakodowany do Opus, ramki z mikrofonu
+  sayfile <plik.wav>      wypowiedź z nagrania WAV (PCM 8/16 bitów), zakodowana do Opus
   local <cmd...>          komenda obsłużona lokalnie
   presence on|off         obecność
   gps <lat> <lon>         pozycja
@@ -52,8 +55,9 @@ class SimConfig:
     buffer_limit: int = 64
     gpio_pins: frozenset[int] = frozenset({5, 6, 7})
     clips: frozenset[str] = frozenset({"ready", "error", "low_battery", "link_lost"})
-    audio_frame_bytes: int = 40
-    audio_frame_ms: int = 20
+    audio_rate_hz: int = 16000
+    audio_frame_ms: float = 20.0
+    audio_bitrate_bps: int = 24000
     seed: int = 1
     fw: str = "sim-0.1"
 
@@ -76,6 +80,7 @@ class BodyModel:
         self.gpio: dict[int, int] = {}
         self.haptic_log: list[str] = []
         self.played: list[tuple[int, int]] = []  # (audio_id, bajty)
+        self.played_audio: list[tuple[int, list[bytes]]] = []  # (audio_id, pakiety Opus w kolejności seq)
         self.clips_played: list[str] = []
         self.frame_errors = 0
         self.buffer: deque[Out] = deque()
@@ -204,7 +209,7 @@ class BodyModel:
             return f"nieznana komenda: {name} (help)"
         try:
             return handler(args, now)
-        except ValueError as e:
+        except (ValueError, sim_audio.AudioUnavailable) as e:
             return f"błąd: {e}"
 
     def _cmd_help(self, args: list[str], now: float) -> str:
@@ -251,17 +256,37 @@ class BodyModel:
         if "mic" in self.faults:
             return "mikrofon ma usterkę, brak wypowiedzi"
         dur_ms = int(args[0]) if args else 1200
-        if dur_ms <= 0:
-            raise ValueError("dur_ms musi być dodatnie")
+        if not 0 < dur_ms <= MAX_UTTERANCE_S * 1000:
+            raise ValueError(f"dur_ms musi być z zakresu 1-{MAX_UTTERANCE_S * 1000}")
+        rate = self.cfg.audio_rate_hz
+        return self._utterance(sim_audio.tone(440, dur_ms / 1000, rate), rate, dur_ms, now)
+
+    def _cmd_sayfile(self, args: list[str], now: float) -> str:
+        if len(args) != 1:
+            raise ValueError("sayfile <plik.wav>")
+        if "mic" in self.faults:
+            return "mikrofon ma usterkę, brak wypowiedzi"
+        samples, rate = sim_audio.read_wav(args[0])
+        dur_ms = int(len(samples) * 1000 / rate)
+        if not 0 < dur_ms <= MAX_UTTERANCE_S * 1000:
+            raise ValueError(f"nagranie musi trwać od 1 ms do {MAX_UTTERANCE_S} s")
+        return self._utterance(samples, rate, dur_ms, now)
+
+    def _utterance(self, samples: Any, rate: int, dur_ms: int, now: float) -> str:
+        """Zdarzenia start/end i ramki Opus mikrofonu (jeden pakiet na ramkę, spec sekcja 6)."""
+        packets = sim_audio.encode_opus(
+            samples, rate,
+            target_rate=self.cfg.audio_rate_hz,
+            frame_ms=self.cfg.audio_frame_ms,
+            bitrate_bps=self.cfg.audio_bitrate_bps,
+        )
         self._utt += 1
         utt = self._utt
-        frames = min(MAX_UTTERANCE_FRAMES, max(1, dur_ms // self.cfg.audio_frame_ms))
         self._emit_event("audio.utterance.start", {"utt_id": utt}, now)
-        for seq in range(frames):
-            payload = self._rng.randbytes(self.cfg.audio_frame_bytes)
-            self._out.append(Out(AUDIO_HEADER.pack(AUDIO_MIC, utt & 0xFFFF, seq) + payload))
+        for seq, packet in enumerate(packets):
+            self._out.append(Out(AUDIO_HEADER.pack(AUDIO_MIC, utt & 0xFFFF, seq) + packet))
         self._emit_event("audio.utterance.end", {"utt_id": utt, "dur_ms": dur_ms}, now)
-        return f"wypowiedź {utt}: {frames} ramek, {dur_ms} ms"
+        return f"wypowiedź {utt}: {len(packets)} pakietów Opus, {dur_ms} ms"
 
     def _cmd_local(self, args: list[str], now: float) -> str:
         if not args:
@@ -382,6 +407,7 @@ class BodyModel:
         if not chunks:
             return "no audio for id"
         self.played.append((key, sum(len(c) for _, c in chunks)))
+        self.played_audio.append((key, [c for _, c in sorted(chunks)]))
         return None
 
     def _act_clip(self, body: dict[str, Any]) -> str | None:

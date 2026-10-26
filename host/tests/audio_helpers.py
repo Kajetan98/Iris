@@ -2,6 +2,7 @@
 
 import math
 import struct
+import wave
 
 import numpy as np
 
@@ -39,3 +40,17 @@ def feed(assembler_or_pipeline, utt_id, packets, drop=()):
 
 def header(frame):
     return struct.unpack(">BHH", frame[:5])
+
+
+def write_wav(path, samples, rate, channels=1, width=2):
+    """Zapis WAV PCM. width=4 daje plik w nieobsługiwanym przez symulator formacie."""
+    data = np.repeat(samples.reshape(-1, 1), channels, axis=1)
+    if width == 4:
+        data = data.astype("<i4") << 16
+    else:
+        data = data.astype("<i2")
+    with wave.open(str(path), "wb") as w:
+        w.setnchannels(channels)
+        w.setsampwidth(width)
+        w.setframerate(rate)
+        w.writeframes(data.tobytes())
