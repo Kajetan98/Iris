@@ -158,6 +158,8 @@ class AudioConfig(_Model):
     max_utterance_s: float = Field(30.0, gt=0)
     min_utterance_ms: float = Field(300.0, ge=0)
     max_speech_s: float = Field(15.0, gt=0)
+    max_pending_turns: int = Field(3, ge=1)
+    error_clip: str | None = None  # nazwa klipu zapisanego w ciele, odtwarzanego po nieudanej turze
 
     @model_validator(mode="after")
     def _opus_parameters(self) -> "AudioConfig":
@@ -187,6 +189,12 @@ class Config(_Model):
     store: StoreConfig = StoreConfig()
     api: ApiConfig = ApiConfig()
     brain: BrainConfig = BrainConfig()
+
+    @model_validator(mode="after")
+    def _voice_engines_together(self) -> "Config":
+        if (self.brain.stt.engine != "none") != (self.brain.tts.engine != "none"):
+            raise ValueError("brain.stt i brain.tts trzeba włączać razem")
+        return self
 
     @classmethod
     def load(cls, path: str | Path) -> "Config":

@@ -140,3 +140,21 @@ def test_importing_brain_does_not_load_audio_libraries():
     root = Path(__file__).parents[2]
     result = subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_voice_wiring_defaults_and_validation():
+    a = Config().brain.audio
+    assert (a.max_pending_turns, a.error_clip) == (3, None)
+    with pytest.raises(ValidationError, match="razem"):
+        Config.model_validate({"brain": {"stt": {"engine": "faster-whisper", "model": "small"}}})
+    with pytest.raises(ValidationError, match="razem"):
+        Config.model_validate({"brain": {"tts": {"engine": "piper", "voice": "/g.onnx"}}})
+    both = {
+        "stt": {"engine": "faster-whisper", "model": "small"},
+        "tts": {"engine": "piper", "voice": "/g.onnx"},
+        "audio": {"error_clip": "error", "max_pending_turns": 1},
+    }
+    b = Config.model_validate({"brain": both}).brain
+    assert (b.audio.error_clip, b.audio.max_pending_turns) == ("error", 1)
+    with pytest.raises(ValidationError):
+        Config.model_validate({"brain": {"audio": {"max_pending_turns": 0}}})

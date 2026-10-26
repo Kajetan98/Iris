@@ -81,6 +81,15 @@ Rozpoznawanie i synteza mowy:
 - Transkrypcja krótsza niż `min_text_chars` (2) znaków kończy wypowiedź bez odpowiedzi.
 - Transkrypcja jest traktowana jak tekst z `POST /chat` (sekcja 12): trafia do LLM z tym samym kontekstem, a odpowiedź jest odtwarzana na ciele.
 
+Tura głosowa na hoście:
+
+- `audio.utterance.start` otwiera składanie wypowiedzi, a `audio.utterance.end` uruchamia turę w osobnym zadaniu, więc odbiór ramek nie jest blokowany. Równolegle trwa najwyżej `max_pending_turns` (3) tur, a kolejne wypowiedzi są pomijane z ostrzeżeniem w logu.
+- Tura przechodzi: transkrypcja, ta sama ścieżka co `POST /chat` (kontekst, kolejność tur, cofanie wycinka stanu), synteza, ramki `kind=2` wysyłane jako binarne ramki WebSocket, akcja `speak` z `ack`. Odpowiedzi różnych tur są odtwarzane po kolei, a ramki jednej odpowiedzi nie mieszają się z drugą.
+- Wypowiedź bez rozpoznanego tekstu i wypowiedź zbyt krótka nie dają odpowiedzi ani klipu.
+- Gdy tura się nie powiedzie (błąd STT, LLM lub TTS, utrata łącza w trakcie), host zapisuje ostrzeżenie w logu i, jeśli ustawiono `error_clip`, wysyła `speak.clip` z tą nazwą (klipy zapisane w ciele, nazwy zależą od firmware). Odrzucone `speak` (`ack` z `ok: false`) lub brak `ack` kończy się samym ostrzeżeniem.
+- Modele ładują się przy starcie hosta. Błąd ładowania, albo włączony głos przy wyłączonym LLM, wyłącza głos (`/health`: `voice` ma wartość `error`), a reszta hosta działa dalej.
+- `brain.stt` i `brain.tts` włącza się razem.
+
 ## 7. Model stanu na hoście
 
 `body` (z ostatnich zdarzeń):
@@ -184,7 +193,7 @@ Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lu
 - `GET /facts?source=`: `{"facts": [{id, text, source, confidence, created_at, updated_at}]}`.
 - `PATCH /facts/{id}`: ciało z co najmniej jednym polem z `text`, `source`, `confidence`. 200 z faktem, 404 lub 422. Reguły korekty w sekcji 9.
 - `DELETE /facts/{id}`: 204 lub 404.
-- `GET /health`: zawsze 200, `{"status": "ok|degraded", "uptime_s", "session_id", "link": {"state", "connected", "rssi", "last_seen_ms"}, "store": "ok|error"}`. `status` to `ok` tylko przy `link.state` = `ok`. `connected` oznacza otwarte połączenie WebSocket.
+- `GET /health`: zawsze 200, `{"status": "ok|degraded", "uptime_s", "session_id", "link": {"state", "connected", "rssi", "last_seen_ms"}, "store": "ok|error", "voice": "disabled|ready|error"}`. `status` to `ok` tylko przy `link.state` = `ok`. `connected` oznacza otwarte połączenie WebSocket.
 
 ## 11. Obsługa błędów
 
