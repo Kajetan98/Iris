@@ -187,10 +187,21 @@ def test_slice_has_no_sensor_payloads():
         assert leaked not in dumped
 
 
-def test_core_runs_without_llm_modules():
+def test_state_layers_do_not_import_brain():
+    """Rdzeń, store i API muszą działać bez host.brain (sprawdzane w czystym procesie)."""
+    import subprocess
     import sys
+    from pathlib import Path
 
-    assert not any(m.startswith("host.brain") for m in sys.modules)
+    code = (
+        "import sys\n"
+        "import host.core.core, host.store, host.api.main\n"
+        "loaded = sorted(m for m in sys.modules if m.startswith('host.brain'))\n"
+        "assert not loaded, loaded\n"
+    )
+    root = Path(__file__).parents[2]
+    result = subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
 
 
 def test_initiative_gate_is_exposed():

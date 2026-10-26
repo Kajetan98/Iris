@@ -50,6 +50,7 @@ sim/             symulator ciała
 - zależności: `pip install pydantic fastapi uvicorn websockets pytest httpx`
 - testy: `pytest host/tests`
 - serwer: `uvicorn host.api.main:app --reload` (konfiguracja TOML ze zmiennej `IRIS_CONFIG`, bez niej wartości domyślne; baza `iris.db` w bieżącym katalogu)
+- LLM (domyślnie wyłączony), w pliku z `IRIS_CONFIG`: `[brain.llm]` z `engine = "ollama"` i `model = "..."` (opcje: `base_url`, `send_facts`, `max_tokens`; lista w `host/core/config.py`)
 - symulator ciała: `python -m sim.body --url ws://localhost:8000/ws` (komendy na stdin, `help` je wypisuje; scenariusze: `--script sim/scenarios/low_battery.txt`)
 
 ## Kolejność prac
