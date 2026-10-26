@@ -146,7 +146,7 @@ Co host zapisuje (wartości początkowe w konfiguracji `api`):
 
 ## 10. REST
 
-Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lub przesunięcie, w URL `+` jako `%2B`), czas bez strefy daje 422. API nie ma jeszcze uwierzytelniania (sekcja 12), więc host domyślnie nasłuchuje tylko na 127.0.0.1.
+Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lub przesunięcie, w URL `+` jako `%2B`), czas bez strefy daje 422. API nie ma jeszcze uwierzytelniania (sekcja 13), więc host domyślnie nasłuchuje tylko na 127.0.0.1.
 
 | metoda i ścieżka | opis |
 |---|---|
