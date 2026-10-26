@@ -6,6 +6,9 @@
 - Ramki tekstowe: JSON UTF-8. Ramki binarne: audio (sekcja 6).
 - Heartbeat: ciało wysyła `body.heartbeat` co 1 s. Brak heartbeatu przez 5 s oznacza `link.lost` (wartości początkowe).
 - Wersja protokołu w polu `v`. Zmiana niezgodna wstecz podnosi `v`.
+- Nowe połączenie zastępuje poprzednie: host zamyka stare z kodem 4000 (ciało po zerwaniu łącza łączy się ponownie, a stare gniazdo może być jeszcze otwarte po stronie hosta).
+- Odrzucona ramka nie zamyka połączenia (sekcja 11).
+- Akcje host wysyła jako ramki tekstowe. `id` ma postać `h<licznik>`, `ts` to milisekundy od startu hosta (zegar monotoniczny).
 
 ## 2. Koperta
 
@@ -35,7 +38,10 @@
 
 ## 4. Zdarzenia hosta (wewnętrzne, widoczne w `/events`)
 
-`link.lost`, `link.restored`, `drive.enter`, `drive.exit`, `host.start`, `host.stop`.
+`link.lost`, `link.restored`, `drive.enter`, `drive.exit`, `host.start`, `host.stop`, `action.sent`, `action.ack`.
+
+- `action.sent`: `id`, `type`, `body`. Zapisywane po wysłaniu akcji do ciała.
+- `action.ack`: `ref`, `ok`, `err`. Zapisywane po odebraniu `ack` od ciała.
 
 ## 5. Akcje (host → ciało)
 
@@ -55,6 +61,8 @@ Ciało odrzuca akcję spoza listy i odsyła `ack` z `ok:false`.
 - Kodek: Opus, ramki binarne. Nagłówek ramki: `kind` (1 B: 1 = mikrofon, 2 = odtwarzanie), `id` (2 B), `seq` (2 B), dane.
 - Mikrofon: strumień między `audio.utterance.start` a `audio.utterance.end`.
 - Odtwarzanie: host wysyła ramki z `kind=2`, potem akcję `speak` z `audio_id`.
+- Pola wielobajtowe nagłówka (5 bajtów) są zapisane w kolejności big-endian.
+- Od ciała host przyjmuje tylko `kind=1`. Inne wartości `kind` i ramki krótsze niż nagłówek są odrzucane (sekcja 11).
 
 ## 7. Model stanu na hoście
 
@@ -130,22 +138,41 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 - Użytkownik może wyświetlić, poprawić i usunąć fakty. Poprawa tekstu przez użytkownika zmienia `source` na `stated` i `confidence` na 1, chyba że podano inaczej. Usunięcie jest trwałe.
 - `continuity.known_facts` to liczba wierszy w `facts`.
 
+Co host zapisuje (wartości początkowe w konfiguracji `api`):
+
+- każde zdarzenie z ciała poza `body.heartbeat` (heartbeaty tylko przy `store_heartbeats`, domyślnie wyłączone) i każde zdarzenie hosta,
+- migawkę stanu przy starcie, przy zamknięciu, przy każdym `drive.enter` i `drive.exit` oraz co `snapshot_every_s` (300 s),
+- `last_seen_at` sesji co `touch_every_s` (10 s).
+
 ## 10. REST
+
+Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lub przesunięcie, w URL `+` jako `%2B`), czas bez strefy daje 422. API nie ma jeszcze uwierzytelniania (sekcja 12), więc host domyślnie nasłuchuje tylko na 127.0.0.1.
 
 | metoda i ścieżka | opis |
 |---|---|
 | `GET /self` | aktualny `self` i `body` |
-| `GET /self/history?since=<ISO>` | zmiany stanu i zdarzenia |
-| `GET /events?type=&since=` | zdarzenia |
+| `GET /self/history?since=<ISO>&limit=` | zmiany stanu i zdarzenia |
+| `GET /events?type=&since=&after_id=&limit=` | zdarzenia |
 | `POST /actions` | wysłanie akcji do ciała (debug) |
 | `GET /facts`, `PATCH /facts/{id}`, `DELETE /facts/{id}` | pamięć o użytkowniku |
 | `GET /health` | stan hosta i łącza |
+
+- `GET /self`: `{"self": {...}, "body": {...}}` (sekcja 7).
+- `GET /self/history`: `{"since": "<ISO>", "snapshots": [{id, session_id, at, self, body}], "events": [...]}`. `since` domyślnie oznacza start bieżącej sesji. Zdarzenia to typy zmian stanu: `host.start`, `host.stop`, `link.lost`, `link.restored`, `drive.enter`, `drive.exit`, `system.boot`, `body.fault`, `body.fault.clear`. `limit` (1-1000, domyślnie 1000) dotyczy każdej z list.
+- `GET /events`: `{"events": [{id, session_id, at, source, type, ts_ms, boot_id, data}]}` rosnąco po `id`. `type` można powtórzyć. `since` jest włączone, `after_id` wyłączone (stronicowanie). `limit` jak wyżej.
+- `POST /actions`: ciało `{"type": "haptic", "body": {"pattern": "warn"}, "wait_ack": true}`. Odpowiedź 200: `{"id": "h3", "ack": {"ref", "ok", "err"}}` (`ack` jest `null`, gdy `wait_ack` ma wartość `false`). 409, gdy ciało nie jest połączone. 422 dla nieznanego typu lub niepoprawnego `body`. 504, gdy `ack` nie przyszedł w `ack_timeout_s` (2 s); akcja została wtedy wysłana.
+- `GET /facts?source=`: `{"facts": [{id, text, source, confidence, created_at, updated_at}]}`.
+- `PATCH /facts/{id}`: ciało z co najmniej jednym polem z `text`, `source`, `confidence`. 200 z faktem, 404 lub 422. Reguły korekty w sekcji 9.
+- `DELETE /facts/{id}`: 204 lub 404.
+- `GET /health`: zawsze 200, `{"status": "ok|degraded", "uptime_s", "session_id", "link": {"state", "connected", "rssi", "last_seen_ms"}, "store": "ok|error"}`. `status` to `ok` tylko przy `link.state` = `ok`. `connected` oznacza otwarte połączenie WebSocket.
 
 ## 11. Obsługa błędów
 
 - Nieznany `type` lub `v`: log i odrzucenie, połączenie pozostaje.
 - Uszkodzona ramka: odrzucenie, licznik błędów w `body.heartbeat`.
 - Utrata łącza: ciało kontynuuje komendy lokalne i buforuje zdarzenia (limit bufora do ustalenia), host oznacza `link_lost`.
+- Błąd zapisu do bazy jest logowany. Host pracuje dalej na stanie w pamięci.
+- Nieoczekiwany wyjątek przy obsłudze ramki jest logowany, połączenie pozostaje.
 
 ## 12. Otwarte kwestie
 
@@ -156,3 +183,4 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 - Sposób ustawiania trybu ciszy (endpoint REST, komenda głosowa lub oba).
 - Czy `battery_critical` może omijać limit inicjatywy.
 - Retencja i usuwanie zdarzeń, w tym zapisanych odczytów `gps` i `imu`.
+- Uwierzytelnianie API i WebSocket (ciało łączy się przez sieć, więc host będzie musiał nasłuchiwać poza 127.0.0.1).
