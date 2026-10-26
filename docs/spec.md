@@ -176,7 +176,7 @@ Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lu
 
 ## 12. Otwarte kwestie
 
-- Limit bufora zdarzeń w ciele przy braku łącza.
+- Limit bufora zdarzeń w ciele przy braku łącza (symulator przyjmuje 64 i przy przepełnieniu odrzuca najstarsze).
 - Format ramki audio po testach na STM32 (Opus na L476 wymaga sprawdzenia pod kątem CPU i RAM).
 - Wybór między JSON a CBOR dla zdarzeń z ciała po pomiarze zużycia RAM.
 - Zestaw lokalnych komend i ich wzorców.
