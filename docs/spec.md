@@ -23,9 +23,10 @@
 | type | body | uwagi |
 |---|---|---|
 | `system.boot` | `boot_id`, `fw`, `reset_reason` | wysyłane po starcie |
-| `body.heartbeat` | `batt_pct`, `link_rssi` | co 1 s |
+| `body.heartbeat` | `batt_pct`, `link_rssi`, `frame_errors` (opcjonalne) | co 1 s; `frame_errors` to licznik odrzuconych ramek (sekcja 11) |
 | `body.sensor` | `temp_c`, `imu`, `presence`, `gps` (pola opcjonalne) | co zmianę lub co N s |
 | `body.fault` | `sensor`, `code` | sensor niedostępny lub błędny |
+| `body.fault.clear` | `sensor` | sensor znów działa |
 | `audio.utterance.start` | `utt_id` | po wake word |
 | `audio.utterance.end` | `utt_id`, `dur_ms` | po VAD |
 | `local.command` | `cmd`, `result` | komenda obsłużona lokalnie na STM32 |
@@ -59,8 +60,13 @@ Ciało odrzuca akcję spoza listy i odsyła `ack` z `ok:false`.
 `body` (z ostatnich zdarzeń):
 ```
 {"batt_pct":71,"link":"ok","rssi":-58,"temp_c":24.1,
- "sensors_ok":["mic","imu","temp"],"sensors_down":["gps"],"last_seen_ms":0}
+ "sensors_ok":["mic","imu","temp","presence"],"sensors_down":["gps"],"last_seen_ms":0}
 ```
+
+- `link`: `unknown` (przed pierwszym heartbeatem), `ok`, `lost`. Z `unknown` do `lost` host przechodzi po `link_timeout_s` od startu, jeśli nie było heartbeatu. Wejście w `lost` generuje `link.lost`. Pierwszy heartbeat po `lost` generuje `link.restored` i ustawia `ok`.
+- `sensors_down`: sensory z aktywnym `body.fault`, usuwane przez `body.fault.clear` lub `system.boot`. `sensors_ok`: pozostałe ze znanych sensorów (lista w konfiguracji: `mic`, `imu`, `temp`, `presence`, `gps`).
+- `last_seen_ms`: czas od ostatniej ramki z ciała, liczony w chwili odczytu stanu.
+- Wartości pól bez danych (np. `temp_c` przed pierwszym odczytem) to `null`.
 
 `self`:
 ```
@@ -69,7 +75,15 @@ Ciało odrzuca akcję spoza listy i odsyła `ack` z `ok:false`.
  "drives":["battery_low"],"continuity":{"sessions":0,"known_facts":0}}
 ```
 
+`mode` wynika z aktywnych drives, w kolejności pierwszeństwa: `offline`, jeśli aktywne jest `link_lost`; `saving`, jeśli aktywne jest `battery_low` lub `battery_critical`; w przeciwnym razie `nominal`.
+
+`continuity.sessions`: liczba sesji hosta łącznie z bieżącą. `last_restart`: czas startu bieżącej sesji.
+
 Do promptu LLM trafia wycinek: `mode`, aktywne `drives`, zmiany `body` od ostatniego zapytania i `last_downtime_s`, jeśli była przerwa.
+
+- Zmiana pola `body` jest raportowana, gdy różni się od wartości ostatnio raportowanej o więcej niż tolerancja z konfiguracji (wartości początkowe: `batt_pct` 5, `temp_c` 2, `rssi` 10). Pola nieliczbowe (`link`, `sensors_ok`, `sensors_down`) raportowane są przy każdej różnicy. Wartość odniesienia aktualizuje się tylko dla raportowanych pól. Przy pierwszym zapytaniu odniesieniem jest brak wartości (`null`).
+- `last_downtime_s` trafia do wycinka, gdy przerwa wynosiła co najmniej `min_downtime_s` (wartość początkowa: 60 s).
+- Wycinek nie zawiera odczytów `gps`, `imu` ani `presence`, tylko dostępność sensorów.
 
 ## 8. Potrzeby (drives)
 
@@ -83,11 +97,23 @@ Deterministyczne reguły z histerezą. Wartości początkowe, do konfiguracji.
 | `temp_high` | `temp_c` > 40 przez 30 s | `temp_c` < 37 przez 60 s |
 | `long_silence` | brak interakcji > 4 h w godzinach aktywności | interakcja |
 
-Wejście lub wyjście z drive zapisuje zdarzenie `drive.enter` / `drive.exit`. Inicjatywa (wypowiedź bez wywołania użytkownika) podlega limitowi: maks. N na godzinę i trybowi ciszy.
+Wejście lub wyjście z drive zapisuje zdarzenie `drive.enter` / `drive.exit`.
+
+Reguły obliczania:
+
+- Czas w warunku ("przez 10 s") oznacza ciągłe spełnianie warunku przez co najmniej tyle sekund. Niespełnienie warunku zeruje licznik. Strefa między progiem wejścia i wyjścia nie zmienia stanu.
+- `battery_low` i `battery_critical` są niezależne. Przy `batt_pct` < 10 oba mogą być aktywne.
+- Gdy dane wejściowe są niedostępne, drive nie zmienia stanu, a licznik jest zerowany. Dla `battery_*` niedostępne znaczy: brak odczytu lub `link` ≠ `ok`. Dla `temp_high`: brak odczytu, `link` ≠ `ok` lub `temp` w `sensors_down`.
+- `link_lost`: wejście natychmiast po przejściu `link` w `lost`. Wyjście, gdy `link` jest `ok` nieprzerwanie przez `link_recover_s`. Kolejna utrata łącza zeruje licznik.
+- `long_silence`: wejście, gdy od ostatniej interakcji minęło więcej niż `long_silence_after_s` (4 h), a bieżąca godzina lokalna mieści się w godzinach aktywności. Wyjście przy pierwszej interakcji. Czas liczony zegarem ściennym. Przed pierwszą interakcją odniesieniem jest czas startu hosta.
+- Interakcja to zdarzenie `audio.utterance.start`, `local.command` lub `button`.
+- Godziny aktywności: konfiguracja `active_hours`, wartość początkowa 08:00-22:00 czasu lokalnego. Przedział może przechodzić przez północ (np. 22:00-06:00).
+
+Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa, gdy włączony jest tryb ciszy (`quiet`, ustawiany przez użytkownika, domyślnie wyłączony) lub gdy w ciągu ostatnich 60 minut zgoda była udzielona co najmniej `max_per_hour` razy (wartość początkowa: 2). Bramka nie zależy od rodzaju drive.
 
 ## 9. Ciągłość
 
-- Przy starcie host odczytuje ostatnie zdarzenie z poprzedniej sesji i wyznacza `last_downtime_s`.
+- Przy starcie host odczytuje ostatnie zdarzenie z poprzedniej sesji i wyznacza `last_downtime_s` jako różnicę między czasem startu a czasem tego zdarzenia. Przy pierwszym uruchomieniu (brak poprzedniej sesji) `last_downtime_s` wynosi 0.
 - Zdarzenia i stany zapisywane w SQLite (tabele: `events`, `state_snapshots`, `facts`, `sessions`).
 - `facts` ma pole `source` (`stated` lub `inferred`) i `confidence`.
 - Użytkownik może wyświetlić, poprawić i usunąć fakty.
