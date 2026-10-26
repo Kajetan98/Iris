@@ -93,6 +93,7 @@ Do promptu LLM trafia wycinek: `mode`, aktywne `drives`, zmiany `body` od ostatn
 - Zmiana pola `body` jest raportowana, gdy różni się od wartości ostatnio raportowanej o więcej niż tolerancja z konfiguracji (wartości początkowe: `batt_pct` 5, `temp_c` 2, `rssi` 10). Pola nieliczbowe (`link`, `sensors_ok`, `sensors_down`) raportowane są przy każdej różnicy. Wartość odniesienia aktualizuje się tylko dla raportowanych pól. Przy pierwszym zapytaniu odniesieniem jest brak wartości (`null`).
 - `last_downtime_s` trafia do pierwszego wycinka w sesji, gdy przerwa wynosiła co najmniej `min_downtime_s` (wartość początkowa: 60 s). Kolejne wycinki go nie zawierają.
 - Wycinek nie zawiera odczytów `gps`, `imu` ani `presence`, tylko dostępność sensorów.
+- Gdy zapytanie do LLM się nie powiedzie (błąd silnika albo anulowanie), wycinek jest cofany: wartości odniesienia i znacznik przerwy wracają do stanu sprzed pobrania, więc następny wycinek zawiera te same zmiany. Cofnąć można tylko ostatnio pobrany wycinek, dlatego tury rozmowy są obsługiwane po kolei.
 
 ## 8. Potrzeby (drives)
 
@@ -115,7 +116,7 @@ Reguły obliczania:
 - Gdy dane wejściowe są niedostępne, drive nie zmienia stanu, a licznik jest zerowany. Dla `battery_*` niedostępne znaczy: brak odczytu lub `link` ≠ `ok`. Dla `temp_high`: brak odczytu, `link` ≠ `ok` lub `temp` w `sensors_down`.
 - `link_lost`: wejście natychmiast po przejściu `link` w `lost`. Wyjście, gdy `link` jest `ok` nieprzerwanie przez `link_recover_s`. Kolejna utrata łącza zeruje licznik.
 - `long_silence`: wejście, gdy od ostatniej interakcji minęło więcej niż `long_silence_after_s` (4 h), a bieżąca godzina lokalna mieści się w godzinach aktywności. Wyjście przy pierwszej interakcji. Czas liczony zegarem ściennym. Przed pierwszą interakcją odniesieniem jest czas startu hosta.
-- Interakcja to zdarzenie `audio.utterance.start`, `local.command` lub `button`.
+- Interakcja to zdarzenie `audio.utterance.start`, `local.command` lub `button` albo przyjęte wywołanie `POST /chat` (także gdy silnik LLM potem zawiedzie).
 - Godziny aktywności: konfiguracja `active_hours`, wartość początkowa 08:00-22:00 czasu lokalnego. Przedział może przechodzić przez północ (np. 22:00-06:00).
 
 Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa, gdy włączony jest tryb ciszy (`quiet`, ustawiany przez użytkownika, domyślnie wyłączony) lub gdy w ciągu ostatnich 60 minut zgoda była udzielona co najmniej `max_per_hour` razy (wartość początkowa: 2). Bramka nie zależy od rodzaju drive.
@@ -154,6 +155,7 @@ Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lu
 | `GET /self/history?since=<ISO>&limit=` | zmiany stanu i zdarzenia |
 | `GET /events?type=&since=&after_id=&limit=` | zdarzenia |
 | `POST /actions` | wysłanie akcji do ciała (debug) |
+| `POST /chat` | wypowiedź tekstowa do asystenta (wymaga włączonego LLM) |
 | `GET /facts`, `PATCH /facts/{id}`, `DELETE /facts/{id}` | pamięć o użytkowniku |
 | `GET /health` | stan hosta i łącza |
 
@@ -161,6 +163,7 @@ Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lu
 - `GET /self/history`: `{"since": "<ISO>", "snapshots": [{id, session_id, at, self, body}], "events": [...]}`. `since` domyślnie oznacza start bieżącej sesji. Zdarzenia to typy zmian stanu: `host.start`, `host.stop`, `link.lost`, `link.restored`, `drive.enter`, `drive.exit`, `system.boot`, `body.fault`, `body.fault.clear`. `limit` (1-1000, domyślnie 1000) dotyczy każdej z list.
 - `GET /events`: `{"events": [{id, session_id, at, source, type, ts_ms, boot_id, data}]}` rosnąco po `id`. `type` można powtórzyć. `since` jest włączone, `after_id` wyłączone (stronicowanie). `limit` jak wyżej.
 - `POST /actions`: ciało `{"type": "haptic", "body": {"pattern": "warn"}, "wait_ack": true}`. Odpowiedź 200: `{"id": "h3", "ack": {"ref", "ok", "err"}}` (`ack` jest `null`, gdy `wait_ack` ma wartość `false`). 409, gdy ciało nie jest połączone. 422 dla nieznanego typu lub niepoprawnego `body`. 504, gdy `ack` nie przyszedł w `ack_timeout_s` (2 s); akcja została wtedy wysłana.
+- `POST /chat`: ciało `{"text": "..."}` (1-4000 znaków po obcięciu białych znaków, brak dodatkowych pól). 200: `{"text", "truncated", "model", "usage": {"input_tokens", "output_tokens"}}`. 501, gdy `brain.llm.engine` ma wartość `none`. 503, gdy silnik jest niedostępny (brak połączenia, limit czasu). 502 przy błędzie silnika (zły model, niepoprawna lub pusta odpowiedź). 422 dla niepoprawnego ciała i dla odmowy silnika. Kontekst jak w sekcji 12. Treść rozmowy nie jest zapisywana w bazie ani logowana. Tury są obsługiwane po kolei.
 - `GET /facts?source=`: `{"facts": [{id, text, source, confidence, created_at, updated_at}]}`.
 - `PATCH /facts/{id}`: ciało z co najmniej jednym polem z `text`, `source`, `confidence`. 200 z faktem, 404 lub 422. Reguły korekty w sekcji 9.
 - `DELETE /facts/{id}`: 204 lub 404.
@@ -201,5 +204,4 @@ Reguły:
 - Czy `battery_critical` może omijać limit inicjatywy.
 - Retencja i usuwanie zdarzeń, w tym zapisanych odczytów `gps` i `imu`.
 - Uwierzytelnianie API i WebSocket (ciało łączy się przez sieć, więc host będzie musiał nasłuchiwać poza 127.0.0.1).
-- Cofnięcie przesunięcia wycinka stanu (`prompt_slice`), gdy zapytanie do LLM się nie powiodło; bez tego zmiany `body` z nieudanego zapytania nie trafią do kolejnych.
 - Silnik Claude API (wymaga zgody na zależność `anthropic`; modele Claude odrzucają `temperature`).
