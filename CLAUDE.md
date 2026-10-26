@@ -51,6 +51,7 @@ sim/             symulator ciała
 - testy: `pytest host/tests`
 - serwer: `uvicorn host.api.main:app --reload` (konfiguracja TOML ze zmiennej `IRIS_CONFIG`, bez niej wartości domyślne; baza `iris.db` w bieżącym katalogu)
 - LLM (domyślnie wyłączony), w pliku z `IRIS_CONFIG`: `[brain.llm]` z `engine = "ollama"` i `model = "..."` (opcje: `base_url`, `send_facts`, `max_tokens`; lista w `host/core/config.py`)
+- rozmowa tekstowa (wymaga `[brain.llm]`, inaczej 501): `curl -s localhost:8000/chat -H 'content-type: application/json' -d '{"text":"Cześć"}'`
 - symulator ciała: `python -m sim.body --url ws://localhost:8000/ws` (komendy na stdin, `help` je wypisuje; scenariusze: `--script sim/scenarios/low_battery.txt`)
 
 ## Kolejność prac

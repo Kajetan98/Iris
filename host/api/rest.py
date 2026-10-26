@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import Response
 
-from host.api.service import AckTimeout, HostService, NotConnected
+from host.api.service import AckTimeout, ChatDisabled, ChatError, HostService, NotConnected
 from host.store.models import Fact, Snapshot, StoredEvent
 
 router = APIRouter()
@@ -135,6 +135,30 @@ async def post_action(
     except AckTimeout as e:
         raise HTTPException(504, f"akcja {e.action_id} wysłana, brak ack w czasie") from None
     return {"id": action_id, "ack": ack.model_dump() if ack else None}
+
+
+# --- rozmowa ---
+
+
+class ChatRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    text: str = Field(min_length=1, max_length=4000)
+
+
+CHAT_STATUS = {"unavailable": 503, "failed": 502, "refused": 422}
+
+
+@router.post("/chat")
+async def post_chat(req: ChatRequest, service: HostService = Depends(get_service)) -> dict[str, Any]:
+    try:
+        return await service.chat(req.text)
+    except ChatDisabled:
+        raise HTTPException(501, "LLM wyłączony w konfiguracji (brain.llm.engine)") from None
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from None
+    except ChatError as e:
+        raise HTTPException(CHAT_STATUS[e.kind], f"silnik LLM: {e}") from None
 
 
 # --- fakty ---

@@ -10,8 +10,9 @@ import asyncio
 import json
 import logging
 import sqlite3
+import time
 from collections.abc import Callable
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
 from host.core.clock import Clock
 from host.core.config import Config
@@ -29,6 +30,9 @@ from host.core.protocol import (
 )
 from host.store import Store, StoreError
 
+if TYPE_CHECKING:  # host.brain ładuje się dopiero, gdy LLM jest włączony
+    from host.brain.assistant import Assistant
+
 log = logging.getLogger(__name__)
 
 REPLACED_CLOSE_CODE = 4000
@@ -42,6 +46,18 @@ class AckTimeout(Exception):
     def __init__(self, action_id: str) -> None:
         super().__init__(f"brak ack dla akcji {action_id}")
         self.action_id = action_id
+
+
+class ChatDisabled(Exception):
+    """LLM jest wyłączony w konfiguracji."""
+
+
+class ChatError(Exception):
+    """Nieudana tura rozmowy. kind: unavailable | refused | failed."""
+
+    def __init__(self, kind: str, message: str) -> None:
+        super().__init__(message)
+        self.kind = kind
 
 
 class WebSocketLike(Protocol):
@@ -58,11 +74,14 @@ class HostService:
         clock: Clock,
         store: Store,
         on_audio: Callable[[AudioFrame], None] | None = None,
+        assistant: "Assistant | None" = None,
     ) -> None:
         self.config = config
         self.clock = clock
         self.store = store
         self.on_audio = on_audio or (lambda frame: None)
+        self.assistant = assistant
+        self._chat_lock = asyncio.Lock()
         self.core: HostCore | None = None
         self.boot_id: str | None = None
         self.rejected_frames = 0
@@ -223,6 +242,53 @@ class HostService:
             log.warning("ack dla nieznanej lub zakończonej akcji: %s", ack.ref)
         elif not future.done():
             future.set_result(ack)
+
+    # --- rozmowa ---
+
+    async def chat(self, text: str) -> dict[str, Any]:
+        """Jedna tura rozmowy z LLM. Rzuca ChatDisabled, ValueError (pusta wypowiedź) lub ChatError.
+
+        Tura obejmuje pobranie wycinka stanu, zapytanie i ewentualne cofnięcie wycinka, więc
+        trwa pod blokadą. Treść rozmowy nie jest zapisywana ani logowana."""
+        assistant = self.assistant
+        if assistant is None:
+            raise ChatDisabled()
+        text = text.strip()
+        if not text:
+            raise ValueError("pusta wypowiedź")
+        from host.brain.llm import LLMError, LLMRefusal, LLMUnavailable
+
+        core = self._require_core()
+        async with self._chat_lock:
+            self._persist(core.note_interaction())
+            state = core.prompt_slice()
+            facts = self._store(self.store.facts) or []
+            started = time.monotonic()
+            try:
+                answer = await assistant.ask(text, state=state, facts=facts, now=self.clock.wall())
+            except BaseException as e:
+                core.rollback_prompt_slice()  # także przy anulowaniu żądania
+                if isinstance(e, LLMRefusal):
+                    raise ChatError("refused", str(e)) from None
+                if isinstance(e, LLMUnavailable):
+                    raise ChatError("unavailable", str(e)) from None
+                if isinstance(e, LLMError):
+                    raise ChatError("failed", str(e)) from None
+                raise
+        log.info(
+            "chat: model=%s tokens=%s/%s truncated=%s %.0f ms",
+            answer.model, answer.usage.input_tokens, answer.usage.output_tokens,
+            answer.truncated, (time.monotonic() - started) * 1000,
+        )
+        return {
+            "text": answer.text,
+            "truncated": answer.truncated,
+            "model": answer.model,
+            "usage": {
+                "input_tokens": answer.usage.input_tokens,
+                "output_tokens": answer.usage.output_tokens,
+            },
+        }
 
     # --- stan ---
 

@@ -11,6 +11,7 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 
@@ -32,6 +33,7 @@ def create_app(
     config: Config | None = None,
     clock: Clock | None = None,
     store: Store | None = None,
+    assistant: Any = None,
     *,
     run_tick_loop: bool = True,
 ) -> FastAPI:
@@ -41,7 +43,13 @@ def create_app(
         clk = clock or SystemClock()
         owned_store = store is None
         st = store or Store(cfg.store.path, clk)
-        service = HostService(cfg, clk, st)
+        owned_assistant = assistant is None
+        asst = assistant
+        if asst is None and cfg.brain.llm.engine != "none":
+            from host.brain import build_assistant  # host.brain tylko przy włączonym LLM
+
+            asst = build_assistant(cfg.brain.llm)
+        service = HostService(cfg, clk, st, assistant=asst)
         service.start()
         app.state.service = service
         tick_task = asyncio.create_task(service.run_tick_loop()) if run_tick_loop else None
@@ -53,6 +61,8 @@ def create_app(
                 with contextlib.suppress(asyncio.CancelledError):
                     await tick_task
             service.stop()
+            if asst is not None and owned_assistant:
+                await asst.aclose()
             if owned_store:
                 st.close()
 
