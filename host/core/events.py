@@ -14,6 +14,8 @@ HostEventType = Literal[
     "drive.exit",
     "host.start",
     "host.stop",
+    "action.sent",
+    "action.ack",
 ]
 
 

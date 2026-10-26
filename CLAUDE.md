@@ -47,7 +47,7 @@ sim/             symulator ciała
 
 ## Komendy
 
-- zależności: `pip install pydantic pytest`
+- zależności: `pip install pydantic fastapi uvicorn websockets pytest httpx`
 - testy: `pytest host/tests`
 - serwer (po kroku 4): `uvicorn host.api.main:app --reload`
 - symulator ciała (po kroku 5): `python -m sim.body --url ws://localhost:8000/ws`

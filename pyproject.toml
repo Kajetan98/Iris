@@ -5,11 +5,15 @@ description = "IRIS: asystent głosowy (host)"
 requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.5",
+    "fastapi>=0.110",
+    "uvicorn>=0.29",
+    "websockets>=12",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8",
+    "httpx>=0.27",
 ]
 
 [tool.pytest.ini_options]

@@ -79,6 +79,11 @@ class Store:
     def __exit__(self, *exc: object) -> None:
         self.close()
 
+    def ping(self) -> None:
+        """Rzuca wyjątek, gdy baza jest niedostępna."""
+        with self._lock:
+            self._conn.execute("SELECT 1").fetchone()
+
     # --- sesje ---
 
     def begin_session(self) -> Continuity:

@@ -7,6 +7,7 @@ Wywołujący loguje i porzuca ramkę, połączenie zostaje.
 from __future__ import annotations
 
 import json
+import struct
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -161,6 +162,31 @@ def decode_frame(raw: str | bytes) -> DecodedEvent | DecodedAck:
         return DecodedEvent(env, model.model_validate(env.body))
     except ValidationError as e:
         raise FrameRejected(f"niepoprawne body {env.type}: {_summary(e)}") from None
+
+
+# --- audio (ramki binarne, sekcja 6) ---
+
+_AUDIO_HEADER = struct.Struct(">BHH")  # kind, id, seq (big-endian)
+AUDIO_MIC = 1
+AUDIO_PLAYBACK = 2
+
+
+@dataclass(frozen=True)
+class AudioFrame:
+    kind: int
+    id: int
+    seq: int
+    data: bytes
+
+
+def decode_audio_frame(raw: bytes) -> AudioFrame:
+    """Dekoduje ramkę binarną z ciała (tylko mikrofon). Rzuca FrameRejected."""
+    if len(raw) < _AUDIO_HEADER.size:
+        raise FrameRejected("ramka audio krótsza niż nagłówek")
+    kind, id_, seq = _AUDIO_HEADER.unpack_from(raw)
+    if kind != AUDIO_MIC:
+        raise FrameRejected(f"nieobsługiwany kind audio od ciała: {kind}")
+    return AudioFrame(kind, id_, seq, bytes(raw[_AUDIO_HEADER.size:]))
 
 
 # --- akcje host -> ciało ---

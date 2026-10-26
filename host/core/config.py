@@ -84,6 +84,14 @@ class StoreConfig(_Model):
     path: str = "iris.db"
 
 
+class ApiConfig(_Model):
+    tick_interval_s: float = Field(1.0, gt=0)
+    touch_every_s: float = Field(10.0, gt=0)
+    snapshot_every_s: float = Field(300.0, gt=0)
+    store_heartbeats: bool = False
+    ack_timeout_s: float = Field(2.0, gt=0)
+
+
 class Config(_Model):
     name: str = "IRIS"
     version: str = "0.1.0"
@@ -94,6 +102,7 @@ class Config(_Model):
     initiative: InitiativeConfig = InitiativeConfig()
     prompt: PromptConfig = PromptConfig()
     store: StoreConfig = StoreConfig()
+    api: ApiConfig = ApiConfig()
 
     @classmethod
     def load(cls, path: str | Path) -> "Config":
