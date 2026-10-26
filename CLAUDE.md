@@ -49,7 +49,7 @@ sim/             symulator ciała
 
 - zależności: `pip install pydantic fastapi uvicorn websockets pytest httpx`
 - testy: `pytest host/tests`
-- serwer (po kroku 4): `uvicorn host.api.main:app --reload`
+- serwer: `uvicorn host.api.main:app --reload` (konfiguracja TOML ze zmiennej `IRIS_CONFIG`, bez niej wartości domyślne; baza `iris.db` w bieżącym katalogu)
 - symulator ciała (po kroku 5): `python -m sim.body --url ws://localhost:8000/ws`
 
 ## Kolejność prac
