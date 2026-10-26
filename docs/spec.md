@@ -16,7 +16,8 @@
 - `id`: unikalny w obrębie nadawcy (licznik lub krótki ciąg).
 - `ts`: dla ciała milisekundy od startu (zegar monotoniczny). Host dodaje czas zegarowy przy zapisie.
 - `boot_id`: ciało wysyła w `system.boot`. Host łączy nim `ts` z czasem zegarowym.
-- `ack`: odpowiedź na `action`, zawiera `ref` (id akcji) i `ok` (bool), opcjonalnie `err`.
+- `ack`: odpowiedź na `action`. W `body`: `ref` (id akcji), `ok` (bool), opcjonalnie `err`. Pole `type` powtarza typ akcji.
+- Pola nieznane w kopercie i w `body` są pomijane (zmiana zgodna wstecz). Brak wymaganego pola oznacza odrzucenie ramki.
 
 ## 3. Zdarzenia (ciało → host)
 
