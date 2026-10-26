@@ -45,11 +45,12 @@ firmware/        STM32L476
 sim/             symulator ciała
 ```
 
-## Komendy (docelowe, uzupełnić po utworzeniu szkieletu)
+## Komendy
 
-- serwer: `uvicorn host.api.main:app --reload`
+- zależności: `pip install pydantic pytest`
 - testy: `pytest host/tests`
-- symulator ciała: `python -m sim.body --url ws://localhost:8000/ws`
+- serwer (po kroku 4): `uvicorn host.api.main:app --reload`
+- symulator ciała (po kroku 5): `python -m sim.body --url ws://localhost:8000/ws`
 
 ## Kolejność prac
 

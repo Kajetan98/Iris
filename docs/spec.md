@@ -83,7 +83,7 @@ Ciało odrzuca akcję spoza listy i odsyła `ack` z `ok:false`.
 Do promptu LLM trafia wycinek: `mode`, aktywne `drives`, zmiany `body` od ostatniego zapytania i `last_downtime_s`, jeśli była przerwa.
 
 - Zmiana pola `body` jest raportowana, gdy różni się od wartości ostatnio raportowanej o więcej niż tolerancja z konfiguracji (wartości początkowe: `batt_pct` 5, `temp_c` 2, `rssi` 10). Pola nieliczbowe (`link`, `sensors_ok`, `sensors_down`) raportowane są przy każdej różnicy. Wartość odniesienia aktualizuje się tylko dla raportowanych pól. Przy pierwszym zapytaniu odniesieniem jest brak wartości (`null`).
-- `last_downtime_s` trafia do wycinka, gdy przerwa wynosiła co najmniej `min_downtime_s` (wartość początkowa: 60 s).
+- `last_downtime_s` trafia do pierwszego wycinka w sesji, gdy przerwa wynosiła co najmniej `min_downtime_s` (wartość początkowa: 60 s). Kolejne wycinki go nie zawierają.
 - Wycinek nie zawiera odczytów `gps`, `imu` ani `presence`, tylko dostępność sensorów.
 
 ## 8. Potrzeby (drives)
@@ -142,3 +142,5 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 - Format ramki audio po testach na STM32 (Opus na L476 wymaga sprawdzenia pod kątem CPU i RAM).
 - Wybór między JSON a CBOR dla zdarzeń z ciała po pomiarze zużycia RAM.
 - Zestaw lokalnych komend i ich wzorców.
+- Sposób ustawiania trybu ciszy (endpoint REST, komenda głosowa lub oba).
+- Czy `battery_critical` może omijać limit inicjatywy.
