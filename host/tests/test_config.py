@@ -85,3 +85,58 @@ def test_api_defaults_match_spec():
     a = Config().api
     assert (a.tick_interval_s, a.touch_every_s, a.snapshot_every_s) == (1.0, 10.0, 300.0)
     assert a.store_heartbeats is False and a.ack_timeout_s == 2.0
+
+
+def test_voice_defaults_match_spec():
+    b = Config().brain
+    assert (b.stt.engine, b.tts.engine) == ("none", "none")
+    assert (b.stt.language, b.stt.min_text_chars, b.stt.vad_filter) == ("pl", 2, True)
+    a = b.audio
+    assert (a.playback_rate_hz, a.frame_ms, a.bitrate_bps) == (16000, 20.0, 24000)
+    assert (a.max_utterance_s, a.min_utterance_ms, a.max_speech_s) == (30.0, 300.0, 15.0)
+
+
+def test_voice_sections_from_toml(tmp_path):
+    p = tmp_path / "iris.toml"
+    p.write_text(
+        '[brain.stt]\nengine = "faster-whisper"\nmodel = "Systran/faster-whisper-small"\nbeam_size = 3\n'
+        '[brain.tts]\nengine = "piper"\nvoice = "/g/pl_PL-gosia-medium.onnx"\nlength_scale = 1.1\n'
+        '[brain.audio]\nmax_speech_s = 8\nplayback_rate_hz = 24000\n'
+    )
+    b = Config.load(p).brain
+    assert (b.stt.model, b.stt.beam_size) == ("Systran/faster-whisper-small", 3)
+    assert (b.tts.voice, b.tts.length_scale) == ("/g/pl_PL-gosia-medium.onnx", 1.1)
+    assert (b.audio.max_speech_s, b.audio.playback_rate_hz, b.audio.frame_ms) == (8.0, 24000, 20.0)
+
+
+@pytest.mark.parametrize(
+    "section, bad",
+    [
+        ("audio", {"playback_rate_hz": 22050}),  # Opus nie obsługuje 22,05 kHz
+        ("audio", {"frame_ms": 30}),
+        ("audio", {"bitrate_bps": 100}),
+        ("audio", {"max_speech_s": 0}),
+        ("stt", {"beam_size": 0}),
+        ("tts", {"length_scale": 0}),
+        ("tts", {"max_chars": 0}),
+    ],
+)
+def test_invalid_voice_settings_are_rejected(section, bad):
+    with pytest.raises(ValidationError):
+        Config.model_validate({"brain": {section: bad}})
+
+
+def test_importing_brain_does_not_load_audio_libraries():
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    code = (
+        "import sys\n"
+        "import host.brain\n"
+        "loaded = sorted(m for m in ('numpy', 'av', 'faster_whisper', 'piper', 'host.brain.audio') if m in sys.modules)\n"
+        "assert not loaded, loaded\n"
+    )
+    root = Path(__file__).parents[2]
+    result = subprocess.run([sys.executable, "-c", code], cwd=root, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr

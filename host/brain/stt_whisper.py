@@ -57,16 +57,19 @@ class FasterWhisperEngine:
     def _load_locked(self) -> Any:
         if self._model is not None:
             return self._model
-        looks_like_path = os.sep in self.model_name or self.model_name.startswith(".")
-        if looks_like_path and not os.path.isdir(self.model_name):
+        # Identyfikator repozytorium ("Systran/faster-whisper-small") też zawiera ukośnik, więc
+        # ścieżką jest tylko nazwa absolutna albo zaczynająca się od "." lub "~".
+        is_path = os.path.isabs(self.model_name) or self.model_name.startswith((".", "~"))
+        if is_path and not os.path.isdir(os.path.expanduser(self.model_name)):
             raise SpeechConfigError(f"katalog modelu STT nie istnieje: {self.model_name}")
         factory = self._factory or _whisper_model_class()
+        name = os.path.expanduser(self.model_name) if is_path else self.model_name
         try:
-            self._model = factory(self.model_name, **self._load_args)
-        except (OSError, ValueError, RuntimeError) as e:
+            self._model = factory(name, **self._load_args)
+        except Exception as e:  # biblioteki rzucają tu różne typy (OSError, ValueError, RuntimeError)
             raise SpeechConfigError(
                 f"nie można załadować modelu STT {self.model_name!r}: "
-                f"{str(e)[:MAX_ERROR_TEXT]} (nazwa modelu jest pobierana z Hugging Face, "
+                f"{type(e).__name__}: {str(e)[:MAX_ERROR_TEXT]} (nazwa modelu jest pobierana z Hugging Face, "
                 "więc host huggingface.co musi być dostępny albo trzeba podać katalog z modelem)"
             ) from None
         log.info("model STT załadowany: %s", self.model_name)

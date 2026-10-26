@@ -59,8 +59,10 @@ class PiperEngine:
         loader = self._loader or _piper_loader()
         try:
             self._voice = loader(str(path))
-        except (OSError, ValueError, RuntimeError) as e:
-            raise SpeechConfigError(f"nie można załadować głosu Piper: {str(e)[:MAX_ERROR_TEXT]}") from None
+        except Exception as e:  # biblioteki rzucają tu różne typy (KeyError, JSONDecodeError, błędy onnxruntime)
+            raise SpeechConfigError(
+                f"nie można załadować głosu Piper: {type(e).__name__}: {str(e)[:MAX_ERROR_TEXT]}"
+            ) from None
         log.info("głos TTS załadowany: %s", path.name)
         return self._voice
 

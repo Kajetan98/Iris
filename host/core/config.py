@@ -114,7 +114,7 @@ class LLMConfig(_Model):
 
 class STTConfig(_Model):
     engine: Literal["none", "faster-whisper"] = "none"
-    model: str | None = None  # nazwa (pobierana z Hugging Face) albo katalog z modelem
+    model: str | None = None  # nazwa lub repozytorium HF (pobierane) albo ścieżka absolutna / zaczynająca się od "." lub "~"
     model_dir: str | None = None
     local_files_only: bool = False
     language: str = "pl"
