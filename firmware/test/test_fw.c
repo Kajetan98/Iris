@@ -462,6 +462,10 @@ static void test_action_error_codes_follow_spec(void)
         {"speak", "{\"audio_id\":9}", "no_audio", NULL},
         {"speak", "{}", "bad_body", NULL},
         {"speak", "{\"audio_id\":true}", "bad_body", NULL},
+        {"device.active", "{\"active\":false}", NULL, "active 0\n"},
+        {"device.active", "{\"active\":1}", "bad_body", NULL},
+        {"device.active", "{\"active\":\"true\"}", "bad_body", NULL},
+        {"device.active", "{}", "bad_body", NULL},
         {"self.destruct", "{}", "unknown_action", NULL},
     };
     size_t i;
@@ -649,6 +653,37 @@ static void test_mic_fault_blocks_utterances_and_link_drop_loses_audio(void)
     CHECK(fake.out_count == 0 && body.outbox_count == 2); /* start i end czekają, audio przepadło */
 }
 
+static void test_inactive_device_keeps_quiet_until_told_or_reconnected(void)
+{
+    setup(1);
+    fake_hal_clear(&fake);
+    action("{\"v\":1,\"t\":\"action\",\"id\":\"h1\",\"type\":\"device.active\",\"body\":{\"active\":false}}");
+    CHECK(body.active == 0 && strcmp(fake.log, "active 0\n") == 0);
+    CHECK(strstr(last_ack(), "\"type\":\"device.active\"") && strstr(last_ack(), "\"ok\":true"));
+    CHECK(fw_body_utterance_start(&body, 2100) == 0); /* bez audio z nieaktywnego urządzenia */
+    action("{\"v\":1,\"t\":\"action\",\"id\":\"h2\",\"type\":\"device.active\",\"body\":{\"active\":false}}");
+    CHECK(strcmp(fake.log, "active 0\n") == 0); /* bez zmiany: bez wywołania sprzętu */
+    /* nowe połączenie: aktywne, dopóki host nie powie inaczej (spec, sekcja 1) */
+    fw_body_set_link(&body, 0);
+    fw_body_set_link(&body, 1);
+    CHECK(body.active == 1 && strcmp(fake.log, "active 0\nactive 1\n") == 0);
+    CHECK(fw_body_utterance_start(&body, 2200) == 1);
+}
+
+static void test_request_active_is_sent_but_never_buffered(void)
+{
+    setup(1);
+    fake_hal_clear(&fake);
+    fw_body_request_active(&body, 3000);
+    CHECK(fake.out_count == 1 && out_has(0, "\"type\":\"device.activate\",\"body\":{}}"));
+    CHECK(out_has(0, "\"t\":\"event\"") && out_has(0, "\"ts\":2000"));
+    fw_body_set_link(&body, 0);
+    fw_body_request_active(&body, 3100);
+    CHECK(body.outbox_count == 0);
+    fw_body_set_link(&body, 1);
+    CHECK(fake.out_count == 1);
+}
+
 static void test_ram_budget(void)
 {
     printf("sizeof(fw_body_t) = %zu B\n", sizeof(fw_body_t));
@@ -689,6 +724,8 @@ int main(void)
     test_bad_playback_frames();
     test_utterance_stream();
     test_mic_fault_blocks_utterances_and_link_drop_loses_audio();
+    test_inactive_device_keeps_quiet_until_told_or_reconnected();
+    test_request_active_is_sent_but_never_buffered();
     test_ram_budget();
     printf("%d sprawdzeń, %d błędów\n", checks, failures);
     return failures ? 1 : 0;

@@ -1,6 +1,6 @@
 """Symulator ciała HERMES: klient WebSocket dla hosta IRIS.
 
-    python -m sim.body --url ws://localhost:8000/ws
+    python -m sim.body --url ws://localhost:8000/ws [--device laptop]
 
 Komendy z konsoli (stdin) i ze skryptu (`--script`, linie `<sekundy> <komenda>`) opisuje `help`.
 Przy braku łącza symulator buforuje zdarzenia (limit `--buffer-limit`) i łączy się ponownie.
@@ -15,6 +15,7 @@ import sys
 import threading
 import time
 from collections.abc import Callable
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed, WebSocketException
@@ -146,6 +147,7 @@ class SimRunner:
     async def _attach(self, ws: ClientConnection) -> None:
         """Najpierw zbuforowane zdarzenia, potem bieżący ruch. Bez await między ostatnim
         odczytem bufora a ustawieniem _ws, więc nic nie wyprzedzi zaległych zdarzeń."""
+        self.model.on_connect()
         while True:
             pending = self.model.take_buffer()
             if not pending:
@@ -175,6 +177,13 @@ class SimRunner:
             self.command(line)
 
 
+def with_device(url: str, device: str) -> str:
+    """Dodaje parametr device do adresu /ws (spec, sekcja 1)."""
+    parts = urlsplit(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k != "device"] + [("device", device)]
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
 def build_config(args: argparse.Namespace) -> SimConfig:
     return SimConfig(
         batt_pct=args.batt,
@@ -192,6 +201,7 @@ def build_config(args: argparse.Namespace) -> SimConfig:
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(prog="python -m sim.body", description=__doc__.split("\n")[0])
     p.add_argument("--url", default="ws://localhost:8000/ws")
+    p.add_argument("--device", help="identyfikator urządzenia (domyślnie hermes)")
     p.add_argument("--batt", type=float, default=71.0, help="początkowa bateria, %%")
     p.add_argument("--drain-per-min", type=float, default=0.0, help="rozładowanie, %%/min (ujemne = ładowanie)")
     p.add_argument("--temp", type=float, default=24.0, help="temperatura, C")
@@ -218,7 +228,8 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, ValueError) as e:
             print(f"skrypt: {e}", file=sys.stderr)
             return 2
-    runner = SimRunner(build_config(args), args.url, script=script, console=not args.no_console)
+    url = with_device(args.url, args.device) if args.device else args.url
+    runner = SimRunner(build_config(args), url, script=script, console=not args.no_console)
     try:
         asyncio.run(runner.run())
     except KeyboardInterrupt:

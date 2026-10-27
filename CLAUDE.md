@@ -55,8 +55,9 @@ sim/             symulator ciała
 - samotest toru głosowego na prawdziwych modelach: `python -m host.brain.selftest --config iris.toml` (kod wyjścia 0 przy zgodności transkrypcji)
 - rozmowa tekstowa (wymaga `[brain.llm]`, inaczej 501): `curl -s localhost:8000/chat -H 'content-type: application/json' -d '{"text":"Cześć"}'`
 - firmware (rdzeń C99 i klient WebSocket, natywnie, bez sprzętu): `make -C firmware test` (ASan i UBSan), `make -C firmware valgrind`, `make -C firmware lint`; testy zgodności z hostem są w `host/tests/test_firmware.py` i `host/tests/test_firmware_posix.py`. Budżet RAM i limity buforów: `firmware/core/fw_config.h`
-- ciało w C z prawdziwym hostem (port POSIX): `make -C firmware posix`, potem `firmware/build/hermes --url ws://localhost:8000/ws` (komendy na stdin jak w symulatorze, `help` je wypisuje; `sayopus plik` wysyła pakiety Opus z pliku: 2 B długości big-endian i dane; `--audio-out katalog` zapisuje odtwarzane audio w tym samym formacie; tylko `ws://`, bez TLS)
-- symulator ciała: `python -m sim.body --url ws://localhost:8000/ws` (komendy na stdin, `help` je wypisuje; `say [ms]` wysyła ton 440 Hz, `sayfile plik.wav` nagranie, obie jako Opus (wymagają `av` i `numpy`); scenariusze: `--script sim/scenarios/low_battery.txt`)
+- ciało w C z prawdziwym hostem (port POSIX): `make -C firmware posix`, potem `firmware/build/hermes --url ws://localhost:8000/ws [--device laptop]` (komendy na stdin jak w symulatorze, `help` je wypisuje; `sayopus plik` wysyła pakiety Opus z pliku: 2 B długości big-endian i dane; `--audio-out katalog` zapisuje odtwarzane audio w tym samym formacie; tylko `ws://`, bez TLS)
+- urządzenia: kilka może być połączonych (`/ws?device=<id>`, bez parametru `hermes`), aktywne jest jedno; `curl -s localhost:8000/devices`, przełączenie `curl -s -X POST localhost:8000/devices/laptop/activate` albo komenda `activate` w symulatorze i porcie POSIX
+- symulator ciała: `python -m sim.body --url ws://localhost:8000/ws [--device laptop]` (komendy na stdin, `help` je wypisuje; `say [ms]` wysyła ton 440 Hz, `sayfile plik.wav` nagranie, obie jako Opus (wymagają `av` i `numpy`); scenariusze: `--script sim/scenarios/low_battery.txt`)
 
 ## Kolejność prac
 

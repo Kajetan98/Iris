@@ -32,6 +32,7 @@ HELP = """komendy:
   fault <sensor> [kod]    usterka sensora (mic imu temp presence gps)
   clear <sensor>          koniec usterki
   press [long]            przycisk
+  activate                prośba o przełączenie IRIS na to urządzenie (device.activate)
   say [dur_ms]            wypowiedź: ton 440 Hz zakodowany do Opus, ramki z mikrofonu
   sayfile <plik.wav>      wypowiedź z nagrania WAV (PCM 8/16 bitów), zakodowana do Opus
   local <cmd...>          komenda obsłużona lokalnie
@@ -90,6 +91,7 @@ class BodyModel:
         self.wants_disconnect = False
         self.mute_until = 0.0
         self.quit_requested = False
+        self.active = True  # po połączeniu, dopóki host nie przyśle device.active (spec, sekcja 1)
         self._out: list[Out] = []
         self._utt = 0
         self._last_tick = now
@@ -102,6 +104,7 @@ class BodyModel:
             "speak.clip": self._act_clip,
             "gpio.set": self._act_gpio,
             "config.set": self._act_config,
+            "device.active": self._act_device_active,
         }
         self._boot(now, "power")
 
@@ -163,6 +166,9 @@ class BodyModel:
         out = list(self.buffer)
         self.buffer.clear()
         return out
+
+    def on_connect(self) -> None:
+        self.active = True
 
     # --- upływ czasu ---
 
@@ -253,7 +259,14 @@ class BodyModel:
         self._emit_event("button", {"id": "b1", "kind": kind}, now)
         return f"przycisk {kind}"
 
+    def _cmd_activate(self, args: list[str], now: float) -> str:
+        # Bez łącza prośba przepada: spóźniona mogłaby przełączyć IRIS nieoczekiwanie.
+        self._emit_event("device.activate", {}, now, bufferable=False)
+        return "prośba o przełączenie na to urządzenie"
+
     def _cmd_say(self, args: list[str], now: float) -> str:
+        if not self.active:
+            return "urządzenie nieaktywne, brak wypowiedzi"
         if "mic" in self.faults:
             return "mikrofon ma usterkę, brak wypowiedzi"
         dur_ms = int(args[0]) if args else 1200
@@ -265,6 +278,8 @@ class BodyModel:
     def _cmd_sayfile(self, args: list[str], now: float) -> str:
         if len(args) != 1:
             raise ValueError("sayfile <plik.wav>")
+        if not self.active:
+            return "urządzenie nieaktywne, brak wypowiedzi"
         if "mic" in self.faults:
             return "mikrofon ma usterkę, brak wypowiedzi"
         samples, rate = sim_audio.read_wav(args[0])
@@ -339,7 +354,8 @@ class BodyModel:
             f"usterki: {dict(self.faults) or 'brak'}\n"
             f"bufor {len(self.buffer)}/{self.cfg.buffer_limit}, utracone {self.dropped}, "
             f"odrzucone ramki z hosta {self.frame_errors}\n"
-            f"głośność {self.settings['volume']:g}, gpio {self.gpio or '-'}"
+            f"głośność {self.settings['volume']:g}, gpio {self.gpio or '-'}\n"
+            f"aktywne urządzenie: {'tak' if self.active else 'nie'}"
         )
 
     # --- ramki od hosta ---
@@ -443,6 +459,13 @@ class BodyModel:
         if key in ("volume", "batt_warn_pct") and not 0 <= value <= 100:
             return "bad_value"
         self.settings[key] = value
+        return None
+
+    def _act_device_active(self, body: dict[str, Any]) -> str | None:
+        active = body.get("active")
+        if not isinstance(active, bool):
+            return "bad_body"
+        self.active = active
         return None
 
 

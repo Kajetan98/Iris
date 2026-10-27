@@ -62,9 +62,22 @@ static void emit(fw_body_t *b, size_t len, int bufferable)
     }
 }
 
+static void set_active(fw_body_t *b, int active)
+{
+    if (b->active != active) {
+        b->active = active;
+        if (b->hal.active_changed) {
+            b->hal.active_changed(b->hal.ctx, active);
+        }
+    }
+}
+
 void fw_body_set_link(fw_body_t *b, int up)
 {
     b->link_up = up ? 1 : 0;
+    if (up) {
+        set_active(b, 1);
+    }
     while (b->link_up && b->outbox_count) {
         fw_slot_t *slot = &b->outbox[b->outbox_head];
         if (send_text(b, slot->data, slot->len) != 0) {
@@ -154,6 +167,7 @@ void fw_body_init(fw_body_t *b, const fw_hal_t *hal, const fw_settings_t *settin
     b->volume_milli = 50000;
     b->batt_warn_milli = 20000;
     b->temp_warn_milli = 40000;
+    b->active = 1;
     playback_reset(b);
 
     begin(b, &w, "event", "system.boot", now_ms);
@@ -320,13 +334,20 @@ void fw_body_local_command(fw_body_t *b, const char *cmd, const char *result, ui
     emit(b, finish(&w), 1);
 }
 
+void fw_body_request_active(fw_body_t *b, uint32_t now_ms)
+{
+    fw_jw_t w;
+    begin(b, &w, "event", "device.activate", now_ms);
+    emit(b, finish(&w), 0); /* spóźniona prośba przełączyłaby IRIS nieoczekiwanie (spec, sekcja 3) */
+}
+
 /* ---------- mikrofon ---------- */
 
 uint32_t fw_body_utterance_start(fw_body_t *b, uint32_t now_ms)
 {
     fw_jw_t w;
-    if (faulted(b, FW_SENSOR_MIC)) {
-        return 0;
+    if (faulted(b, FW_SENSOR_MIC) || !b->active) {
+        return 0; /* nieaktywne urządzenie nie wysyła audio (spec, sekcja 1) */
     }
     b->utt_id++;
     if (b->utt_id == 0) {
@@ -618,6 +639,16 @@ static const char *act_config(fw_body_t *b, const action_t *a)
     return NULL;
 }
 
+static const char *act_device_active(fw_body_t *b, const action_t *a)
+{
+    int t = field(b, a, "active");
+    if (t < 0 || !fw_json_is_bool(a->js, &b->tok[t])) {
+        return "bad_body";
+    }
+    set_active(b, a->js[b->tok[t].start] == 't');
+    return NULL;
+}
+
 static int envelope_str(fw_body_t *b, const char *js, int ntok, const char *key, char *out, size_t cap)
 {
     int t = fw_json_find(js, b->tok, ntok, 0, key);
@@ -672,6 +703,8 @@ void fw_body_on_text(fw_body_t *b, const char *frame, size_t len, uint32_t now_m
         err = act_gpio(b, &a);
     } else if (strcmp(type, "config.set") == 0) {
         err = act_config(b, &a);
+    } else if (strcmp(type, "device.active") == 0) {
+        err = act_device_active(b, &a);
     } else {
         err = "unknown_action";
     }

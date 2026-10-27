@@ -406,3 +406,48 @@ def test_websocket_protocol_against_websockets_server(hermes, bodies):
     assert r2["close"] == 1007
     assert r3["close"] == 1000
     assert body.lines(r"^link down") == ["link down 4000 -", "link down 1007 utf8", "link down 1000 -"]
+
+
+def test_two_c_bodies_switch_between_each_other(hermes, bodies, tmp_path):
+    port = free_port()
+    url = f"ws://127.0.0.1:{port}/ws"
+    server = start(create_app(host_config()), port)
+    try:
+        first = bodies(hermes, url, "--device", "hermes")
+        first.wait(r"^link up$")
+        laptop = bodies(hermes, url, "--device", "laptop", "--batt", "15")
+        laptop.wait(r"^link up$")
+        laptop.wait(r"^active 0$")  # host: urządzenie w spoczynku
+        laptop.wait(r"\?device=laptop$", stream=laptop.err)
+        with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=10) as http:
+            body = http.get("/devices").json()
+            assert body["active"] == "hermes"
+            assert [(d["id"], d["connected"]) for d in body["devices"]] == [("hermes", True), ("laptop", True)]
+            time.sleep(0.6)  # dłużej niż enter_hold_s: bateria laptopa nie ma wpływu
+            assert http.get("/self").json()["self"]["drives"] == []
+
+            assert http.post("/devices/laptop/activate").status_code == 200
+            laptop.wait(r"^active 1$")
+            first.wait(r"^active 0$")
+            (enter,) = poll(lambda: events(http, "drive.enter"))
+            assert enter["device"] == "laptop" and enter["data"]["drive"] == "battery_low"
+            speech = tmp_path / "x.bin"
+            write_packets(speech, opus_packets(440, 0.2))
+            mark = len(first.err)
+            first.send(f"sayopus {speech}")
+            first.wait(r"urządzenie nieaktywne", after=mark, stream=first.err)
+            assert first.status()["active"] == "0"
+
+            first.send("activate")
+            first.wait(r"^active 1$", after=first.wait(r"^active 0$")[0])
+            laptop.wait(r"^active 0$", after=laptop.wait(r"^active 1$")[0])
+            exits = poll(lambda: events(http, "drive.exit"))
+            assert [(e["device"], e["data"]) for e in exits] == [
+                ("laptop", {"drive": "battery_low", "reason": "device_switch"}),
+            ]
+            switches = [(e["data"]["to"], e["data"]["by"]) for e in events(http, "device.switch")]
+            assert switches == [("hermes", "first"), ("laptop", "rest"), ("hermes", "device")]
+            assert http.get("/health").json()["devices_connected"] == 2
+        assert first.quit() == 0 and laptop.quit() == 0
+    finally:
+        stop(*server)

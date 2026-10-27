@@ -1,6 +1,6 @@
 /* Port POSIX ciała HERMES: rdzeń fw_body i klient fw_ws na gnieździe TCP.
  *
- *   build/hermes --url ws://127.0.0.1:8000/ws [--audio-out KATALOG]
+ *   build/hermes --url ws://127.0.0.1:8000/ws [--device ID] [--audio-out KATALOG]
  *
  * Do sprawdzania firmware z prawdziwym hostem bez sprzętu. Odczyty czujników ustawiają
  * komendy ze stdin (help). Wywołania sprzętu (gpio, haptyka, klipy, odtwarzanie) i stan
@@ -301,6 +301,12 @@ static void hal_clip(void *ctx, const char *clip)
     printf("clip %s\n", clip);
 }
 
+static void hal_active(void *ctx, int active)
+{
+    (void)ctx;
+    printf("active %d\n", active);
+}
+
 static void hal_config(void *ctx, const char *key, int32_t value_milli)
 {
     (void)ctx;
@@ -362,6 +368,7 @@ static const char HELP[] =
     "  fault <sensor> [kod]    usterka sensora (mic imu temp presence gps)\n"
     "  clear <sensor>          koniec usterki\n"
     "  press [long]            przycisk\n"
+    "  activate                przełącz IRIS na to urządzenie (device.activate)\n"
     "  sayopus <plik>          wypowiedź z pakietów Opus (2 B długości big-endian + dane)\n"
     "  local <cmd...>          komenda obsłużona lokalnie\n"
     "  presence on|off         obecność\n"
@@ -405,7 +412,7 @@ static void cmd_sayopus(const char *path, uint32_t now)
     }
     utt = fw_body_utterance_start(&body, now);
     if (utt == 0) {
-        fprintf(stderr, "mikrofon ma usterkę, brak wypowiedzi\n");
+        fprintf(stderr, "%s, brak wypowiedzi\n", body.active ? "mikrofon ma usterkę" : "urządzenie nieaktywne");
         fclose(f);
         return;
     }
@@ -451,6 +458,8 @@ static void command(char *line, uint32_t now)
         fw_body_fault(&body, (fw_sensor_t)s, a2 ? a2 : "fault", now);
     } else if (strcmp(name, "clear") == 0 && (s = sensor_of(a1)) >= 0) {
         fw_body_fault_clear(&body, (fw_sensor_t)s, now);
+    } else if (strcmp(name, "activate") == 0) {
+        fw_body_request_active(&body, now);
     } else if (strcmp(name, "press") == 0) {
         fw_body_button(&body, "b1", a1 && strcmp(a1, "long") == 0, now);
     } else if (strcmp(name, "sayopus") == 0) {
@@ -476,8 +485,8 @@ static void command(char *line, uint32_t now)
             close_socket();
         }
     } else if (strcmp(name, "status") == 0) {
-        printf("status link=%d ws=%d outbox=%u frame_errors=%lu dropped=%lu busy=%lu oversized=%lu\n",
-               body.link_up, (int)ws.state, body.outbox_count, (unsigned long)body.frame_errors,
+        printf("status link=%d ws=%d active=%d outbox=%u frame_errors=%lu dropped=%lu busy=%lu oversized=%lu\n",
+               body.link_up, (int)ws.state, body.active, body.outbox_count, (unsigned long)body.frame_errors,
                (unsigned long)body.dropped_events, (unsigned long)body.busy_drops,
                (unsigned long)ws.oversized);
     } else if (strcmp(name, "quit") == 0) {
@@ -595,6 +604,28 @@ static int parse_url(const char *s, url_t *u)
     return 0;
 }
 
+/* Parametr device w adresie /ws (spec, sekcja 1). Host i tak sprawdza identyfikator. */
+static int add_device(url_t *u, const char *device)
+{
+    size_t n = strlen(device);
+    size_t i;
+    if (n == 0 || n > 32 || device[0] == '-') {
+        return -1;
+    }
+    for (i = 0; i < n; i++) {
+        char c = device[i];
+        if (!((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '-')) {
+            return -1;
+        }
+    }
+    if (strlen(u->path) + n + 8 >= sizeof(u->path)) {
+        return -1;
+    }
+    strcat(u->path, strchr(u->path, '?') ? "&device=" : "?device=");
+    strcat(u->path, device);
+    return 0;
+}
+
 static int parse_pins(const char *s)
 {
     while (*s) {
@@ -620,8 +651,8 @@ static void on_signal(int sig)
 
 static void usage(void)
 {
-    fprintf(stderr, "użycie: hermes [--url ws://host:port/ws] [--batt %%] [--temp C] [--rssi dBm]\n"
-                    "               [--gpio-pins 5,6,7] [--audio-out KATALOG]\n%s",
+    fprintf(stderr, "użycie: hermes [--url ws://host:port/ws] [--device ID] [--batt %%] [--temp C]\n"
+                    "               [--rssi dBm] [--gpio-pins 5,6,7] [--audio-out KATALOG]\n%s",
             HELP);
 }
 
@@ -630,6 +661,7 @@ int main(int argc, char **argv)
     static const char *const clips[] = {"ready", "error", "low_battery", "link_lost"};
     double batt = 71, temp = 24, rssi = -58;
     const char *pins = "5,6,7";
+    const char *device = NULL;
     struct sigaction sa;
     uint32_t t0;
     int i;
@@ -655,6 +687,8 @@ int main(int argc, char **argv)
             pins = val;
         } else if (strcmp(argv[i], "--audio-out") == 0) {
             audio_out = val;
+        } else if (strcmp(argv[i], "--device") == 0) {
+            device = val;
         } else {
             bad = 1;
         }
@@ -666,6 +700,10 @@ int main(int argc, char **argv)
     }
     if (parse_url(url_text, &url) != 0) {
         fprintf(stderr, "niepoprawny adres: %s\n", url_text);
+        return 2;
+    }
+    if (device && add_device(&url, device) != 0) {
+        fprintf(stderr, "niepoprawne --device: %s (a-z, 0-9, -, do 32 znaków)\n", device);
         return 2;
     }
     if (parse_pins(pins) != 0) {
@@ -698,12 +736,13 @@ int main(int argc, char **argv)
     hal.play_clip = hal_clip;
     hal.play_audio = hal_play;
     hal.config_changed = hal_config;
+    hal.active_changed = hal_active;
     fw_body_init(&body, &hal, &settings, t0, random32(NULL), "power");
     fw_body_set_battery(&body, (int32_t)lround(batt * 10));
     fw_body_set_rssi(&body, (int16_t)lround(rssi));
     fw_body_set_temp(&body, (int32_t)lround(temp * 10));
     retry_at = t0;
-    fprintf(stderr, "HERMES %s, boot_id %s, host %s\n", FW_VERSION, body.boot_id, url_text);
+    fprintf(stderr, "HERMES %s, boot_id %s, host ws://%s%s\n", FW_VERSION, body.boot_id, url.host_header, url.path);
 
     for (;;) {
         struct pollfd fds[2];

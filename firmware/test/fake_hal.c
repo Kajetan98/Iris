@@ -84,6 +84,13 @@ static void config_changed(void *ctx, const char *key, int32_t value_milli)
     logf_(ctx, line);
 }
 
+static void active_changed(void *ctx, int active)
+{
+    char line[16];
+    snprintf(line, sizeof(line), "active %d\n", active);
+    logf_(ctx, line);
+}
+
 void fake_hal_clear(fake_hal_t *f)
 {
     f->out_count = 0;
@@ -104,4 +111,5 @@ void fake_hal_init(fake_hal_t *f, fw_hal_t *hal)
     hal->play_clip = play_clip;
     hal->play_audio = play_audio;
     hal->config_changed = config_changed;
+    hal->active_changed = active_changed;
 }

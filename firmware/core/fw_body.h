@@ -66,6 +66,7 @@ typedef struct {
     uint32_t utt_id;
     uint16_t mic_seq;
     int utt_active;
+    int active; /* aktywne urządzenie IRIS; po połączeniu 1, dopóki host nie przyśle device.active */
 
     fw_slot_t outbox[FW_OUTBOX_LEN];
     uint16_t outbox_head;
@@ -88,7 +89,8 @@ typedef struct {
 void fw_body_init(fw_body_t *b, const fw_hal_t *hal, const fw_settings_t *settings,
                   uint32_t now_ms, uint32_t random32, const char *reset_reason);
 void fw_body_tick(fw_body_t *b, uint32_t now_ms);
-/* Port zgłasza zestawienie (1) i zerwanie (0) połączenia; po zestawieniu idą zaległe zdarzenia. */
+/* Port zgłasza zestawienie (1) i zerwanie (0) połączenia; po zestawieniu idą zaległe zdarzenia,
+ * a urządzenie uznaje się za aktywne, dopóki host nie przyśle device.active (spec, sekcja 1). */
 void fw_body_set_link(fw_body_t *b, int up);
 
 void fw_body_on_text(fw_body_t *b, const char *frame, size_t len, uint32_t now_ms);
@@ -106,8 +108,11 @@ void fw_body_fault(fw_body_t *b, fw_sensor_t sensor, const char *code, uint32_t 
 void fw_body_fault_clear(fw_body_t *b, fw_sensor_t sensor, uint32_t now_ms);
 void fw_body_button(fw_body_t *b, const char *button_id, int long_press, uint32_t now_ms);
 void fw_body_local_command(fw_body_t *b, const char *cmd, const char *result, uint32_t now_ms);
+/* Prośba o przełączenie IRIS na to urządzenie (device.activate); bez łącza przepada. */
+void fw_body_request_active(fw_body_t *b, uint32_t now_ms);
 
-/* Wypowiedź: zwraca utt_id albo 0, gdy mikrofon ma usterkę. Pakiety Opus koduje port. */
+/* Wypowiedź: zwraca utt_id albo 0, gdy mikrofon ma usterkę lub urządzenie nie jest aktywne.
+ * Pakiety Opus koduje port. */
 uint32_t fw_body_utterance_start(fw_body_t *b, uint32_t now_ms);
 void fw_body_mic_packet(fw_body_t *b, const uint8_t *opus, size_t len);
 void fw_body_utterance_end(fw_body_t *b, uint32_t dur_ms, uint32_t now_ms);

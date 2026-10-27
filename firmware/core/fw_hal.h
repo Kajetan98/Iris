@@ -24,6 +24,8 @@ typedef struct {
     /* Odtwarzanie asynchroniczne; po zakończeniu port woła fw_body_playback_done(). */
     void (*play_audio)(void *ctx, const fw_playback_t *playback);
     void (*config_changed)(void *ctx, const char *key, int32_t value_milli);
+    /* Czy urządzenie jest aktywne (spec, sekcja 1). Opcjonalne, może być NULL. */
+    void (*active_changed)(void *ctx, int active);
 } fw_hal_t;
 
 #endif

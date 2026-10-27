@@ -25,6 +25,7 @@ from host.core.protocol import (
     BodySensor,
     Button,
     DecodedAck,
+    DeviceActivate,
     DecodedEvent,
     LocalCommand,
     SystemBoot,
@@ -66,6 +67,7 @@ def fwlib(tmp_path_factory):
         "ffi_fault_clear": ([ctypes.c_int, u32], None),
         "ffi_button": ([cstr, ctypes.c_int, u32], None),
         "ffi_local_command": ([cstr, cstr, u32], None),
+        "ffi_request_active": ([u32], None),
         "ffi_utterance_start": ([u32], u32),
         "ffi_mic_packet": ([bytes_p, sz], None),
         "ffi_utterance_end": ([u32, u32], None),
@@ -160,6 +162,7 @@ def emit_everything(fw):
     fw.lib.ffi_button(b"b1", 0, 1500)
     fw.lib.ffi_button(b"b1", 1, 1600)
     fw.lib.ffi_local_command("głośniej".encode(), b"ok", 1700)
+    fw.lib.ffi_request_active(1750)
     utt = fw.lib.ffi_utterance_start(1800)
     for _ in range(3):
         fw.lib.ffi_mic_packet(b"\xf8\x01\x02", 3)
@@ -189,6 +192,7 @@ def test_every_firmware_event_decodes_on_the_host(fw):
     assert [(b.id, b.kind) for b in by_type["button"]] == [("b1", "press"), ("b1", "long")]
     assert isinstance(by_type["button"][0], Button)
     assert isinstance(by_type["local.command"][0], LocalCommand) and by_type["local.command"][0].cmd == "głośniej"
+    assert isinstance(by_type["device.activate"][0], DeviceActivate)
     assert isinstance(by_type["audio.utterance.start"][0], AudioUtteranceStart)
     assert isinstance(by_type["audio.utterance.end"][0], AudioUtteranceEnd) and by_type["audio.utterance.end"][0].dur_ms == 60
 
@@ -258,6 +262,12 @@ CASES = [
     ("speak", {}),
     ("speak", {"audio_id": True}),
     ("speak", {"audio_id": None}),
+    ("device.active", {"active": False}),
+    ("device.active", {"active": True}),
+    ("device.active", {"active": 1}),
+    ("device.active", {"active": "true"}),
+    ("device.active", {"active": None}),
+    ("device.active", {}),
     ("self.destruct", {}),
 ]
 
@@ -293,12 +303,13 @@ def test_actions_encoded_by_the_host_are_accepted(fw):
     fw.clear()
     for i, (type_, body) in enumerate(
         [("ping", {}), ("haptic", {"pattern": "critical"}), ("gpio.set", {"pin": 6, "value": 0}),
-         ("speak.clip", {"clip": "low_battery"}), ("config.set", {"key": "volume", "value": 35})]
+         ("speak.clip", {"clip": "low_battery"}), ("config.set", {"key": "volume", "value": 35}),
+         ("device.active", {"active": False})]
     ):
         fw.send(encode_action(type_, body, id=f"h{i}", ts_ms=i * 10))
     acks = fw.acks()
-    assert [(a.body.ref, a.body.ok) for a in acks] == [(f"h{i}", True) for i in range(5)]
-    assert fw.hal_log() == "haptic critical\ngpio 6 0\nclip low_battery\nconfig volume 35000\n"
+    assert [(a.body.ref, a.body.ok) for a in acks] == [(f"h{i}", True) for i in range(6)]
+    assert fw.hal_log() == "haptic critical\ngpio 6 0\nclip low_battery\nconfig volume 35000\nactive 0\n"
     assert fw.lib.ffi_setting(b"volume") == 35000
 
 
@@ -435,4 +446,4 @@ def test_busy_while_playing(fw):
 
 
 def test_ram_budget_is_what_the_config_says(fw):
-    assert fw.lib.ffi_sizeof_body() == 71960
+    assert fw.lib.ffi_sizeof_body() == 71968

@@ -58,6 +58,8 @@ void ffi_button(const char *button_id, int long_press, uint32_t now_ms);
 void ffi_button(const char *button_id, int long_press, uint32_t now_ms) { fw_body_button(&body, button_id, long_press, now_ms); }
 void ffi_local_command(const char *cmd, const char *result, uint32_t now_ms);
 void ffi_local_command(const char *cmd, const char *result, uint32_t now_ms) { fw_body_local_command(&body, cmd, result, now_ms); }
+void ffi_request_active(uint32_t now_ms);
+void ffi_request_active(uint32_t now_ms) { fw_body_request_active(&body, now_ms); }
 uint32_t ffi_utterance_start(uint32_t now_ms);
 uint32_t ffi_utterance_start(uint32_t now_ms) { return fw_body_utterance_start(&body, now_ms); }
 void ffi_mic_packet(const uint8_t *opus, size_t len);
@@ -90,6 +92,7 @@ uint32_t ffi_counter(const char *name)
     if (strcmp(name, "link_up") == 0) return (uint32_t)body.link_up;
     if (strcmp(name, "pb_packets") == 0) return body.pb_packets;
     if (strcmp(name, "pb_used") == 0) return body.pb_used;
+    if (strcmp(name, "active") == 0) return (uint32_t)body.active;
     return 0xFFFFFFFFu;
 }
 
