@@ -78,6 +78,17 @@ class InitiativeConfig(_Model):
 
 class DevicesConfig(_Model):
     max_connected: int = Field(8, ge=1)  # spec, sekcja 1
+    # Nazwy urządzeń w komendzie "przełącz na X", np. {"laptop": ["komputer", "laptopa"]}.
+    aliases: dict[str, list[str]] = {}
+
+    @model_validator(mode="after")
+    def _alias_ids(self) -> "DevicesConfig":
+        from host.core.protocol import valid_device_id
+
+        bad = [d for d in self.aliases if not valid_device_id(d)]
+        if bad:
+            raise ValueError(f"devices.aliases: niepoprawne identyfikatory {bad}")
+        return self
 
 
 class PromptConfig(_Model):

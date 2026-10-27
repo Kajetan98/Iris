@@ -32,7 +32,7 @@ from host.core.self_model import SelfModel
 
 log = logging.getLogger(__name__)
 
-SwitchBy = Literal["first", "rest", "device"]
+SwitchBy = Literal["first", "rest", "device", "voice"]
 
 
 class HostCore:

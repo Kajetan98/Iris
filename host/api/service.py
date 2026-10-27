@@ -17,6 +17,7 @@ from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any, Protocol
 
 from host.core.clock import Clock
+from host.core.commands import parse_switch, resolve_device
 from host.core.config import Config
 from host.core.core import HostCore
 from host.core.events import HostEvent
@@ -519,12 +520,15 @@ class HostService:
 
         Tura obejmuje pobranie wycinka stanu, zapytanie i ewentualne cofnięcie wycinka, więc
         trwa pod blokadą. Treść rozmowy nie jest zapisywana ani logowana."""
-        assistant = self.assistant
-        if assistant is None:
-            raise ChatDisabled()
         text = text.strip()
         if not text:
             raise ValueError("pusta wypowiedź")
+        command = await self._switch_command(text)  # przed LLM i bez niego (spec, sekcja 1)
+        if command is not None:
+            return command
+        assistant = self.assistant
+        if assistant is None:
+            raise ChatDisabled()
         from host.brain.llm import LLMError, LLMRefusal, LLMUnavailable
 
         core = self._require_core()
@@ -558,6 +562,34 @@ class HostService:
                 "output_tokens": answer.usage.output_tokens,
             },
         }
+
+    async def _switch_command(self, text: str) -> dict[str, Any] | None:
+        """Komenda "przełącz na X". None, gdy tekst nią nie jest. Treść nie trafia do logów."""
+        name = parse_switch(text)
+        if name is None:
+            return None
+        core = self._require_core()
+        aliases = self.config.devices.aliases
+        known = set(core.known_devices()) | {d.id for d in (self._store(self.store.devices) or [])}
+        matches = [d for d in resolve_device(name, known, aliases) if d in known]
+        async with self._chat_lock:  # kolejność z turami rozmowy
+            self._persist(core.note_interaction())
+            if len(matches) == 1:
+                device = matches[0]
+                spoken = (aliases.get(device) or [device.replace("-", " ")])[0]
+                if device == core.active_device:
+                    reply = f"Urządzenie {spoken} jest już aktywne."
+                else:
+                    self._persist(core.activate(device, "voice"))
+                    reply = f"Przełączam na {spoken}."
+                    if _turn_device.get() is not None and device in self._conns:
+                        _turn_device.set(device)  # potwierdzenie mówi już nowe urządzenie
+                log.info("komenda przełączenia: %s", device)
+            else:
+                listed = ", ".join(sorted(matches or known)) or "brak"
+                reply = f"Nie wiem, które urządzenie. Znane: {listed}."
+                log.info("komenda przełączenia: %s", "niejednoznaczna" if matches else "nieznane urządzenie")
+        return {"text": reply, "truncated": False, "model": None, "usage": {"input_tokens": 0, "output_tokens": 0}}
 
     # --- stan ---
 

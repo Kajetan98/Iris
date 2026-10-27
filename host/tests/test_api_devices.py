@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from host.api.main import create_app
-from host.api.service import HostService, NotConnected, UnknownDevice
+from host.api.service import ChatDisabled, HostService, NotConnected, UnknownDevice
 from host.brain import Assistant
 from host.core.clock import ManualClock
 from host.core.config import Config
@@ -411,3 +411,64 @@ async def wait_tasks(service, timeout=3.0):
         await asyncio.sleep(0.01)
     assert service._voice_tasks, "tura głosowa nie ruszyła"
     return list(service._voice_tasks)
+
+
+# --- komenda przełączenia ---
+
+
+def test_switch_command_over_chat_works_without_llm():
+    async def scenario():
+        cfg = Config.model_validate({"devices": {"aliases": {"pi-kuchnia": ["kuchnię"]}}})
+        service, _, store = make(cfg)
+        hermes, t1 = await connect(service, "hermes")
+        laptop, t2 = await connect(service, "laptop")
+        reply = await service.chat("Przełącz na laptopa.")
+        assert reply == {"text": "Przełączam na laptop.", "truncated": False, "model": None,
+                         "usage": {"input_tokens": 0, "output_tokens": 0}}
+        assert service.core.active_device == "laptop"
+        assert store.events(types=["device.switch"])[-1].data == {"from": "hermes", "to": "laptop", "by": "voice"}
+        assert (await service.chat("przełącz się na laptop"))["text"] == "Urządzenie laptop jest już aktywne."
+        unknown = await service.chat("przełącz na kuchnię")  # alias, ale urządzenie nigdy się nie łączyło
+        assert unknown["text"] == "Nie wiem, które urządzenie. Znane: hermes, laptop."
+        assert service.core.active_device == "laptop"
+        with pytest.raises(ChatDisabled):
+            await service.chat("Jak się masz?")  # zwykła rozmowa nadal wymaga LLM
+        for ws in (hermes, laptop):
+            ws.disconnect()
+        await asyncio.gather(t1, t2)
+
+    run(scenario())
+
+
+def test_switch_command_by_voice_confirms_on_the_new_device(caplog):
+    async def scenario():
+        service = voice_service()
+        service.stt.text = "IRIS, przełącz na laptopa"
+        hermes, t1 = await connect(service, "hermes")
+        laptop, t2 = await connect(service, "laptop")
+        say(hermes, 1, opus_packets(440, 1.0))
+        await until(lambda: actions(laptop, "speak"))
+        await asyncio.gather(*list(service._voice_tasks))
+        assert service.core.active_device == "laptop"
+        assert laptop.sent_bytes and not hermes.sent_bytes  # potwierdzenie na nowym urządzeniu
+        assert service.tts.calls == ["Przełączam na laptop."]
+        assert service.assistant.engine.calls == []  # LLM nie był pytany
+        assert active_flags(hermes) == [False]
+        # przełączenie na znane, ale niepołączone urządzenie: bez odpowiedzi i bez klipu błędu
+        await service.activate_device("hermes")
+        laptop.disconnect()
+        await t2
+        sent_before = len(hermes.sent)
+        service.stt.text = "przełącz na laptop"
+        say(hermes, 2, opus_packets(440, 1.0))
+        await until(lambda: len(service.stt.calls) == 2)
+        await asyncio.gather(*list(service._voice_tasks))
+        assert service.core.active_device == "laptop"
+        new = [json.loads(t)["type"] for t in hermes.sent[sent_before:]]
+        assert set(new) <= {"device.active"} and not hermes.sent_bytes  # bez speak, klipu i audio
+        hermes.disconnect()
+        await t1
+
+    with caplog.at_level(logging.INFO):
+        run(scenario())
+    assert "laptopa" not in caplog.text and "przełącz na" not in caplog.text  # treść nie trafia do logów
