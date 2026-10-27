@@ -44,12 +44,13 @@ class SimRunner:
         clock: Callable[[], float] = time.monotonic,
         say: Callable[[str], None] = print,
         token: str | None = None,
+        model: BodyModel | None = None,
     ) -> None:
         self.url = url
         self._subprotocols = [Subprotocol("iris"), Subprotocol(f"token.{token}")] if token else None
         self.clock = clock
         self.say = say
-        self.model = BodyModel(cfg, clock())
+        self.model = model or BodyModel(cfg, clock())  # klient na komputerze daje własny model
         self.connections = 0
         self._script = list(script or [])
         self._console = console

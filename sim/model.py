@@ -50,7 +50,7 @@ class SimConfig:
     batt_pct: float = 71.0
     drain_per_min: float = 0.0
     temp_c: float = 24.0
-    rssi: int = -58
+    rssi: int | None = -58  # None: urządzenie bez pomiaru sygnału
     heartbeat_interval_s: float = 1.0
     sensor_period_s: float = 30.0
     temp_delta: float = 0.5
@@ -193,7 +193,9 @@ class BodyModel:
             return
         if now >= self._next_hb:
             self._next_hb = now + self.cfg.heartbeat_interval_s
-            hb: dict[str, Any] = {"link_rssi": self.cfg.rssi, "frame_errors": self.frame_errors}
+            hb: dict[str, Any] = {"frame_errors": self.frame_errors}
+            if self.cfg.rssi is not None:
+                hb = {"link_rssi": self.cfg.rssi, **hb}
             if "battery" in self.cfg.has:
                 hb = {"batt_pct": _num(self.batt), **hb}
             self._emit_event("body.heartbeat", hb, now, bufferable=False)

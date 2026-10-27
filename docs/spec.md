@@ -40,6 +40,14 @@ Host serwuje klienta pod `/app/` (pliki publiczne, sekcja 10). Ten sam klient dz
 - Nazwę urządzenia i token klient trzyma w pamięci przeglądarki (`localStorage`) na tym urządzeniu.
 - HTTPS: `python -m host.api.serve` uruchamia host na zwykłym porcie (dla HERMES) i drugim porcie z TLS (dla przeglądarek), z tym samym stanem. Instalacja jako aplikacja wymaga certyfikatu, któremu telefon ufa; z samopodpisanym klient działa w karcie po akceptacji ostrzeżenia.
 
+### Program na komputer i Raspberry Pi
+
+`python -m client.desktop` (katalog `client/`) używa mikrofonu i głośnika systemu przez PortAudio.
+
+- Wypowiedź zaczyna i kończy Enter. Z `--vad` wypowiedź zaczyna się po trzech ramkach głośniejszych niż próg (wartość początkowa -40 dBFS) i kończy po 800 ms ciszy (`--vad-threshold`, `--vad-end-ms`), z 200 ms dźwięku sprzed startu. Nie ma słowa wybudzającego, więc w tym trybie IRIS odpowiada na każdą wykrytą mowę.
+- `device.caps`: `mic`, `speaker` i `battery` tylko wtedy, gdy system podaje poziom baterii (Linux: `/sys/class/power_supply`). Heartbeat bez `link_rssi`, bez `body.sensor`: program nie wysyła danych, których nie mierzy.
+- `haptic` i `gpio.set` dają `unsupported`, `speak.clip` daje `unknown_clip`. Odtwarzanie ma jeden bufor jak w firmware (`busy`).
+
 ## 2. Koperta
 
 ```

@@ -43,11 +43,12 @@ host/brain/      adapter LLM, STT, TTS
 host/tests/
 firmware/        STM32L476
 sim/             symulator ciała
+client/          program na komputer i Raspberry Pi
 ```
 
 ## Komendy
 
-- zależności: `pip install pydantic fastapi uvicorn websockets pytest httpx anthropic`; głos: `pip install faster-whisper piper-tts av numpy`
+- zależności: `pip install pydantic fastapi uvicorn websockets pytest httpx anthropic`; głos: `pip install faster-whisper piper-tts av numpy`; program na komputer: `pip install sounddevice av numpy` (plus systemowe `libportaudio2`)
 - testy: `pytest host/tests`
 - serwer: `uvicorn host.api.main:app --reload` (konfiguracja TOML ze zmiennej `IRIS_CONFIG`, bez niej wartości domyślne; baza `iris.db` w bieżącym katalogu)
 - uwierzytelnianie: token w zmiennej `IRIS_TOKEN` (16-128 znaków `A-Za-z0-9_-`, np. `python -c "import secrets; print(secrets.token_urlsafe(32))"`), ta sama zmienna dla hosta, symulatora i portu POSIX. REST: nagłówek `Authorization: Bearer $IRIS_TOKEN`; `/ws`: podprotokoły `iris` i `token.$IRIS_TOKEN`. Bez tokenu host nasłuchuje tylko na 127.0.0.1
@@ -60,6 +61,7 @@ sim/             symulator ciała
 - klient w przeglądarce: `http://localhost:8000/app/` (na komputerze z hostem). Telefon i inne komputery wymagają HTTPS: `python -m host.api.serve --host 0.0.0.0 --port 8000 --tls-port 8443 --certfile cert.pem --keyfile key.pem` (jeden stan, zwykły port dla HERMES), certyfikat np. `openssl req -x509 -newkey rsa:2048 -nodes -keyout key.pem -out cert.pem -days 365 -subj /CN=iris -addext subjectAltName=IP:<adres hosta>`. Instalacja jako aplikacja (PWA) wymaga certyfikatu zaufanego na telefonie. Testy: `pytest host/tests/test_browser.py` (Node i Playwright z Chromium)
 - urządzenia: kilka może być połączonych (`/ws?device=<id>`, bez parametru `hermes`), aktywne jest jedno; `curl -s localhost:8000/devices`, przełączenie `curl -s -X POST localhost:8000/devices/laptop/activate` (z tokenem dodaj `-H "Authorization: Bearer $IRIS_TOKEN"`) albo komenda `activate` w symulatorze i porcie POSIX
 - przełączanie głosem albo przez `/chat`: "przełącz na laptop" (host rozpoznaje bez LLM; odmiany nazw w `[devices.aliases]`, np. `pi-kuchnia = ["kuchnię"]`)
+- program na komputer i Raspberry Pi: `python -m client.desktop --url ws://<host>:8000/ws --device laptop` (Enter zaczyna i kończy wypowiedź; `--vad` bez rąk, po głośności i bez słowa wybudzającego; `--list-devices`, `--input-device`, `--output-device`; token z `IRIS_TOKEN`)
 - symulator ciała: `python -m sim.body --url ws://localhost:8000/ws [--device laptop]` (komendy na stdin, `help` je wypisuje; `say [ms]` wysyła ton 440 Hz, `sayfile plik.wav` nagranie, obie jako Opus (wymagają `av` i `numpy`); scenariusze: `--script sim/scenarios/low_battery.txt`)
 
 ## Kolejność prac

@@ -24,6 +24,13 @@ voice = [
     "av>=12",
     "numpy>=1.26",
 ]
+# Program na komputer i Raspberry Pi (client/). sounddevice wymaga systemowej biblioteki PortAudio
+# (Debian, Ubuntu, Raspberry Pi OS: apt install libportaudio2).
+desktop = [
+    "sounddevice>=0.4",
+    "av>=12",
+    "numpy>=1.26",
+]
 
 [tool.pytest.ini_options]
 pythonpath = ["."]
