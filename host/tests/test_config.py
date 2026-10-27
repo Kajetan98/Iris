@@ -189,3 +189,24 @@ def test_ollama_still_requires_a_model_and_keeps_its_default_url():
     with pytest.raises(ValidationError, match="model"):
         Config.model_validate({"brain": {"llm": {"engine": "ollama"}}})
     assert Config().brain.llm.base_url is None
+
+
+@pytest.mark.parametrize(
+    "audio, fragment",
+    [
+        ({"bitrate_bps": 32000}, "zmniejsz"),            # 15 s * 4000 B/s = 60 kB > 48 KB
+        ({"frame_ms": 10}, "1501 pakietów"),              # 1501 pakietów > 1024
+        ({"max_speech_s": 20}, "zmniejsz"),
+        ({"body_buffer_bytes": 30000}, "zmniejsz"),
+    ],
+)
+def test_speech_limit_must_fit_the_body_buffer(audio, fragment):
+    with pytest.raises(ValidationError, match=fragment):
+        Config.model_validate({"brain": {"audio": audio}})
+
+
+def test_speech_limit_fits_with_defaults_and_smaller_settings():
+    a = Config().brain.audio
+    assert (a.body_buffer_bytes, a.body_max_packets) == (49152, 1024)
+    Config.model_validate({"brain": {"audio": {"bitrate_bps": 32000, "max_speech_s": 10}}})
+    Config.model_validate({"brain": {"audio": {"frame_ms": 40, "max_speech_s": 15}}})

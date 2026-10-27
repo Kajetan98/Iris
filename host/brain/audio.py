@@ -91,7 +91,8 @@ class OpusEncoder:
         ctx.format = "s16"
         ctx.bit_rate = bitrate_bps
         ctx.time_base = Fraction(1, rate)
-        ctx.options = {"frame_duration": f"{frame_ms:g}", "application": "voip"}
+        # CBR: przy VBR ton zajmuje do 41 kbit/s zamiast 24, a bufor ciała ma stały rozmiar.
+        ctx.options = {"frame_duration": f"{frame_ms:g}", "application": "voip", "vbr": "off"}
         ctx.open()
         if ctx.frame_size != self.frame_samples:
             raise AudioError(f"koder ma ramkę {ctx.frame_size} próbek, oczekiwano {self.frame_samples}")

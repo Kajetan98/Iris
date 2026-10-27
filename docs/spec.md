@@ -87,9 +87,10 @@ Mikrofon (ciało → host):
 
 Odtwarzanie (host → ciało):
 
-- Host koduje mowę do Opus: mono, `playback_rate_hz` (16000), pakiety `frame_ms` (20 ms), `bitrate_bps` (24000). Wysyła ramki `kind=2` z `id` równym `audio_id` (1-65535, numerowane cyklicznie) i `seq` od 0, a po nich akcję `speak` z tym `audio_id`.
+- Host koduje mowę do Opus: mono, `playback_rate_hz` (16000), pakiety `frame_ms` (20 ms), `bitrate_bps` (24000), ze stałą przepływnością (CBR). Przy zmiennej przepływności ton potrafi zająć 41 kbit/s zamiast 24, więc rozmiar odpowiedzi nie byłby przewidywalny. Wysyła ramki `kind=2` z `id` równym `audio_id` (1-65535, numerowane cyklicznie) i `seq` od 0, a po nich akcję `speak` z tym `audio_id`.
 - Ciało ma jeden bufor odtwarzania. Ramki innego `audio_id` przychodzące w trakcie odtwarzania są odrzucane, a `speak` dla nich daje `busy`. Gdy nic nie gra, ramki nowego `audio_id` zastępują niezapowiedziane ramki poprzedniego.
 - Host wysyła ramki kolejnego odtwarzania dopiero po upływie czasu trwania poprzedniego, liczonego od `ack` dla `speak` (`serialize_playback`, domyślnie włączone).
+- Bufor odtwarzania ciała ma `body_buffer_bytes` (49 152 B) danych i `body_max_packets` (1024) pakietów (wartości początkowe, zgodne z firmware). Host nie wysyła więcej: nadmiarowe pakiety z końca odpowiedzi odcina. Konfiguracja, w której `max_speech_s` przy danej przepływności nie mieści się w buforze, jest błędem.
 - Ciało odtwarza dopiero po `speak`, więc cały dźwięk musi się zmieścić w jego pamięci. Host ogranicza odpowiedź do `max_speech_s` (15 s): syntezuje zdanie po zdaniu i przestaje dodawać zdania, gdy kolejne przekroczyłoby limit. Pierwsze zdanie dłuższe niż limit jest ucinane.
 
 Rozpoznawanie i synteza mowy:
@@ -250,10 +251,11 @@ Silnik Claude API (`brain.llm.engine = "claude"`):
 
 - Limit bufora zdarzeń w ciele przy braku łącza (symulator przyjmuje 64 i przy przepełnieniu odrzuca najstarsze).
 - Format ramki audio po testach na STM32 (Opus na L476 wymaga sprawdzenia pod kątem CPU i RAM). Host zakłada 16 kHz, mono i pakiety 20 ms w obu kierunkach.
-- Rozmiar bufora odtwarzania w ciele; od niego zależy `max_speech_s` (15 s przy 24 kbps to ok. 45 KB).
+- Rozmiar bufora odtwarzania w ciele (firmware: 48 KB danych, cały stan rdzenia ok. 70 KB z 128 KB RAM); od niego zależy `max_speech_s` (15 s przy 24 kbit/s CBR to 45 000 B).
 - Wybór między JSON a CBOR dla zdarzeń z ciała po pomiarze zużycia RAM.
 - Zestaw lokalnych komend i ich wzorców.
 - Sposób ustawiania trybu ciszy (endpoint REST, komenda głosowa lub oba).
 - Czy `battery_critical` może omijać limit inicjatywy.
 - Retencja i usuwanie zdarzeń, w tym zapisanych odczytów `gps` i `imu`.
 - Uwierzytelnianie API i WebSocket (ciało łączy się przez sieć, więc host będzie musiał nasłuchiwać poza 127.0.0.1).
+- Port firmware na STM32L476: moduł sieciowy (L476 nie ma Wi-Fi ani Ethernetu), klient WebSocket nad nim, kodek mikrofonu i koder Opus (CPU i RAM), czujniki, sterownik haptyki, pomiar baterii.

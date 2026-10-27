@@ -50,6 +50,16 @@ class VoiceTurn:
     spoken: Spoken
 
 
+def fit_body_buffer(packets: list[bytes], audio: AudioConfig) -> list[bytes]:
+    """Najdłuższy początek odpowiedzi, który mieści się w buforze odtwarzania ciała."""
+    total = 0
+    for i, p in enumerate(packets[: audio.body_max_packets]):
+        total += len(p)
+        if total > audio.body_buffer_bytes:
+            return packets[:i]
+    return packets[: audio.body_max_packets]
+
+
 def split_sentences(text: str) -> list[str]:
     return [s for s in _SENTENCE_END.split(text.strip()) if s.strip()]
 
@@ -135,6 +145,12 @@ class VoicePipeline:
         async with self._say_lock:
             pcm, sentences, shortened = await self._synthesize_limited(text)
             packets = await asyncio.to_thread(encode_speech, pcm, self._audio.playback_rate_hz, self._audio)
+            fitted = fit_body_buffer(packets, self._audio)
+            if len(fitted) < len(packets):
+                log.warning("odpowiedź ucięta do %d z %d pakietów (bufor ciała)", len(fitted), len(packets))
+                shortened = True
+                pcm = pcm[: int(len(fitted) * self._audio.frame_ms / 1000 * self._audio.playback_rate_hz) * 2]
+            packets = fitted
             audio_id = self._allocate_audio_id()
             for frame in playback_frames(audio_id, packets):
                 await self._send_frame(frame)

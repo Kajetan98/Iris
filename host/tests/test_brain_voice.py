@@ -317,3 +317,19 @@ def test_waiting_can_be_disabled():
     rig = Rig(audio=AudioConfig(serialize_playback=False))
     run(rig.pipeline.say("Test."))
     assert rig.waits == []
+
+
+def test_reply_is_cut_to_the_body_buffer():
+    from host.brain.voice import fit_body_buffer
+
+    # Walidator nie dopuściłby takiej konfiguracji; przycinanie chroni przed koderem, który
+    # wyprodukuje więcej niż nominalnie, więc tu je wymuszamy z pominięciem walidacji.
+    audio = AudioConfig.model_construct(**{**AudioConfig().model_dump(), "max_speech_s": 2.0, "body_buffer_bytes": 3000})
+    rig = Rig(tts=FakeTTS(1.5), audio=audio)
+    spoken = rig.utter().spoken
+    assert spoken.shortened and spoken.packets == 50  # 50 * 60 B = 3000 B
+    assert sum(len(f) - 5 for f in rig.frames) <= 3000
+    assert spoken.duration_s == pytest.approx(1.0, abs=0.01)
+    small = AudioConfig.model_construct(**{**AudioConfig().model_dump(), "body_buffer_bytes": 25, "body_max_packets": 3})
+    assert fit_body_buffer([b"x" * 10] * 5, small) == [b"x" * 10] * 2
+    assert fit_body_buffer([b"x"] * 5, small) == [b"x"] * 3

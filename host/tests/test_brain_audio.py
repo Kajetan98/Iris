@@ -235,3 +235,15 @@ def test_utterance_is_truncated_at_max_length():
     feed(a, 7, opus_packets(440, 2.0))
     u = finish(a)
     assert u.truncated and u.packets == 50 and abs(u.duration_ms - 1000) < 60
+
+
+def test_playback_is_constant_bitrate_whatever_the_signal():
+    rng = np.random.default_rng(0)
+    signals = [
+        sine(300, 2.0, 16000),  # przy VBR ton dawał ok. 41 kbit/s
+        (rng.normal(0, 6000, 32000)).clip(-32767, 32767).astype(np.int16),
+        np.zeros(32000, dtype=np.int16),
+    ]
+    for pcm in signals:
+        packets = encode_speech(pcm.tobytes(), 16000, CFG)
+        assert {len(p) for p in packets[:-1]} == {60}  # 24 kbit/s * 20 ms = 60 B

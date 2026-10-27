@@ -54,6 +54,7 @@ sim/             symulator ciała
 - głos (domyślnie wyłączony): `[brain.stt]` z `engine = "faster-whisper"` i `model` (nazwa, repozytorium HF albo katalog) oraz `[brain.tts]` z `engine = "piper"` i `voice` (plik `.onnx` z `.onnx.json` obok). Modele Whispera pobiera Hugging Face; głosy Pipera trzeba pobrać ręcznie. Opcje `[brain.audio]`: `error_clip` (klip z ciała odtwarzany po nieudanej turze), `max_speech_s`, `max_pending_turns`. Błąd ładowania modeli wyłącza głos (`/health`: `voice` = `error`), host działa dalej
 - samotest toru głosowego na prawdziwych modelach: `python -m host.brain.selftest --config iris.toml` (kod wyjścia 0 przy zgodności transkrypcji)
 - rozmowa tekstowa (wymaga `[brain.llm]`, inaczej 501): `curl -s localhost:8000/chat -H 'content-type: application/json' -d '{"text":"Cześć"}'`
+- firmware (rdzeń C99, natywnie, bez sprzętu): `make -C firmware test` (ASan i UBSan), `make -C firmware valgrind`, `make -C firmware lint`; testy zgodności z hostem są w `host/tests/test_firmware.py`. Budżet RAM i limity buforów: `firmware/core/fw_config.h`
 - symulator ciała: `python -m sim.body --url ws://localhost:8000/ws` (komendy na stdin, `help` je wypisuje; `say [ms]` wysyła ton 440 Hz, `sayfile plik.wav` nagranie, obie jako Opus (wymagają `av` i `numpy`); scenariusze: `--script sim/scenarios/low_battery.txt`)
 
 ## Kolejność prac

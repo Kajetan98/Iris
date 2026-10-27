@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 import platform
 import tomllib
 from datetime import time
@@ -172,6 +173,8 @@ class AudioConfig(_Model):
     max_speech_s: float = Field(15.0, gt=0)
     max_pending_turns: int = Field(3, ge=1)
     serialize_playback: bool = True  # czekaj na koniec odtwarzania przed wysłaniem kolejnego
+    body_buffer_bytes: int = Field(49152, gt=0)  # bufor odtwarzania w ciele (firmware: FW_PLAYBACK_BYTES)
+    body_max_packets: int = Field(1024, gt=0)    # firmware: FW_PLAYBACK_MAX_PACKETS
     error_clip: str | None = None  # nazwa klipu zapisanego w ciele, odtwarzanego po nieudanej turze
 
     @model_validator(mode="after")
@@ -180,6 +183,15 @@ class AudioConfig(_Model):
             raise ValueError(f"playback_rate_hz musi być jedną z {OPUS_RATES}")
         if self.frame_ms not in OPUS_FRAME_MS:
             raise ValueError(f"frame_ms musi być jedną z {OPUS_FRAME_MS}")
+        # CBR: rozmiar odpowiedzi to przepływność razy czas (+1 pakiet z opróżnienia kodera).
+        packets = math.ceil(self.max_speech_s * 1000 / self.frame_ms) + 1
+        packet_bytes = math.ceil(self.bitrate_bps * self.frame_ms / 8000)
+        if packets * packet_bytes > self.body_buffer_bytes or packets > self.body_max_packets:
+            raise ValueError(
+                f"max_speech_s={self.max_speech_s:g} przy {self.bitrate_bps} bit/s to {packets} pakietów "
+                f"({packets * packet_bytes} B), a bufor ciała ma {self.body_max_packets} pakietów "
+                f"i {self.body_buffer_bytes} B: zmniejsz max_speech_s lub bitrate_bps"
+            )
         return self
 
 
