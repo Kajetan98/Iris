@@ -140,7 +140,7 @@ def test_drive_change_is_stored_with_snapshot():
         clock.advance(1)
         service.handle_text(hb(18))
     assert types(store, types=["drive.enter"]) == ["drive.enter"]
-    assert len(store.snapshots()) == 2  # start + wejście w battery_low
+    assert len(store.snapshots()) == 3  # start, pierwsze urządzenie (device.switch), wejście w battery_low
     assert store.latest_snapshot().self_state["mode"] == "saving"
 
 
@@ -169,11 +169,13 @@ def test_tick_touches_session_and_snapshots_periodically():
     assert store.sessions()[0].last_seen_at == start + timedelta(seconds=1)
     beat_for(service, clock, 1)
     assert store.sessions()[0].last_seen_at == start + timedelta(seconds=10)
-    assert len(store.snapshots()) == 1
+    assert len(store.snapshots()) == 2  # start i device.switch pierwszego urządzenia
     beat_for(service, clock, 290)  # t = 300 s
-    assert len(store.snapshots()) == 2
+    assert len(store.snapshots()) == 2  # 300 s liczone od migawki przy device.switch (t = 1 s)
+    beat_for(service, clock, 1)
+    assert len(store.snapshots()) == 3
     beat_for(service, clock, 10)
-    assert len(store.snapshots()) == 2  # następna dopiero po kolejnych 300 s
+    assert len(store.snapshots()) == 3  # następna dopiero po kolejnych 300 s
 
 
 def test_store_failure_does_not_stop_the_core(monkeypatch, caplog):
@@ -237,11 +239,11 @@ def test_unexpected_error_in_handler_keeps_connection(monkeypatch, caplog):
         calls = []
         real = service.core.handle_event
 
-        def flaky(ev):
+        def flaky(ev, device="hermes"):
             calls.append(ev.type)
             if len(calls) == 1:
                 raise RuntimeError("błąd w rdzeniu")
-            return real(ev)
+            return real(ev, device)
 
         monkeypatch.setattr(service.core, "handle_event", flaky)
         ws = FakeWS()

@@ -96,6 +96,19 @@ def test_context_full_state():
     assert "Znane fakty o użytkowniku:\n- Mieszkam w Gdańsku" in out
 
 
+def test_context_names_device_change_before_body_changes():
+    state = {
+        "mode": "nominal",
+        "drives": [],
+        "device_change": {"from": "hermes", "to": "laptop"},
+        "body_changes": {"batt_pct": {"from": None, "to": 90}},
+    }
+    out = render_context(state, [], None)
+    assert "Urządzenie: zmiana z hermes na laptop\nZmiany stanu ciała od ostatniej rozmowy:" in out
+    assert "- bateria: brak danych → 90%" in out
+    assert "Urządzenie" not in render_context({"mode": "nominal", "drives": []}, [], None)
+
+
 def test_unknown_mode_drive_and_change_keys_pass_through():
     state = {"mode": "turbo", "drives": ["nowy_drive"], "body_changes": {"wilgotnosc": {"from": 1, "to": 2}}}
     out = render_context(state, [], None)

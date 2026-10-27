@@ -88,7 +88,7 @@ def test_self_history_filters_to_state_events_and_since(client, service, clock):
     types = [e["type"] for e in r.json()["events"]]
     assert types == ["body.fault"]  # button nie jest zmianą stanu, host.start jest wcześniejszy
     all_types = [e["type"] for e in client.get("/self/history").json()["events"]]
-    assert all_types == ["host.start", "body.fault"]
+    assert all_types == ["host.start", "device.switch", "body.fault"]  # pierwsze urządzenie
 
 
 # --- zdarzenia ---
@@ -238,7 +238,7 @@ def test_action_with_ack(client):
             ws.send_text(frame("haptic", {"ref": sent["id"], "ok": True}, t="ack"))
             r = pending.result(timeout=5)
     assert r.status_code == 200
-    assert r.json() == {"id": sent["id"], "ack": {"ref": sent["id"], "ok": True, "err": None}}
+    assert r.json() == {"id": sent["id"], "device": "hermes", "ack": {"ref": sent["id"], "ok": True, "err": None}}
     types = [e["type"] for e in client.get("/events", params=[("type", "action.sent"), ("type", "action.ack")]).json()["events"]]
     assert types == ["action.sent", "action.ack"]
 

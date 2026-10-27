@@ -50,7 +50,7 @@ IRIS może działać przez różne urządzenia: HERMES, przeglądarkę, program 
 | `audio.utterance.end` | `utt_id`, `dur_ms` | po VAD |
 | `local.command` | `cmd`, `result` | komenda obsłużona lokalnie na STM32 |
 | `button` | `id`, `kind` (`press`, `long`) | |
-| `device.activate` | – | urządzenie prosi o przełączenie na siebie (sekcja 1); liczy się jako interakcja |
+| `device.activate` | – | urządzenie prosi o przełączenie na siebie (sekcja 1); liczy się jako interakcja; bez łącza przepada (nie jest buforowane), bo spóźnione przełączyłoby IRIS nieoczekiwanie |
 
 ## 4. Zdarzenia hosta (wewnętrzne, widoczne w `/events`)
 
@@ -217,7 +217,7 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 Co host zapisuje (wartości początkowe w konfiguracji `api`):
 
 - każde zdarzenie z ciała poza `body.heartbeat` (heartbeaty tylko przy `store_heartbeats`, domyślnie wyłączone) i każde zdarzenie hosta,
-- migawkę stanu przy starcie, przy zamknięciu, przy każdym `drive.enter` i `drive.exit` oraz co `snapshot_every_s` (300 s),
+- migawkę stanu przy starcie, przy zamknięciu, przy każdym `drive.enter`, `drive.exit` i `device.switch` oraz co `snapshot_every_s` (300 s),
 - `last_seen_at` sesji co `touch_every_s` (10 s).
 
 ## 10. REST

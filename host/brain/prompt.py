@@ -80,6 +80,9 @@ def render_context(state: dict[str, Any], facts: Sequence[Fact], now: datetime |
     lines.append(
         "Aktywne potrzeby: " + (", ".join(DRIVE_LABELS.get(d, d) for d in drives) or "brak")
     )
+    device_change = state.get("device_change")
+    if device_change:
+        lines.append(f"Urządzenie: zmiana z {device_change['from']} na {device_change['to']}")
     changes = state.get("body_changes") or {}
     if changes:
         lines.append("Zmiany stanu ciała od ostatniej rozmowy:")
