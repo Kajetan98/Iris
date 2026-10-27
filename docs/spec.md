@@ -56,6 +56,21 @@
 
 Ciało odrzuca akcję spoza listy i odsyła `ack` z `ok:false`.
 
+- Ramka tekstowa od hosta do ciała ma najwyżej 512 bajtów (UTF-8). Host nie wysyła większych (`POST /actions` daje 422). Ciało większe odrzuca bez `ack` i zwiększa `frame_errors`.
+- `config.set` zna klucze `volume` (0-100), `batt_warn_pct` (0-100) i `temp_warn_c` (liczba). Inne klucze dają `unknown_key`.
+- `err` w `ack` to krótki kod ASCII (najwyżej 32 znaki):
+
+| kod | znaczenie |
+|---|---|
+| `unknown_action` | typ spoza tabeli |
+| `bad_body` | brak pola albo pole złego typu |
+| `bad_value` | wartość spoza dozwolonego zbioru lub zakresu |
+| `pin_not_allowed` | pin spoza białej listy |
+| `unknown_key` | klucz `config.set` nieznany ciału |
+| `unknown_clip` | klip, którego ciało nie ma |
+| `no_audio` | `speak` bez odebranych ramek tego `audio_id` |
+| `busy` | trwa odtwarzanie innego `audio_id` |
+
 ## 6. Audio
 
 - Kodek: Opus, ramki binarne. Nagłówek ramki: `kind` (1 B: 1 = mikrofon, 2 = odtwarzanie), `id` (2 B), `seq` (2 B), dane.
@@ -73,6 +88,8 @@ Mikrofon (ciało → host):
 Odtwarzanie (host → ciało):
 
 - Host koduje mowę do Opus: mono, `playback_rate_hz` (16000), pakiety `frame_ms` (20 ms), `bitrate_bps` (24000). Wysyła ramki `kind=2` z `id` równym `audio_id` (1-65535, numerowane cyklicznie) i `seq` od 0, a po nich akcję `speak` z tym `audio_id`.
+- Ciało ma jeden bufor odtwarzania. Ramki innego `audio_id` przychodzące w trakcie odtwarzania są odrzucane, a `speak` dla nich daje `busy`. Gdy nic nie gra, ramki nowego `audio_id` zastępują niezapowiedziane ramki poprzedniego.
+- Host wysyła ramki kolejnego odtwarzania dopiero po upływie czasu trwania poprzedniego, liczonego od `ack` dla `speak` (`serialize_playback`, domyślnie włączone).
 - Ciało odtwarza dopiero po `speak`, więc cały dźwięk musi się zmieścić w jego pamięci. Host ogranicza odpowiedź do `max_speech_s` (15 s): syntezuje zdanie po zdaniu i przestaje dodawać zdania, gdy kolejne przekroczyłoby limit. Pierwsze zdanie dłuższe niż limit jest ucinane.
 
 Rozpoznawanie i synteza mowy:

@@ -171,6 +171,7 @@ class AudioConfig(_Model):
     min_utterance_ms: float = Field(300.0, ge=0)
     max_speech_s: float = Field(15.0, gt=0)
     max_pending_turns: int = Field(3, ge=1)
+    serialize_playback: bool = True  # czekaj na koniec odtwarzania przed wysłaniem kolejnego
     error_clip: str | None = None  # nazwa klipu zapisanego w ciele, odtwarzanego po nieudanej turze
 
     @model_validator(mode="after")

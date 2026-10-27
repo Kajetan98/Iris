@@ -67,9 +67,16 @@ class Rig:
         async def announce(audio_id):
             self.events.append(("announce", audio_id))
 
+        self.waits = []
+
+        async def fake_sleep(seconds):
+            self.waits.append(seconds)
+            self.events.append(("wait", round(seconds, 2)))
+
         self.pipeline = VoicePipeline(
             stt=self.stt, tts=self.tts, respond=respond, send_frame=send_frame,
             announce=announce, audio=audio or AudioConfig(), min_text_chars=min_text_chars,
+            sleep=fake_sleep,
         )
 
     def utter(self, packets=None, utt_id=7, drop=()):
@@ -88,6 +95,8 @@ class Rig:
 def test_full_turn_with_real_opus_both_ways():
     rig = Rig()
     turn = rig.utter()
+    assert rig.events[-1] == ("wait", 1.0)  # po speak potok czeka do końca odtwarzania
+    rig.events = rig.events[:-1]
     # wejście: STT dostaje 16 kHz s16le z poprawnie zdekodowanym tonem
     pcm, rate = rig.stt.calls[0]
     assert rate == STT_RATE and abs(len(pcm) / 2 / rate - 1.5) < 0.06
@@ -198,7 +207,7 @@ def test_audio_ids_increase_and_wrap():
 def test_say_works_without_an_utterance():
     rig = Rig()
     spoken = run(rig.pipeline.say("Powiedz coś."))
-    assert spoken.audio_id == 1 and rig.events[-1] == ("announce", 1)
+    assert spoken.audio_id == 1 and rig.events[-2] == ("announce", 1)
     assert rig.asked == []
 
 
@@ -214,7 +223,7 @@ def test_concurrent_says_do_not_interleave_frames():
         # Wysyłka trwa dłużej niż kodowanie drugiej odpowiedzi, więc bez blokady ramki by się przeplotły.
         rig = Rig(tts=FakeTTS(0.3, delay=0.01), send_delay=0.002)
         await asyncio.gather(rig.pipeline.say("Pierwsza."), rig.pipeline.say("Druga."))
-        ids = [e[1][1] if e[0] == "frame" else -e[1] for e in rig.events]
+        ids = [e[1][1] if e[0] == "frame" else -e[1] for e in rig.events if e[0] != "wait"]
         # ramki jednej odpowiedzi, jej speak, dopiero potem następna
         assert ids == [1] * ids.index(-1) + [-1] + [2] * (len(ids) - ids.index(-1) - 2) + [-2]
 
@@ -288,3 +297,23 @@ def test_conversation_text_never_reaches_logs(caplog):
 )
 def test_split_sentences(text, parts):
     assert split_sentences(text) == parts
+
+
+
+# --- jeden bufor odtwarzania w ciele ---
+
+
+def test_next_reply_waits_for_previous_playback():
+    rig = Rig(tts=FakeTTS(0.7))
+    run(rig.pipeline.say("Pierwsza."))
+    run(rig.pipeline.say("Druga."))
+    kinds = [e[0] for e in rig.events]
+    first_wait = kinds.index("wait")
+    assert kinds[first_wait - 1] == "announce" and "frame" in kinds[first_wait + 1:]
+    assert rig.waits == [pytest.approx(0.7, abs=0.01)] * 2
+
+
+def test_waiting_can_be_disabled():
+    rig = Rig(audio=AudioConfig(serialize_playback=False))
+    run(rig.pipeline.say("Test."))
+    assert rig.waits == []

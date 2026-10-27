@@ -16,6 +16,7 @@ from typing import Any, Callable
 from sim import audio as sim_audio
 
 PROTOCOL_VERSION = 1
+MAX_HOST_FRAME_BYTES = 512  # większe ramki od hosta ciało odrzuca (spec, sekcja 5)
 AUDIO_HEADER = struct.Struct(">BHH")  # kind, id, seq (big-endian), sekcja 6
 AUDIO_MIC = 1
 AUDIO_PLAYBACK = 2
@@ -345,6 +346,9 @@ class BodyModel:
 
     def on_host_text(self, raw: str, now: float) -> None:
         """Akcja od hosta. Ramka niezgodna ze spec zwiększa licznik frame_errors."""
+        if len(raw.encode("utf-8")) > MAX_HOST_FRAME_BYTES:
+            self.frame_errors += 1
+            return
         try:
             data = json.loads(raw)
         except ValueError:
@@ -362,12 +366,12 @@ class BodyModel:
             return
         handler = self._actions.get(data["type"])
         if handler is None:
-            err: str | None = "unknown action"
+            err: str | None = "unknown_action"
         else:
             try:
                 err = handler(data.get("body", {}))
-            except (TypeError, ValueError) as e:
-                err = f"bad body: {e}"
+            except (TypeError, ValueError):
+                err = "bad_body"
         ack: dict[str, Any] = {"ref": data["id"], "ok": err is None}
         if err is not None:
             ack["err"] = err
@@ -381,6 +385,8 @@ class BodyModel:
         if kind != AUDIO_PLAYBACK:
             self.frame_errors += 1
             return
+        if audio_id not in self._playback:
+            self._playback.clear()  # jeden bufor: nowe audio_id zastępuje niezapowiedziane ramki
         self._playback.setdefault(audio_id, []).append((seq, bytes(raw[AUDIO_HEADER.size:])))
 
     # --- akcje: zwracają None (ok) albo tekst błędu ---
@@ -391,21 +397,21 @@ class BodyModel:
     def _act_haptic(self, body: dict[str, Any]) -> str | None:
         pattern = body.get("pattern")
         if pattern not in HAPTIC_PATTERNS:
-            return f"pattern must be one of {HAPTIC_PATTERNS}"
+            return "bad_value" if isinstance(pattern, str) else "bad_body"
         self.haptic_log.append(pattern)
         return None
 
     def _act_speak(self, body: dict[str, Any]) -> str | None:
         audio_id = body.get("audio_id")
         if isinstance(audio_id, bool) or not isinstance(audio_id, (int, str)):
-            return "audio_id required"
+            return "bad_body"
         try:
             key = int(audio_id)
         except ValueError:
-            return "audio_id must be a number"
+            return "bad_body"
         chunks = self._playback.pop(key, None)
         if not chunks:
-            return "no audio for id"
+            return "no_audio"
         self.played.append((key, sum(len(c) for _, c in chunks)))
         self.played_audio.append((key, [c for _, c in sorted(chunks)]))
         return None
@@ -413,27 +419,29 @@ class BodyModel:
     def _act_clip(self, body: dict[str, Any]) -> str | None:
         clip = body.get("clip")
         if clip not in self.cfg.clips:
-            return "unknown clip"
+            return "unknown_clip" if isinstance(clip, str) else "bad_body"
         self.clips_played.append(clip)
         return None
 
     def _act_gpio(self, body: dict[str, Any]) -> str | None:
         pin, value = body.get("pin"), body.get("value")
-        if isinstance(pin, bool) or pin not in self.cfg.gpio_pins:
-            return "pin not allowed"
-        if value not in (0, 1) or isinstance(value, bool):
-            return "value must be 0 or 1"
+        if not _is_int(pin) or not _is_int(value):
+            return "bad_body"
+        if pin not in self.cfg.gpio_pins:
+            return "pin_not_allowed"
+        if value not in (0, 1):
+            return "bad_value"
         self.gpio[pin] = value
         return None
 
     def _act_config(self, body: dict[str, Any]) -> str | None:
         key, value = body.get("key"), body.get("value")
         if key not in self.settings:
-            return "unknown key"
+            return "unknown_key" if isinstance(key, str) else "bad_body"
         if isinstance(value, bool) or not isinstance(value, (int, float)):
-            return "value must be a number"
+            return "bad_body"
         if key in ("volume", "batt_warn_pct") and not 0 <= value <= 100:
-            return "value out of range 0-100"
+            return "bad_value"
         self.settings[key] = value
         return None
 
@@ -455,6 +463,10 @@ def parse_script(text: str) -> list[tuple[float, str]]:
         steps.append((at, command.strip()))
     steps.sort(key=lambda s: s[0])
     return steps
+
+
+def _is_int(x: Any) -> bool:
+    return isinstance(x, int) and not isinstance(x, bool)
 
 
 def _num(x: float) -> float | int:

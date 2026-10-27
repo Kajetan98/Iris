@@ -14,6 +14,7 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 PROTOCOL_VERSION = 1
+MAX_ACTION_FRAME_BYTES = 512  # ramka tekstowa host -> ciało (spec, sekcja 5)
 
 # Pola, których spec nie typuje dokładniej, przyjmują tekst lub liczbę.
 Ident = str | int
@@ -245,7 +246,11 @@ def encode_action(action_type: str, body: dict[str, Any], *, id: str, ts_ms: int
         "type": action_type,
         "body": validated.model_dump(mode="json"),
     }
-    return json.dumps(frame, separators=(",", ":"), ensure_ascii=False)
+    encoded = json.dumps(frame, separators=(",", ":"), ensure_ascii=False)
+    size = len(encoded.encode("utf-8"))
+    if size > MAX_ACTION_FRAME_BYTES:
+        raise ValueError(f"ramka akcji ma {size} B, ciało przyjmuje najwyżej {MAX_ACTION_FRAME_BYTES} B")
+    return encoded
 
 
 def _summary(e: ValidationError) -> str:

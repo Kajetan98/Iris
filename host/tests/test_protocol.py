@@ -117,3 +117,14 @@ def test_decode_audio_frame_rejects(raw):
 
     with pytest.raises(FrameRejected):
         decode_audio_frame(raw)
+
+
+def test_encode_action_enforces_body_frame_limit():
+    from host.core.protocol import MAX_ACTION_FRAME_BYTES
+
+    ok = encode_action("config.set", {"key": "volume", "value": "x" * 400}, id="h1", ts_ms=0)
+    assert len(ok.encode()) <= MAX_ACTION_FRAME_BYTES
+    with pytest.raises(ValueError, match="512"):
+        encode_action("config.set", {"key": "volume", "value": "x" * 600}, id="h1", ts_ms=0)
+    with pytest.raises(ValueError, match="512"):  # liczą się bajty UTF-8, nie znaki
+        encode_action("config.set", {"key": "volume", "value": "ż" * 250}, id="h1", ts_ms=0)

@@ -25,6 +25,8 @@ run = asyncio.run
 
 
 def config(**audio):
+    # Czekanie na koniec odtwarzania ma osobny test; tu tylko spowalniałoby kolejne tury.
+    audio.setdefault("serialize_playback", False)
     return Config.model_validate({"brain": {"audio": audio}, "api": {"ack_timeout_s": 0.3}})
 
 
@@ -376,6 +378,25 @@ def test_concurrent_replies_are_played_one_after_another():
         await finish_turns(service)
         ids = [header(f)[1] for f in ws.sent_bytes]
         assert ids == sorted(ids)  # ramki odpowiedzi 1 przed ramkami odpowiedzi 2
+        ws.disconnect()
+        await task
+
+    run(scenario())
+
+
+def test_host_waits_for_playback_before_the_next_reply():
+    async def scenario():
+        service, _, _ = make(replies=["Pierwsza.", "Druga."], tts=FakeTTS(0.5), cfg=config(serialize_playback=True))
+        ws, task = await connect(service)
+        loop = asyncio.get_running_loop()
+        say(ws, 1, opus_packets(440, 1.0))
+        say(ws, 2, opus_packets(440, 1.0))
+        await answer_speak(ws, n=1)
+        acked_at = loop.time()
+        await until(lambda: any(header(f)[1] == 2 for f in ws.sent_bytes), timeout=3)
+        assert loop.time() - acked_at >= 0.45  # ramki drugiej odpowiedzi dopiero po 0,5 s odtwarzania
+        await answer_speak(ws, n=2)
+        await finish_turns(service)
         ws.disconnect()
         await task
 

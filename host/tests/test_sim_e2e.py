@@ -109,7 +109,7 @@ def test_sim_against_real_host(host):
             assert sim.model.haptic_log == ["warn"]
             bad = await http.post("/actions", json={"type": "gpio.set", "body": {"pin": 99, "value": 1}})
             assert bad.status_code == 200
-            assert bad.json()["ack"] == {"ref": bad.json()["id"], "ok": False, "err": "pin not allowed"}
+            assert bad.json()["ack"] == {"ref": bad.json()["id"], "ok": False, "err": "pin_not_allowed"}
 
             # zerwanie łącza: link_lost, zdarzenie z bufora, powrót
             sim.command("drop 1.5")

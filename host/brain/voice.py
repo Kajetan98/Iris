@@ -66,6 +66,7 @@ class VoicePipeline:
         audio: AudioConfig,
         min_text_chars: int = 2,
         decoder_factory: Callable[[], OpusDecoder] = OpusDecoder,
+        sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
     ) -> None:
         self._stt = stt
         self._tts = tts
@@ -74,6 +75,7 @@ class VoicePipeline:
         self._announce = announce
         self._audio = audio
         self._min_text_chars = min_text_chars
+        self._sleep = sleep
         self.assembler = UtteranceAssembler(audio, decoder_factory)
         self._say_lock = asyncio.Lock()
         self._next_audio_id = 1
@@ -137,7 +139,11 @@ class VoicePipeline:
             for frame in playback_frames(audio_id, packets):
                 await self._send_frame(frame)
             await self._announce(audio_id)
-            return Spoken(audio_id, len(packets), len(pcm) / 2 / self._audio.playback_rate_hz, sentences, shortened)
+            duration_s = len(pcm) / 2 / self._audio.playback_rate_hz
+            if self._audio.serialize_playback:
+                # Ciało ma jeden bufor odtwarzania: następne ramki dopiero, gdy to się skończy.
+                await self._sleep(duration_s)
+            return Spoken(audio_id, len(packets), duration_s, sentences, shortened)
 
     async def _synthesize_limited(self, text: str) -> tuple[bytes, int, bool]:
         rate = self._audio.playback_rate_hz

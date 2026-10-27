@@ -285,3 +285,10 @@ def test_module_level_app_is_importable():
     from host.api.main import app
 
     assert app.title == "IRIS host"
+
+
+def test_oversized_action_is_422(client):
+    with client.websocket_connect("/ws") as ws:
+        eventually(lambda: connected(client))
+        r = client.post("/actions", json={"type": "config.set", "body": {"key": "volume", "value": "x" * 600}})
+        assert r.status_code == 422 and "512" in r.json()["detail"]

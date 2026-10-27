@@ -368,7 +368,7 @@ def test_haptic_valid_and_invalid():
     assert ack_of(m).body.ok and m.haptic_log == ["warn"]
     m.on_host_text(action("haptic", {"pattern": "loud"}, "h2"), 1.0)
     ack = ack_of(m)
-    assert not ack.body.ok and "pattern" in ack.body.err and m.haptic_log == ["warn"]
+    assert (ack.body.ok, ack.body.err) == (False, "bad_value") and m.haptic_log == ["warn"]
 
 
 def test_gpio_whitelist_and_values():
@@ -430,7 +430,7 @@ def test_action_outside_list_is_rejected_with_ack():
     m.take_out()
     m.on_host_text(action("self.destruct", {}, "h9"), 1.0)
     ack = ack_of(m)
-    assert (ack.body.ref, ack.body.ok, ack.body.err) == ("h9", False, "unknown action")
+    assert (ack.body.ref, ack.body.ok, ack.body.err) == ("h9", False, "unknown_action")
 
 
 def test_malformed_host_frames_count_as_frame_errors():
@@ -497,3 +497,51 @@ def test_parse_script():
 def test_parse_script_errors(text):
     with pytest.raises(ValueError, match="linia 1"):
         parse_script(text)
+
+
+def test_oversized_host_frame_is_dropped_without_ack():
+    m = make()
+    m.take_out()
+    big = action("config.set", {"key": "volume", "value": "x" * 600})
+    assert len(big.encode()) > 512
+    m.on_host_text(big, 1.0)
+    assert m.take_out() == [] and m.frame_errors == 1
+
+
+def test_new_audio_id_replaces_unannounced_frames():
+    m = make()
+    m.take_out()
+    m.on_host_binary(AUDIO_HEADER.pack(2, 5, 0) + b"stare")
+    m.on_host_binary(AUDIO_HEADER.pack(2, 6, 0) + b"nowe")
+    m.on_host_text(action("speak", {"audio_id": 5}, "h1"), 1.0)
+    assert ack_of(m).body.err == "no_audio"  # ramki 5 zastąpiło nowe audio_id
+    m.on_host_text(action("speak", {"audio_id": 6}, "h2"), 1.0)
+    assert ack_of(m).body.ok and m.played_audio == [(6, [b"nowe"])]
+
+
+@pytest.mark.parametrize(
+    "body, err",
+    [({"pin": "5", "value": 1}, "bad_body"), ({"pin": 5, "value": "1"}, "bad_body"), ({"pin": True, "value": 1}, "bad_body"),
+     ({"pin": 9, "value": 1}, "pin_not_allowed"), ({"pin": 5, "value": 2}, "bad_value"), ({"pin": 5}, "bad_body")],
+)
+def test_gpio_error_codes(body, err):
+    m = make(gpio_pins=frozenset({5}))
+    m.take_out()
+    m.on_host_text(action("gpio.set", body), 1.0)
+    assert ack_of(m).body.err == err
+
+
+@pytest.mark.parametrize(
+    "type_, body, err",
+    [("haptic", {"pattern": 1}, "bad_body"), ("haptic", {"pattern": "loud"}, "bad_value"),
+     ("speak.clip", {"clip": 3}, "bad_body"), ("speak.clip", {"clip": "nope"}, "unknown_clip"),
+     ("config.set", {"key": 1, "value": 1}, "bad_body"), ("config.set", {"key": "color", "value": 1}, "unknown_key"),
+     ("config.set", {"key": "volume", "value": "x"}, "bad_body"), ("config.set", {"key": "volume", "value": 101}, "bad_value"),
+     ("speak", {}, "bad_body"), ("speak", {"audio_id": 9}, "no_audio")],
+)
+def test_ack_error_codes_follow_spec(type_, body, err):
+    m = make()
+    m.take_out()
+    m.on_host_text(action(type_, body), 1.0)
+    assert ack_of(m).body.err == err
+    assert len(err) <= 32 and err.isascii()
