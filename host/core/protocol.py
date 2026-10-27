@@ -12,10 +12,11 @@ import struct
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError, model_validator
 
 PROTOCOL_VERSION = 1
 MAX_ACTION_FRAME_BYTES = 512  # ramka tekstowa host -> ciało (spec, sekcja 5)
+DISPLAY_FRAME_BYTES = 4096  # urządzenie z `display` przyjmuje większe ramki (napisy)
 
 # Urządzenia (spec, sekcja 1): parametr `device` w /ws, brak oznacza jedno ciało HERMES.
 DEFAULT_DEVICE = "hermes"
@@ -103,7 +104,7 @@ class DeviceActivate(_Body):
     pass
 
 
-CAPABILITIES = ("mic", "speaker", "haptic", "gpio", "battery")
+CAPABILITIES = ("mic", "speaker", "haptic", "gpio", "battery", "display")
 
 
 class DeviceCaps(_Body):
@@ -250,6 +251,21 @@ class DeviceActive(_Body):
     active: StrictBool
 
 
+class Display(_Body):
+    """Napisy tury głosowej (spec, sekcja 6). Tekst tylko dla heard i reply."""
+
+    turn: Ident
+    kind: Literal["heard", "reply", "nothing", "failed"]
+    text: str | None = None
+    truncated: StrictBool = False
+
+    @model_validator(mode="after")
+    def _text_when_needed(self) -> "Display":
+        if (self.kind in ("heard", "reply")) != (self.text is not None):
+            raise ValueError("text jest wymagany dla heard i reply, a dla nothing i failed niedozwolony")
+        return self
+
+
 ACTION_MODELS: dict[str, type[_Body]] = {
     "speak": Speak,
     "speak.clip": SpeakClip,
@@ -258,11 +274,14 @@ ACTION_MODELS: dict[str, type[_Body]] = {
     "config.set": ConfigSet,
     "ping": Ping,
     "device.active": DeviceActive,
+    "display": Display,
 }
 
 
 def encode_action(action_type: str, body: dict[str, Any], *, id: str, ts_ms: int) -> str:
-    """Buduje ramkę akcji. Rzuca ValueError dla nieznanego typu lub niepoprawnego body."""
+    """Buduje ramkę akcji. Rzuca ValueError dla nieznanego typu lub niepoprawnego body.
+
+    Limit rozmiaru: 512 B, dla `display` 4096 B (wysyłane tylko urządzeniom z `display`)."""
     model = ACTION_MODELS.get(action_type)
     if model is None:
         raise ValueError(f"nieznany typ akcji: {action_type!r}")
@@ -276,12 +295,13 @@ def encode_action(action_type: str, body: dict[str, Any], *, id: str, ts_ms: int
         "id": id,
         "ts": ts_ms,
         "type": action_type,
-        "body": validated.model_dump(mode="json"),
+        "body": validated.model_dump(mode="json", exclude_unset=True),  # tylko podane pola
     }
     encoded = json.dumps(frame, separators=(",", ":"), ensure_ascii=False)
     size = len(encoded.encode("utf-8"))
-    if size > MAX_ACTION_FRAME_BYTES:
-        raise ValueError(f"ramka akcji ma {size} B, ciało przyjmuje najwyżej {MAX_ACTION_FRAME_BYTES} B")
+    limit = DISPLAY_FRAME_BYTES if action_type == "display" else MAX_ACTION_FRAME_BYTES
+    if size > limit:
+        raise ValueError(f"ramka akcji ma {size} B, ciało przyjmuje najwyżej {limit} B")
     return encoded
 
 

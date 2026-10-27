@@ -75,6 +75,8 @@ class Out:
 
 
 class BodyModel:
+    max_host_frame_bytes = MAX_HOST_FRAME_BYTES  # urządzenie z `display` przyjmuje więcej (spec, sekcja 5)
+
     def __init__(self, cfg: SimConfig, now: float) -> None:
         self.cfg = cfg
         self._rng = random.Random(cfg.seed)
@@ -370,7 +372,7 @@ class BodyModel:
 
     def on_host_text(self, raw: str, now: float) -> None:
         """Akcja od hosta. Ramka niezgodna ze spec zwiększa licznik frame_errors."""
-        if len(raw.encode("utf-8")) > MAX_HOST_FRAME_BYTES:
+        if len(raw.encode("utf-8")) > self.max_host_frame_bytes:
             self.frame_errors += 1
             return
         try:

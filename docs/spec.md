@@ -35,7 +35,7 @@ Host serwuje klienta pod `/app/` (pliki publiczne, sekcja 10). Ten sam klient dz
 
 - Wymaga bezpiecznego kontekstu (`localhost` albo HTTPS), bo bez niego przeglądarka nie daje mikrofonu ani WebCodecs. Mowę koduje i dekoduje przez WebCodecs (Opus, 16 kHz, mono, pakiety 20 ms, 24 kbit/s), jak opisuje sekcja 6.
 - Mówi się z przyciskiem: wciśnięcie wysyła `audio.utterance.start`, puszczenie kończy wypowiedź (`audio.utterance.end`, najwyżej 60 s).
-- `device.caps`: `mic`, `speaker`, `haptic` (gdy przeglądarka ma wibracje), `battery` (gdy podaje poziom baterii), bez klipów. `gpio.set` i `haptic` bez wibracji dają `unsupported`, `speak.clip` daje `unknown_clip`. Pozostałe reguły `ack` jak w firmware.
+- `device.caps`: `mic`, `speaker`, `display`, `haptic` (gdy przeglądarka ma wibracje), `battery` (gdy podaje poziom baterii), bez klipów. Napisy (sekcja 6) pokazuje pod przysłoną: rozpoznaną wypowiedź i słowa IRIS odsłaniane w tempie odtwarzania (według liczby znaków, więc w przybliżeniu). `gpio.set` i `haptic` bez wibracji dają `unsupported`, `speak.clip` daje `unknown_clip`. Pozostałe reguły `ack` jak w firmware.
 - Heartbeat bez `link_rssi`. Przeglądarka nie może wysyłać pingów WebSocket, więc zerwane łącze wykrywa dopiero przy błędzie wysyłki albo po pingu hosta.
 - Nazwę urządzenia i token klient trzyma w pamięci przeglądarki (`localStorage`) na tym urządzeniu.
 - HTTPS: `python -m host.api.serve` uruchamia host na zwykłym porcie (dla HERMES) i drugim porcie z TLS (dla przeglądarek), z tym samym stanem. Instalacja jako aplikacja wymaga certyfikatu, któremu telefon ufa; z samopodpisanym klient działa w karcie po akceptacji ostrzeżenia.
@@ -45,7 +45,7 @@ Host serwuje klienta pod `/app/` (pliki publiczne, sekcja 10). Ten sam klient dz
 `python -m client.desktop` (katalog `client/`) używa mikrofonu i głośnika systemu przez PortAudio.
 
 - Wypowiedź zaczyna i kończy Enter. Z `--vad` wypowiedź zaczyna się po trzech ramkach głośniejszych niż próg (wartość początkowa -40 dBFS) i kończy po 800 ms ciszy (`--vad-threshold`, `--vad-end-ms`), z 200 ms dźwięku sprzed startu. Nie ma słowa wybudzającego, więc w tym trybie IRIS odpowiada na każdą wykrytą mowę.
-- `device.caps`: `mic`, `speaker` i `battery` tylko wtedy, gdy system podaje poziom baterii (Linux: `/sys/class/power_supply`). Heartbeat bez `link_rssi`, bez `body.sensor`: program nie wysyła danych, których nie mierzy.
+- `device.caps`: `mic`, `speaker`, `display` (napisy wypisywane w terminalu) i `battery` tylko wtedy, gdy system podaje poziom baterii (Linux: `/sys/class/power_supply`). Heartbeat bez `link_rssi`, bez `body.sensor`: program nie wysyła danych, których nie mierzy.
 - `haptic` i `gpio.set` dają `unsupported`, `speak.clip` daje `unknown_clip`. Odtwarzanie ma jeden bufor jak w firmware (`busy`).
 
 ## 2. Koperta
@@ -73,7 +73,7 @@ Host serwuje klienta pod `/app/` (pliki publiczne, sekcja 10). Ten sam klient dz
 | `audio.utterance.end` | `utt_id`, `dur_ms` | po VAD |
 | `local.command` | `cmd`, `result` | komenda obsłużona lokalnie na STM32 |
 | `button` | `id`, `kind` (`press`, `long`) | |
-| `device.caps` | `has` (lista: `mic`, `speaker`, `haptic`, `gpio`, `battery`), `clips` (lista nazw klipów), `playback_bytes`, `playback_packets` (pola opcjonalne) | możliwości urządzenia (sekcja 1); wysyłane po każdym zestawieniu połączenia, przed zaległymi zdarzeniami, bez buforowania |
+| `device.caps` | `has` (lista: `mic`, `speaker`, `haptic`, `gpio`, `battery`, `display`), `clips` (lista nazw klipów), `playback_bytes`, `playback_packets` (pola opcjonalne) | możliwości urządzenia (sekcja 1); wysyłane po każdym zestawieniu połączenia, przed zaległymi zdarzeniami, bez buforowania |
 | `device.activate` | – | urządzenie prosi o przełączenie na siebie (sekcja 1); liczy się jako interakcja; bez łącza przepada (nie jest buforowane), bo spóźnione przełączyłoby IRIS nieoczekiwanie |
 
 ## 4. Zdarzenia hosta (wewnętrzne, widoczne w `/events`)
@@ -97,10 +97,11 @@ Host serwuje klienta pod `/app/` (pliki publiczne, sekcja 10). Ten sam klient dz
 | `config.set` | `key`, `value` | progi lokalne, głośność |
 | `ping` | – | odpowiedź `ack` |
 | `device.active` | `active` (bool) | czy urządzenie jest aktywne (sekcja 1) |
+| `display` | `turn`, `kind` (`heard`, `reply`, `nothing`, `failed`), `text`, `truncated` | napisy tury głosowej (sekcja 6); tylko dla urządzeń z `display` |
 
 Ciało odrzuca akcję spoza listy i odsyła `ack` z `ok:false`.
 
-- Ramka tekstowa od hosta do ciała ma najwyżej 512 bajtów (UTF-8). Host nie wysyła większych (`POST /actions` daje 422). Ciało większe odrzuca bez `ack` i zwiększa `frame_errors`.
+- Ramka tekstowa od hosta do ciała ma najwyżej 512 bajtów (UTF-8), a do urządzenia z `display` w `device.caps` najwyżej 4096 bajtów. Host nie wysyła większych (`POST /actions` daje 422). Ciało większe odrzuca bez `ack` i zwiększa `frame_errors`.
 - `config.set` zna klucze `volume` (0-100), `batt_warn_pct` (0-100) i `temp_warn_c` (liczba). Inne klucze dają `unknown_key`.
 - `err` w `ack` to krótki kod ASCII (najwyżej 32 znaki):
 
@@ -140,7 +141,7 @@ Odtwarzanie (host → ciało):
 
 Rozpoznawanie i synteza mowy:
 
-- STT (faster-whisper) i TTS (Piper) działają lokalnie, więc dźwięk i tekst nie opuszczają maszyny hosta. Dźwięk, transkrypcje i teksty odpowiedzi nie są zapisywane w bazie ani logowane. Logi zawierają tylko czasy i liczby.
+- STT (faster-whisper) i TTS (Piper) działają lokalnie, więc dźwięk i tekst nie opuszczają maszyny hosta, z wyjątkiem napisów (`display`) dla urządzenia, które nagrało wypowiedź. Dźwięk, transkrypcje i teksty odpowiedzi nie są zapisywane w bazie ani logowane. Logi zawierają tylko czasy i liczby.
 - Transkrypcja krótsza niż `min_text_chars` (2) znaków kończy wypowiedź bez odpowiedzi.
 - Transkrypcja jest traktowana jak tekst z `POST /chat` (sekcja 12): trafia do LLM z tym samym kontekstem, a odpowiedź jest odtwarzana na ciele.
 
@@ -152,6 +153,11 @@ Tura głosowa na hoście:
 - Gdy tura się nie powiedzie (błąd STT, LLM lub TTS, utrata łącza w trakcie), host zapisuje ostrzeżenie w logu i, jeśli ustawiono `error_clip`, wysyła `speak.clip` z tą nazwą (klipy zapisane w ciele, nazwy zależą od firmware). Odrzucone `speak` (`ack` z `ok: false`) lub brak `ack` kończy się samym ostrzeżeniem.
 - Modele ładują się przy starcie hosta. Błąd ładowania, albo włączony głos przy wyłączonym LLM, wyłącza głos (`/health`: `voice` ma wartość `error`), a reszta hosta działa dalej.
 - `brain.stt` i `brain.tts` włącza się razem.
+
+Napisy (urządzenia z `display` w `device.caps`, np. przeglądarka):
+
+- Host wysyła akcję `display` tylko urządzeniu, z którego przyszła wypowiedź, z `turn` równym jej `utt_id`. Kolejność w turze: `heard` z rozpoznanym tekstem po transkrypcji, potem `reply` z tekstem, który IRIS wypowie (tylko zdania zmieszczone w `max_speech_s`, `truncated: true`, gdy odpowiedź była dłuższa), wysyłane przed ramkami audio. Wypowiedź bez rozpoznanego tekstu kończy się `nothing`, nieudana tura `failed` (oba bez `text`).
+- Akcja nie czeka na `ack`. Zapis `action.sent` zawiera zamiast `text` liczbę znaków (`chars`), więc treść rozmowy nie trafia do bazy.
 
 ## 7. Model stanu na hoście
 

@@ -49,8 +49,10 @@ REPLACED_CLOSE_CODE = 4000
 TOO_MANY_DEVICES_CLOSE_CODE = 4001
 BAD_DEVICE_CLOSE_CODE = 4002
 
-# Urządzenie, z którego przyszła wypowiedź bieżącej tury głosowej.
+# Urządzenie, z którego przyszła wypowiedź bieżącej tury głosowej, i jej utt_id (napisy).
 _turn_device: contextvars.ContextVar[str | None] = contextvars.ContextVar("turn_device", default=None)
+_turn_utt: contextvars.ContextVar[int | str | None] = contextvars.ContextVar("turn_utt", default=None)
+DISPLAY_TEXT_BYTES = 3500  # tekst napisu mieści się w ramce 4096 B razem z kopertą
 
 
 class NotConnected(Exception):
@@ -340,12 +342,15 @@ class HostService:
                 await ws.send_text(frame)
             except Exception:
                 raise NotConnected() from None
+            logged = json.loads(frame)["body"]
+            if "text" in logged:  # napisy: treść rozmowy nie trafia do bazy (spec, sekcja 6)
+                logged["chars"] = len(logged.pop("text"))
             self._persist(
                 [
                     HostEvent(
                         type="action.sent",
                         at=self.clock.wall(),
-                        data={"id": action_id, "type": type_, "body": json.loads(frame)["body"]},
+                        data={"id": action_id, "type": type_, "body": logged},
                         device=target,
                     )
                 ]
@@ -400,6 +405,8 @@ class HostService:
             audio=self.config.brain.audio,
             min_text_chars=self.config.brain.stt.min_text_chars,
             limits=self._turn_limits,
+            heard=lambda text: self._display("heard", text),
+            replying=lambda text, truncated: self._display("reply", text, truncated),
         )
         self.voice_status = "ready"
 
@@ -423,6 +430,7 @@ class HostService:
                 return
             context = contextvars.copy_context()
             context.run(_turn_device.set, device)  # odpowiedź wraca na to urządzenie
+            context.run(_turn_utt.set, raw.utt_id)
             try:
                 task = asyncio.get_running_loop().create_task(self._voice_turn(raw), context=context)
             except RuntimeError:
@@ -437,7 +445,7 @@ class HostService:
 
         assert self.voice is not None
         try:
-            await self.voice.process(raw)
+            turn = await self.voice.process(raw)
         except asyncio.CancelledError:
             raise
         except DeviceSwitched:
@@ -445,10 +453,37 @@ class HostService:
         except (ChatError, ChatDisabled, SpeechError, AudioError, NotConnected) as e:
             # Komunikaty tych błędów nie zawierają treści rozmowy.
             log.warning("tura głosowa nieudana (%s): %s", type(e).__name__, str(e)[:200])
+            await self._display("failed")
             await self._play_error_clip()
         except Exception:
             log.exception("tura głosowa: nieoczekiwany błąd")
+            await self._display("failed")
             await self._play_error_clip()
+        else:
+            if turn is None:
+                await self._display("nothing")
+
+    async def _display(self, kind: str, text: str | None = None, truncated: bool = False) -> None:
+        """Napis dla urządzenia tury, jeśli ma `display` (spec, sekcja 6). Bez ack, bez treści w bazie."""
+        try:
+            device = self._turn_target()
+        except DeviceSwitched:
+            return
+        caps = self._require_core().device_caps(device)
+        if device not in self._conns or caps is None or "display" not in caps.has:
+            return
+        body: dict[str, Any] = {"turn": _turn_utt.get() or 0, "kind": kind}
+        if text is not None:
+            raw = text.encode("utf-8")
+            if len(raw) > DISPLAY_TEXT_BYTES:
+                text, truncated = raw[:DISPLAY_TEXT_BYTES].decode("utf-8", errors="ignore") + "…", True
+            body["text"] = text
+        if kind == "reply":
+            body["truncated"] = truncated
+        try:
+            await self.send_action("display", body, wait_ack=False, device=device)
+        except (NotConnected, ValueError):
+            log.debug("napis %s nie został wysłany", kind)
 
     def _turn_limits(self) -> tuple[int, int] | None:
         """Bufor odtwarzania urządzenia tury z device.caps (None: możliwości HERMES)."""

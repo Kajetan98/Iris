@@ -69,14 +69,15 @@ def action(type_, body_, id_="h1"):
 def test_caps_and_heartbeat_contain_only_real_data():
     b = body()
     caps = json.loads(b.on_connect(0.0).data)["body"]
-    assert caps == {"has": ["mic", "speaker"], "clips": [], "playback_bytes": 1048576, "playback_packets": 4096}
+    assert caps == {"has": ["mic", "speaker", "display"], "clips": [], "playback_bytes": 1048576,
+                    "playback_packets": 4096}
     for t in range(0, 61):
         b.tick(float(t))
     sent = frames(b)
     assert {f["type"] for f in sent} == {"body.heartbeat"}  # bez body.sensor: nie zmyślamy temperatury
     assert sent[0]["body"] == {"frame_errors": 0}  # bez RSSI i bez baterii
     with_battery = body(battery=55.0)
-    assert json.loads(with_battery.on_connect(0.0).data)["body"]["has"] == ["mic", "speaker", "battery"]
+    assert json.loads(with_battery.on_connect(0.0).data)["body"]["has"] == ["mic", "speaker", "display", "battery"]
     with_battery.tick(1.0)
     assert frames(with_battery)[0]["body"]["batt_pct"] == 55
 
@@ -93,6 +94,9 @@ def test_caps_and_heartbeat_contain_only_real_data():
         ("speak", {"audio_id": True}, "bad_body"),
         ("ping", {}, None),
         ("config.set", {"key": "volume", "value": 40}, None),
+        ("display", {"turn": 1, "kind": "heard", "text": "Cześć"}, None),
+        ("display", {"turn": 1, "kind": "heard"}, "bad_body"),
+        ("display", {"turn": 1, "kind": "hello"}, "bad_value"),
     ],
 )
 def test_acks(type_, body_, err):
@@ -182,7 +186,7 @@ def voice_host():
 def run_client(port, scenario, *, vad=None):
     async def main():
         audio = FakeAudio()
-        b = DesktopBody(desktop_config("laptop", None, heartbeat_interval_s=0.2), 0.0, audio, vad=vad)
+        b = DesktopBody(desktop_config("laptop", None, heartbeat_interval_s=0.2), 0.0, audio, vad=vad, show=shown.append)
         runner = DesktopRunner(b, f"ws://127.0.0.1:{port}/ws?device=laptop", say=lambda s: None)
         task = asyncio.create_task(runner.run())
         await until(lambda: runner.connected)
@@ -194,7 +198,9 @@ def run_client(port, scenario, *, vad=None):
         assert audio.closed  # mikrofon zamknięty po zakończeniu
         return audio
 
-    return asyncio.run(main())
+    shown = []
+    audio = asyncio.run(main())
+    return audio, shown
 
 
 def test_push_to_talk_conversation_with_the_host(voice_host):
@@ -207,7 +213,8 @@ def test_push_to_talk_conversation_with_the_host(voice_host):
         runner.command("")  # Enter: koniec
         await until(lambda: audio.played, timeout=10)
 
-    audio = run_client(port, scenario)
+    audio, shown = run_client(port, scenario)
+    assert shown == ["Rozpoznano: Jak się masz", "IRIS: Mam się dobrze. Dziękuję za pytanie."]
     pcm, rate = stt.calls[0]
     assert rate == STT_RATE and abs(len(pcm) / 2 / rate - 1.5) < 0.06
     assert abs(dominant_hz(pcm) - 440) < 5
@@ -215,7 +222,7 @@ def test_push_to_talk_conversation_with_the_host(voice_host):
     assert rate == DECODE_RATE and abs(dominant_hz(played, rate=rate) - TTS_HZ) < 5
     assert abs(played.size / rate - 1.2) < 0.1
     devices = httpx.get(f"http://127.0.0.1:{port}/devices").json()["devices"]
-    assert devices[0]["caps"]["has"] == ["mic", "speaker"] and devices[0]["rssi"] is None
+    assert devices[0]["caps"]["has"] == ["mic", "speaker", "display"] and devices[0]["rssi"] is None
 
 
 def test_hands_free_with_vad(voice_host):

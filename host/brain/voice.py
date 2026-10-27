@@ -85,6 +85,8 @@ class VoicePipeline:
         decoder_factory: Callable[[], OpusDecoder] = OpusDecoder,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
         limits: Callable[[], tuple[int, int] | None] = lambda: None,
+        heard: Callable[[str], Awaitable[None]] | None = None,
+        replying: Callable[[str, bool], Awaitable[None]] | None = None,
     ) -> None:
         self._stt = stt
         self._tts = tts
@@ -95,6 +97,9 @@ class VoicePipeline:
         self._min_text_chars = min_text_chars
         self._sleep = sleep
         self._limits = limits  # bufor odtwarzania urządzenia, które dostanie odpowiedź
+        # Napisy (spec, sekcja 6): rozpoznany tekst i tekst, który zaraz zostanie wypowiedziany.
+        self._heard = heard
+        self._replying = replying
         self.assembler = UtteranceAssembler(audio, decoder_factory)
         self._say_lock = asyncio.Lock()
         self._next_audio_id = 1
@@ -134,6 +139,8 @@ class VoicePipeline:
         if len(text) < self._min_text_chars:
             log.info("pusta transkrypcja (%.0f ms), brak odpowiedzi", stt_ms)
             return None
+        if self._heard is not None:
+            await self._heard(text)
         t_llm = time.monotonic()
         reply = (await self._respond(text)).strip()
         llm_ms = (time.monotonic() - t_llm) * 1000
@@ -160,6 +167,9 @@ class VoicePipeline:
                 shortened = True
                 pcm = pcm[: int(len(fitted) * self._audio.frame_ms / 1000 * self._audio.playback_rate_hz) * 2]
             packets = fitted
+            if self._replying is not None:
+                spoken_text = " ".join(split_sentences(text)[:sentences])
+                await self._replying(spoken_text, shortened)
             audio_id = self._allocate_audio_id()
             for frame in playback_frames(audio_id, packets):
                 await self._send_frame(frame)

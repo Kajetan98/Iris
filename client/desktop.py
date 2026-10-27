@@ -69,9 +69,14 @@ class _Utterance:
     samples: int = 0
 
 
+DISPLAY_KINDS = ("heard", "reply", "nothing", "failed")
+
+
 class DesktopBody(BodyModel):
     """Urządzenie z prawdziwym mikrofonem i głośnikiem. Reguły protokołu jak w symulatorze, ale bez
     zmyślonych odczytów: bez temperatury, RSSI i (bez baterii w systemie) poziomu baterii."""
+
+    max_host_frame_bytes = 4096  # napisy (display)
 
     def __init__(
         self,
@@ -81,8 +86,12 @@ class DesktopBody(BodyModel):
         *,
         battery: Callable[[], float | None] = lambda: None,
         vad: EnergyVad | None = None,
+        show: Callable[[str], None] = print,
     ) -> None:
         super().__init__(cfg, now)
+        self._actions["display"] = self._act_display
+        self._show = show
+        self.captions: list[dict[str, Any]] = []
         self.audio = audio
         self.vad = vad
         self._read_battery = battery
@@ -193,6 +202,25 @@ class DesktopBody(BodyModel):
         self.playing = False
         self.played.append((audio_id, samples))
 
+    # --- napisy w terminalu (spec, sekcja 6) ---
+
+    def _act_display(self, body: dict[str, Any]) -> str | None:
+        kind, text = body.get("kind"), body.get("text")
+        if kind not in DISPLAY_KINDS:
+            return "bad_value" if isinstance(kind, str) else "bad_body"
+        if (kind in ("heard", "reply")) != isinstance(text, str):
+            return "bad_body"
+        self.captions.append(body)
+        if kind == "heard":
+            self._show(f"Rozpoznano: {text}")
+        elif kind == "reply":
+            self._show(f"IRIS: {text}" + (" (odpowiedź skrócona)" if body.get("truncated") else ""))
+        elif kind == "nothing":
+            self._show("Nic nie rozpoznano.")
+        else:
+            self._show("Nie udało się przygotować odpowiedzi.")
+        return None
+
     # --- akcje bez sprzętu ---
 
     def _act_haptic(self, body: dict[str, Any]) -> str | None:
@@ -227,7 +255,7 @@ class DesktopBody(BodyModel):
 
 
 def desktop_config(device: str, battery: float | None, **overrides: Any) -> SimConfig:
-    has = ("mic", "speaker", "battery") if battery is not None else ("mic", "speaker")
+    has = ("mic", "speaker", "display", "battery") if battery is not None else ("mic", "speaker", "display")
     return SimConfig(
         batt_pct=battery or 0.0, rssi=None, has=has, clips=frozenset(), gpio_pins=frozenset(),
         fw=f"desktop-0.1 ({device})", playback_bytes=1024 * 1024, playback_packets=4096, **overrides,
