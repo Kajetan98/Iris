@@ -101,9 +101,11 @@ def test_events_filters_and_paging(client, service, clock):
     service.handle_text(frame("body.fault", {"sensor": "imu", "code": 1}))
 
     all_ev = client.get("/events").json()["events"]
-    assert [e["type"] for e in all_ev] == ["host.start", "button", "button", "button", "body.fault"]
-    assert all_ev[1]["source"] == "body" and all_ev[1]["ts_ms"] == 500
-    assert all_ev[1]["data"] == {"id": "b0", "kind": "press"}
+    assert [e["type"] for e in all_ev] == [
+        "host.start", "device.switch", "button", "button", "button", "body.fault",
+    ]
+    assert all_ev[2]["source"] == "body" and all_ev[2]["ts_ms"] == 500
+    assert all_ev[2]["data"] == {"id": "b0", "kind": "press"}
 
     r = client.get("/events", params=[("type", "button"), ("type", "body.fault")])
     assert len(r.json()["events"]) == 4

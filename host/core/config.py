@@ -76,6 +76,10 @@ class InitiativeConfig(_Model):
     quiet: bool = False
 
 
+class DevicesConfig(_Model):
+    max_connected: int = Field(8, ge=1)  # spec, sekcja 1
+
+
 class PromptConfig(_Model):
     tolerance: dict[str, float] = {"batt_pct": 5, "temp_c": 2, "rssi": 10}
     min_downtime_s: float = Field(60, ge=0)
@@ -208,6 +212,7 @@ class Config(_Model):
     host_name: str = Field(default_factory=platform.node)
     sensors: list[str] = ["mic", "imu", "temp", "presence", "gps"]
     link: LinkConfig = LinkConfig()
+    devices: DevicesConfig = DevicesConfig()
     drives: DrivesConfig = DrivesConfig()
     initiative: InitiativeConfig = InitiativeConfig()
     prompt: PromptConfig = PromptConfig()

@@ -30,9 +30,10 @@ class SelfModel:
         # Odniesienie dla "zmian od ostatniego zapytania", osobne dla każdego pola.
         self._reported: dict[str, Any] = {}
         self._downtime_reported = False
-        self._undo: tuple[dict[str, Any], bool] | None = None
+        self._slice_device: str | None = None  # aktywne urządzenie przy ostatnim wycinku
+        self._undo: tuple[dict[str, Any], bool, str | None] | None = None
 
-    def snapshot(self, drives: list[str]) -> dict[str, Any]:
+    def snapshot(self, drives: list[str], device: str | None = None) -> dict[str, Any]:
         return {
             "name": self._cfg.name,
             "version": self._cfg.version,
@@ -43,14 +44,24 @@ class SelfModel:
             "last_downtime_s": self.continuity.last_downtime_s,
             "drives": drives,
             "continuity": self.continuity.snapshot(),
+            "device": device,
         }
 
-    def prompt_slice(self, drives: list[str], body: BodyState) -> dict[str, Any]:
+    def prompt_slice(
+        self, drives: list[str], body: BodyState, device: str | None = None
+    ) -> dict[str, Any]:
         """Wycinek do promptu. Zapamiętuje raportowane wartości jako nowe odniesienie.
 
         Poprzednie odniesienie można przywrócić przez rollback_prompt_slice()."""
-        self._undo = (dict(self._reported), self._downtime_reported)
+        self._undo = (dict(self._reported), self._downtime_reported, self._slice_device)
         out: dict[str, Any] = {"mode": mode_for(drives), "drives": drives}
+        previous = self._slice_device
+        if previous is not None and device is not None and device != previous:
+            # Inne urządzenie: jego wartości nie są zmianą wobec poprzedniego (spec, sekcja 7).
+            self._reported = {}
+            out["device_change"] = {"from": previous, "to": device}
+        if device is not None:
+            self._slice_device = device
         changes = self._body_changes(body.snapshot())
         if changes:
             out["body_changes"] = changes
@@ -67,7 +78,7 @@ class SelfModel:
         Zwraca fałsz, gdy nie ma czego cofać. Cofnąć można tylko jeden wycinek."""
         if self._undo is None:
             return False
-        self._reported, self._downtime_reported = self._undo
+        self._reported, self._downtime_reported, self._slice_device = self._undo
         self._undo = None
         return True
 

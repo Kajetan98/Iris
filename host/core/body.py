@@ -1,4 +1,4 @@
-"""Stan ciała budowany ze zdarzeń (docs/spec.md, sekcja 7)."""
+"""Stan ciała (jednego urządzenia) budowany ze zdarzeń (docs/spec.md, sekcja 7)."""
 
 from __future__ import annotations
 
@@ -18,9 +18,10 @@ from host.core.protocol import (
 
 
 class BodyState:
-    def __init__(self, config: Config, clock: Clock) -> None:
+    def __init__(self, config: Config, clock: Clock, device: str | None = None) -> None:
         self._cfg = config
         self._clock = clock
+        self.device = device  # None: stan sprzed połączenia pierwszego urządzenia
         self._started = clock.monotonic()
         self.link: str = "unknown"  # unknown | ok | lost
         self.batt_pct: float | None = None
@@ -61,7 +62,11 @@ class BodyState:
         silent_for = self._clock.monotonic() - ref
         if silent_for > self._cfg.link.timeout_s:
             self.link = "lost"
-            return [HostEvent(type="link.lost", at=self._clock.wall(), data={"silent_s": silent_for})]
+            return [
+                HostEvent(
+                    type="link.lost", at=self._clock.wall(), data={"silent_s": silent_for}, device=self.device
+                )
+            ]
         return []
 
     def _on_heartbeat(self, hb: BodyHeartbeat) -> list[HostEvent]:
@@ -73,7 +78,7 @@ class BodyState:
         was_lost = self.link == "lost"
         self.link = "ok"
         if was_lost:
-            return [HostEvent(type="link.restored", at=self._clock.wall())]
+            return [HostEvent(type="link.restored", at=self._clock.wall(), device=self.device)]
         return []
 
     @property

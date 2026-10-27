@@ -162,7 +162,7 @@ Do promptu LLM trafia wycinek: `mode`, aktywne `drives`, zmiany `body` od ostatn
 - Zmiana pola `body` jest raportowana, gdy różni się od wartości ostatnio raportowanej o więcej niż tolerancja z konfiguracji (wartości początkowe: `batt_pct` 5, `temp_c` 2, `rssi` 10). Pola nieliczbowe (`link`, `sensors_ok`, `sensors_down`) raportowane są przy każdej różnicy. Wartość odniesienia aktualizuje się tylko dla raportowanych pól. Przy pierwszym zapytaniu odniesieniem jest brak wartości (`null`).
 - `last_downtime_s` trafia do pierwszego wycinka w sesji, gdy przerwa wynosiła co najmniej `min_downtime_s` (wartość początkowa: 60 s). Kolejne wycinki go nie zawierają.
 - Wycinek nie zawiera odczytów `gps`, `imu` ani `presence`, tylko dostępność sensorów.
-- Po przełączeniu z jednego urządzenia na inne wartości odniesienia `body` wracają do `null`, a pierwszy wycinek po przełączeniu zawiera `device_change`: `{"from", "to"}` (urządzenie z poprzedniego wycinka i bieżące). Przejęcie stanu przez pierwsze urządzenie nie jest przełączeniem.
+- Gdy aktywne urządzenie jest inne niż przy poprzednim wycinku, wartości odniesienia `body` wracają do `null`, a wycinek zawiera `device_change`: `{"from", "to"}` (urządzenie z poprzedniego wycinka i bieżące). Przełączenie tam i z powrotem między wycinkami niczego nie zmienia. Przejęcie stanu przez pierwsze urządzenie nie jest przełączeniem.
 - Gdy zapytanie do LLM się nie powiedzie (błąd silnika albo anulowanie), wycinek jest cofany: wartości odniesienia, `device_change` i znacznik przerwy wracają do stanu sprzed pobrania, więc następny wycinek zawiera te same zmiany. Cofnąć można tylko ostatnio pobrany wycinek, dlatego tury rozmowy są obsługiwane po kolei.
 
 ## 8. Potrzeby (drives)
@@ -204,7 +204,7 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 
 `devices`: `id`, `first_seen_at`, `last_seen_at`, `active` (najwyżej jeden wiersz z 1). Urządzenie trafia do tabeli przy pierwszym połączeniu. `last_seen_at` odświeża się przy połączeniu, rozłączeniu i co `touch_every_s` dla połączonych urządzeń.
 
-- Migracja z wersji 1 (jedno ciało): zdarzenia z ciała dostają `device_id` `hermes`, a jeśli były, `hermes` trafia do `devices` jako aktywne (czas pierwszego i ostatniego zdarzenia).
+- Migracja z wersji 1 (jedno ciało): zdarzenia z ciała oraz `link.*` i `action.*` dostają `device_id` `hermes`. Jeśli były zdarzenia z ciała, `hermes` trafia do `devices` jako aktywne (czas pierwszego i ostatniego z nich).
 
 `state_snapshots`: `id`, `session_id`, `at`, `self_json`, `body_json`. Moment zapisu wybiera warstwa api.
 

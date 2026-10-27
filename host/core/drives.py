@@ -14,6 +14,8 @@ from host.core.config import Config, ThresholdRule
 from host.core.events import HostEvent
 
 DRIVE_ORDER = ("battery_low", "battery_critical", "link_lost", "temp_high", "long_silence")
+# Zależne od danych ciała, więc kończone przy przełączeniu urządzenia (spec, sekcja 8).
+BODY_DRIVES = ("battery_low", "battery_critical", "link_lost", "temp_high")
 
 
 class _ThresholdDrive:
@@ -42,6 +44,10 @@ class _ThresholdDrive:
         self._since = None
         return "exit" if not self.active else "enter"
 
+    def reset(self) -> None:
+        self.active = False
+        self._since = None
+
 
 class _LinkDrive:
     def __init__(self, recover_s: float) -> None:
@@ -66,6 +72,10 @@ class _LinkDrive:
             self._ok_since = None
             return "exit"
         return None
+
+    def reset(self) -> None:
+        self.active = False
+        self._ok_since = None
 
 
 class DriveEngine:
@@ -107,7 +117,31 @@ class DriveEngine:
         for name in DRIVE_ORDER:
             change, data = results[name]
             if change is not None:
-                events.append(HostEvent(type=f"drive.{change}", at=wall, data={"drive": name, **data}))
+                device = body.device if name in BODY_DRIVES else None
+                events.append(
+                    HostEvent(type=f"drive.{change}", at=wall, data={"drive": name, **data}, device=device)
+                )
+        return events
+
+    def end_body_drives(self, device: str | None) -> list[HostEvent]:
+        """Przełączenie urządzenia: aktywne drives zależne od ciała kończą się, liczniki od zera."""
+        wall = self._clock.wall()
+        drives = {
+            "battery_low": self._battery_low,
+            "battery_critical": self._battery_critical,
+            "link_lost": self._link_lost,
+            "temp_high": self._temp_high,
+        }
+        events = []
+        for name in BODY_DRIVES:
+            drive = drives[name]
+            if drive.active:
+                events.append(
+                    HostEvent(
+                        type="drive.exit", at=wall, data={"drive": name, "reason": "device_switch"}, device=device
+                    )
+                )
+            drive.reset()
         return events
 
     def _update_long_silence(

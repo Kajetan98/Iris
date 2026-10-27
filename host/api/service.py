@@ -19,6 +19,7 @@ from host.core.config import Config
 from host.core.core import HostCore
 from host.core.events import HostEvent
 from host.core.protocol import (
+    DEFAULT_DEVICE,
     AckBody,
     AudioFrame,
     AudioUtteranceEnd,
@@ -183,6 +184,8 @@ class HostService:
             return
         if isinstance(decoded.body, SystemBoot):
             self.boot_id = decoded.body.boot_id
+        if DEFAULT_DEVICE not in core.known_devices():
+            self._persist(core.connect(DEFAULT_DEVICE))  # device.switch przed pierwszym zdarzeniem
         host_events = core.handle_event(decoded)
         if decoded.type != "body.heartbeat" or self.config.api.store_heartbeats:
             self._store(self.store.append_body_event, decoded, at=at, boot_id=self.boot_id)

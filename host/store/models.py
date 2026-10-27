@@ -23,6 +23,15 @@ class StoredEvent:
     ts_ms: int | None
     boot_id: str | None
     data: dict[str, Any]
+    device: str | None = None
+
+
+@dataclass(frozen=True)
+class DeviceRow:
+    id: str
+    first_seen_at: datetime
+    last_seen_at: datetime
+    active: bool
 
 
 @dataclass(frozen=True)

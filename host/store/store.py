@@ -18,7 +18,7 @@ from host.core.clock import Clock, SystemClock
 from host.core.continuity import Continuity
 from host.core.events import HostEvent
 from host.core.protocol import DecodedEvent
-from host.store.models import Fact, SessionRow, Snapshot, StoredEvent
+from host.store.models import DeviceRow, Fact, SessionRow, Snapshot, StoredEvent
 from host.store.schema import SchemaError, migrate
 
 __all__ = ["Store", "StoreError", "SchemaError"]
@@ -155,24 +155,30 @@ class Store:
         data: dict[str, Any],
         ts_ms: int | None = None,
         boot_id: str | None = None,
+        device: str | None = None,
     ) -> int:
         at_db = _to_db(at)
         payload = json.dumps(data, ensure_ascii=False)
         with self._lock, self._conn:
             sid = self._require_session()
             cur = self._conn.execute(
-                "INSERT INTO events(session_id, at, source, type, ts_ms, boot_id, data)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (sid, at_db, source, type, ts_ms, boot_id, payload),
+                "INSERT INTO events(session_id, at, source, type, ts_ms, boot_id, data, device_id)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (sid, at_db, source, type, ts_ms, boot_id, payload, device),
             )
             self._touch(sid, at_db)
         return cur.lastrowid
 
     def append_host_event(self, ev: HostEvent) -> int:
-        return self.append_event(at=ev.at, source="host", type=ev.type, data=ev.data)
+        return self.append_event(at=ev.at, source="host", type=ev.type, data=ev.data, device=ev.device)
 
     def append_body_event(
-        self, decoded: DecodedEvent, *, at: datetime | None = None, boot_id: str | None = None
+        self,
+        decoded: DecodedEvent,
+        *,
+        at: datetime | None = None,
+        boot_id: str | None = None,
+        device: str | None = None,
     ) -> int:
         """Zapisuje zdarzenie z ciała. `at` to czas zegarowy hosta (domyślnie teraz)."""
         return self.append_event(
@@ -182,6 +188,7 @@ class Store:
             data=decoded.body.model_dump(mode="json"),
             ts_ms=decoded.envelope.ts,
             boot_id=boot_id,
+            device=device,
         )
 
     def events(
@@ -191,10 +198,14 @@ class Store:
         since: datetime | None = None,
         after_id: int = 0,
         limit: int = 1000,
+        device: str | None = None,
     ) -> list[StoredEvent]:
         """Zdarzenia rosnąco po id. `since` jest włączone, `after_id` wyłączone."""
         sql = "SELECT * FROM events WHERE id > ?"
         args: list[Any] = [after_id]
+        if device is not None:
+            sql += " AND device_id = ?"
+            args.append(device)
         if types is not None:
             types = list(types)
             if not types:
@@ -211,10 +222,55 @@ class Store:
         return [
             StoredEvent(
                 r["id"], r["session_id"], _from_db(r["at"]), r["source"], r["type"],
-                r["ts_ms"], r["boot_id"], json.loads(r["data"]),
+                r["ts_ms"], r["boot_id"], json.loads(r["data"]), r["device_id"],
             )
             for r in rows
         ]
+
+    # --- urządzenia ---
+
+    def see_device(self, device: str) -> None:
+        """Połączenie lub rozłączenie urządzenia: dopisuje je albo odświeża last_seen_at."""
+        now = _to_db(self._clock.wall())
+        with self._lock, self._conn:
+            self._conn.execute(
+                "INSERT INTO devices(id, first_seen_at, last_seen_at) VALUES (?, ?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET last_seen_at = MAX(last_seen_at, excluded.last_seen_at)",
+                (device, now, now),
+            )
+
+    def touch_devices(self, devices: Iterable[str]) -> None:
+        now = _to_db(self._clock.wall())
+        with self._lock, self._conn:
+            self._conn.executemany(
+                "UPDATE devices SET last_seen_at = MAX(last_seen_at, ?) WHERE id = ?",
+                [(now, d) for d in devices],
+            )
+
+    def devices(self) -> list[DeviceRow]:
+        with self._lock:
+            rows = self._conn.execute("SELECT * FROM devices ORDER BY id").fetchall()
+        return [
+            DeviceRow(r["id"], _from_db(r["first_seen_at"]), _from_db(r["last_seen_at"]), bool(r["active"]))
+            for r in rows
+        ]
+
+    def device_known(self, device: str) -> bool:
+        with self._lock:
+            return self._conn.execute("SELECT 1 FROM devices WHERE id = ?", (device,)).fetchone() is not None
+
+    def active_device(self) -> str | None:
+        with self._lock:
+            r = self._conn.execute("SELECT id FROM devices WHERE active = 1").fetchone()
+        return r["id"] if r else None
+
+    def set_active_device(self, device: str) -> None:
+        """Zapamiętuje aktywne urządzenie. KeyError, gdy urządzenie nie jest znane."""
+        with self._lock, self._conn:
+            if not self._conn.execute("SELECT 1 FROM devices WHERE id = ?", (device,)).fetchone():
+                raise KeyError(device)
+            self._conn.execute("UPDATE devices SET active = 0 WHERE active = 1 AND id != ?", (device,))
+            self._conn.execute("UPDATE devices SET active = 1 WHERE id = ?", (device,))
 
     # --- migawki stanu ---
 

@@ -7,14 +7,23 @@ Wywołujący loguje i porzuca ramkę, połączenie zostaje.
 from __future__ import annotations
 
 import json
+import re
 import struct
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, ValidationError
 
 PROTOCOL_VERSION = 1
 MAX_ACTION_FRAME_BYTES = 512  # ramka tekstowa host -> ciało (spec, sekcja 5)
+
+# Urządzenia (spec, sekcja 1): parametr `device` w /ws, brak oznacza jedno ciało HERMES.
+DEFAULT_DEVICE = "hermes"
+_DEVICE_ID = re.compile(r"[a-z0-9][a-z0-9-]{0,31}")
+
+
+def valid_device_id(device: str) -> bool:
+    return _DEVICE_ID.fullmatch(device) is not None
 
 # Pola, których spec nie typuje dokładniej, przyjmują tekst lub liczbę.
 Ident = str | int
@@ -90,6 +99,10 @@ class Button(_Body):
     kind: Literal["press", "long"]
 
 
+class DeviceActivate(_Body):
+    pass
+
+
 EVENT_MODELS: dict[str, type[_Body]] = {
     "system.boot": SystemBoot,
     "body.heartbeat": BodyHeartbeat,
@@ -100,10 +113,11 @@ EVENT_MODELS: dict[str, type[_Body]] = {
     "audio.utterance.end": AudioUtteranceEnd,
     "local.command": LocalCommand,
     "button": Button,
+    "device.activate": DeviceActivate,
 }
 
-# Zdarzenia, które liczą się jako interakcja użytkownika (spec, sekcja 8).
-INTERACTION_EVENTS = frozenset({"audio.utterance.start", "local.command", "button"})
+# Zdarzenia, które liczą się jako interakcja użytkownika (spec, sekcje 3 i 8).
+INTERACTION_EVENTS = frozenset({"audio.utterance.start", "local.command", "button", "device.activate"})
 
 
 class AckBody(_Body):
@@ -219,6 +233,10 @@ class Ping(_Body):
     pass
 
 
+class DeviceActive(_Body):
+    active: StrictBool
+
+
 ACTION_MODELS: dict[str, type[_Body]] = {
     "speak": Speak,
     "speak.clip": SpeakClip,
@@ -226,6 +244,7 @@ ACTION_MODELS: dict[str, type[_Body]] = {
     "gpio.set": GpioSet,
     "config.set": ConfigSet,
     "ping": Ping,
+    "device.active": DeviceActive,
 }
 
 

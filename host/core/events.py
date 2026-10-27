@@ -16,6 +16,7 @@ HostEventType = Literal[
     "host.stop",
     "action.sent",
     "action.ack",
+    "device.switch",
 ]
 
 
@@ -23,3 +24,4 @@ class HostEvent(BaseModel):
     type: HostEventType
     at: datetime
     data: dict[str, Any] = Field(default_factory=dict)
+    device: str | None = None  # urządzenie, którego dotyczy zdarzenie (spec, sekcja 4)

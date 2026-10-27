@@ -165,7 +165,8 @@ def test_tick_touches_session_and_snapshots_periodically():
     service, clock, store = make()
     start = clock.wall()
     beat_for(service, clock, 9)
-    assert store.sessions()[0].last_seen_at == start
+    # jedyny zapis przed touch: device.switch przy pierwszym heartbeacie (t = 1 s)
+    assert store.sessions()[0].last_seen_at == start + timedelta(seconds=1)
     beat_for(service, clock, 1)
     assert store.sessions()[0].last_seen_at == start + timedelta(seconds=10)
     assert len(store.snapshots()) == 1

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 _V1 = """
 CREATE TABLE sessions (
@@ -48,6 +48,28 @@ CREATE TABLE facts (
 """
 
 
+# Wersja 2: wiele urządzeń (docs/spec.md, sekcje 1 i 9).
+_V2 = """
+ALTER TABLE events ADD COLUMN device_id TEXT;
+UPDATE events SET device_id = 'hermes'
+    WHERE source = 'body' OR type IN ('link.lost', 'link.restored', 'action.sent', 'action.ack');
+CREATE INDEX events_device ON events(device_id, id);
+
+CREATE TABLE devices (
+    id            TEXT PRIMARY KEY,
+    first_seen_at TEXT NOT NULL,
+    last_seen_at  TEXT NOT NULL,
+    active        INTEGER NOT NULL DEFAULT 0 CHECK (active IN (0, 1))
+);
+CREATE UNIQUE INDEX devices_one_active ON devices(active) WHERE active = 1;
+
+INSERT INTO devices(id, first_seen_at, last_seen_at, active)
+    SELECT 'hermes', MIN(at), MAX(at), 1 FROM events WHERE source = 'body' HAVING COUNT(*) > 0;
+"""
+
+_MIGRATIONS = {0: _V1 + _V2, 1: _V2}
+
+
 class SchemaError(Exception):
     pass
 
@@ -58,10 +80,12 @@ def migrate(conn: sqlite3.Connection) -> None:
         raise SchemaError(
             f"baza ma schemat v{version}, ten program obsługuje do v{SCHEMA_VERSION}"
         )
-    if version == 0:
-        # executescript robi własny COMMIT, więc wersję ustawiamy w tym samym skrypcie.
-        try:
-            conn.executescript(f"BEGIN;{_V1}PRAGMA user_version = {SCHEMA_VERSION};COMMIT;")
-        except sqlite3.Error:
-            conn.rollback()
-            raise
+    script = _MIGRATIONS.get(version)
+    if script is None:
+        return
+    # executescript robi własny COMMIT, więc wersję ustawiamy w tym samym skrypcie.
+    try:
+        conn.executescript(f"BEGIN;{script}PRAGMA user_version = {SCHEMA_VERSION};COMMIT;")
+    except sqlite3.Error:
+        conn.rollback()
+        raise

@@ -22,7 +22,7 @@ def make(prev_event=None):
 
 
 def beats(core, clock, seconds, batt):
-    """Heartbeat co 1 s; zwraca (typ, drive) zdarzeń drive.*."""
+    """Heartbeat co 1 s; zwraca (typ, drive) zdarzeń hosta."""
     out = []
     for _ in range(seconds):
         clock.advance(1)
@@ -51,8 +51,9 @@ def test_self_snapshot_has_spec_fields():
     snap = core.self_snapshot()
     assert set(snap["self"]) == {
         "name", "version", "host", "mode", "uptime_s", "last_restart",
-        "last_downtime_s", "drives", "continuity",
+        "last_downtime_s", "drives", "continuity", "device",
     }
+    assert snap["self"]["device"] is None  # żadne urządzenie się jeszcze nie połączyło
     assert snap["self"]["name"] == "IRIS"
     assert snap["self"]["mode"] == "nominal"
     assert snap["self"]["uptime_s"] == 42
@@ -66,7 +67,8 @@ def test_self_snapshot_has_spec_fields():
 
 def test_low_battery_scenario_switches_mode_and_reports_in_slice():
     core, clock = make()
-    assert beats(core, clock, 10, batt=18) == []  # licznik startuje przy pierwszym odczycie
+    # pierwsze urządzenie staje się aktywne; licznik startuje przy pierwszym odczycie
+    assert beats(core, clock, 10, batt=18) == [("device.switch", None)]
     assert beats(core, clock, 1, batt=18) == [("drive.enter", "battery_low")]
     assert core.self_snapshot()["self"]["mode"] == "saving"
     s = core.prompt_slice()
@@ -143,7 +145,7 @@ def test_long_silence_ends_on_button_press():
     entered = [e.data["drive"] for e in core.tick() if e.type == "drive.enter"]
     assert entered == ["link_lost", "long_silence"]  # ciało nigdy się nie odezwało
     ev = core.handle_event(make_event("button", {"id": "b", "kind": "press"}))
-    assert [(e.type, e.data["drive"]) for e in ev] == [("drive.exit", "long_silence")]
+    assert [(e.type, e.data.get("drive")) for e in ev] == [("device.switch", None), ("drive.exit", "long_silence")]
 
 
 def test_slice_reports_body_changes_beyond_tolerance_only():
