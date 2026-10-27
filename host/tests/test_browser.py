@@ -62,7 +62,7 @@ def poll(fn, timeout=8.0):
 
 
 @pytest.fixture
-def voice_host():
+def voice_host(request):
     ollama_app, _ = ollama_stub_app("Mam się dobrze. Dziękuję za pytanie.")
     ollama_port = free_port()
     ollama = start(ollama_app, ollama_port)
@@ -72,7 +72,7 @@ def voice_host():
         "brain": {"llm": {"engine": "ollama", "model": "m", "retries": 0, "timeout_s": 5,
                           "base_url": f"http://127.0.0.1:{ollama_port}"}},
     })
-    stt, tts = FakeSTT("Jak się masz"), FakeTTS(0.6)
+    stt, tts = FakeSTT(getattr(request, "param", "Jak się masz")), FakeTTS(0.6)
     port = free_port()
     server = start(create_app(cfg, stt=stt, tts=tts, token=None), port)
     yield f"http://127.0.0.1:{port}", stt
@@ -147,18 +147,38 @@ def test_voice_turn_through_the_browser(voice_host):
     assert played["audioId"] == 1 and abs(played["duration"] - 1.2) < 0.1  # dwa zdania po 0,6 s
     samples = np.array(out["samples"], dtype=np.int16)
     assert abs(dominant_hz(samples, rate=out["rate"]) - TTS_HZ) < 5  # przeglądarka zdekodowała odpowiedź
-    assert out["caps"]["has"][:2] == ["mic", "speaker"] and out["caps"]["clips"] == []
+    assert out["caps"]["has"][:3] == ["mic", "speaker", "display"] and out["caps"]["clips"] == []
+    # Napisy: rozpoznany tekst i odpowiedź, wszystkie słowa odsłonięte po odtworzeniu.
+    assert out["turns"] == [{"heard": "Ty Jak się masz", "reply": "Mam się dobrze. Dziękuję za pytanie.",
+                             "pending": 0, "note": None}]
+    states = out["states"]
+    assert states[0] == "idle" and states[-1] == "idle"
+    # sayPcm przechodzi przez "listening" synchronicznie, więc obserwator widzi już "thinking".
+    assert [s for s in states if s in ("thinking", "speaking")] == ["thinking", "speaking"]
     with httpx.Client(base_url=base) as http:
         (dev,) = http.get("/devices").json()["devices"]
         assert dev["id"] == "przegladarka" and dev["active"] and dev["rssi"] is None
-        assert dev["caps"]["has"][:2] == ["mic", "speaker"]
+        assert dev["caps"]["has"][:3] == ["mic", "speaker", "display"]
+        sent = http.get("/events", params={"type": "action.sent"}).json()["events"]
+        assert [(e["data"]["type"], e["data"]["body"].get("kind")) for e in sent] == [
+            ("display", "heard"), ("display", "reply"), ("speak", None)]
         acks = http.get("/events", params={"type": "action.ack"}).json()["events"]
-        assert [e["data"] for e in acks] == [{"ref": "h1", "ok": True, "err": None}]
+        assert [e["data"] for e in acks] == [{"ref": f"h{i}", "ok": True, "err": None} for i in (1, 2, 3)]
+
+
+@pytest.mark.parametrize("voice_host", [""], indirect=True)
+def test_browser_shows_when_nothing_was_recognized(voice_host):
+    base, _ = voice_host
+    out = browser("noReply", base, device="przegladarka", token="")
+    assert out["turns"] == [{"heard": None, "reply": None, "pending": 0,
+                             "note": "Nic nie rozpoznano. Mów bliżej mikrofonu."}]
+    assert out["state"] == "Przytrzymaj przycisk i mów"
 
 
 def test_real_microphone_of_the_browser(voice_host):
     base, stt = voice_host
-    browser("mic", base, device="laptop", token="", ms=1200)
+    out = browser("mic", base, device="laptop", token="", ms=1200)
+    assert out == {"pressed": "true", "released": "false"}
     poll(lambda: stt.calls)
     pcm, rate = stt.calls[0]
     seconds = len(pcm) / 2 / rate
@@ -173,7 +193,8 @@ def test_inactive_browser_can_take_over(voice_host):
         with httpx.Client(base_url=base) as http:
             poll(lambda: http.get("/devices").json()["active"] == "hermes")
             out = browser("switching", base, device="telefon", token="")
-            assert out == {"talkDisabled": True, "before": False, "after": True, "activateHidden": True}
+            assert out == {"talkHidden": True, "before": False, "after": True, "activateHidden": True,
+                           "talkVisible": True}
             assert http.get("/devices").json()["active"] == "telefon"
             switch = http.get("/events", params={"type": "device.switch"}).json()["events"][-1]
             assert switch["data"] == {"from": "hermes", "to": "telefon", "by": "device"}
@@ -192,9 +213,11 @@ def test_token_in_the_browser():
             assert http.get("/app/").status_code == 200  # pliki klienta bez tokenu
             assert http.get("/devices").status_code == 401
             out = browser("badToken", base, device="laptop", token="zly-token-1234567890")
-            assert "brak lub zły token" in out["status"]
-            out = browser("connectOnly", base, device="laptop", token=TOKEN)
-            assert out["status"] == "Połączono jako laptop"
+            assert out["notice"].startswith("Host odrzucił token.") and out["state"] == "Łączę się z hostem"
+            # Po sekundzie klient pyta /health z tokenem: host bez głosu, więc przycisk mówienia jest wyłączony.
+            out = browser("connectOnly", base, device="laptop", token=TOKEN, stayMs=1500)
+            assert out["status"] == "laptop: połączono" and out["state"] == "Przytrzymaj przycisk i mów"
+            assert "rozpoznawanie i synteza mowy" in out["notice"] and out["talkDisabled"]
             devices = http.get("/devices", headers={"Authorization": f"Bearer {TOKEN}"}).json()["devices"]
             assert [d["id"] for d in devices] == ["laptop"]
     finally:
@@ -211,7 +234,7 @@ def test_installable_app():
     m = out["manifest"]
     assert (m["name"], m["start_url"], m["display"]) == ("IRIS", "/app/", "standalone")
     assert {i["sizes"] for i in m["icons"]} >= {"192x192", "512x512"}
-    assert {"/app/", "/app/app.js", "/app/protocol.js", "/app/icon-512.png"} <= set(out["cached"])
+    assert {"/app/", "/app/app.js", "/app/protocol.js", "/app/aperture.js", "/app/icon-512.png"} <= set(out["cached"])
     assert out["secure"]
 
 
@@ -246,7 +269,8 @@ def test_host_on_plain_and_tls_ports_shares_one_state(tmp_path):
             # ale nie da się go zainstalować (spec, sekcja 1, "Klient w przeglądarce").
             out = browser("connectOnly", f"https://127.0.0.1:{tls}", device="telefon", token=TOKEN, stayMs=300,
                           expected_errors=["An SSL certificate error occurred when fetching the script."])
-            assert out["status"] == "Połączono jako telefon" and out["active"] == "W spoczynku"
+            assert out["status"] == "telefon: połączono"
+            assert out["state"] == "W spoczynku: aktywne jest inne urządzenie"
             body = httpx.get(f"http://127.0.0.1:{plain}/devices", headers=headers).json()
             assert body["active"] == "hermes" and [d["id"] for d in body["devices"]] == ["hermes", "telefon"]
         finally:

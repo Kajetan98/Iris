@@ -53,6 +53,7 @@ BAD_DEVICE_CLOSE_CODE = 4002
 _turn_device: contextvars.ContextVar[str | None] = contextvars.ContextVar("turn_device", default=None)
 _turn_utt: contextvars.ContextVar[int | str | None] = contextvars.ContextVar("turn_utt", default=None)
 DISPLAY_TEXT_BYTES = 3500  # tekst napisu mieści się w ramce 4096 B razem z kopertą
+UNAWAITED_ACKS = 64  # tyle ostatnich akcji bez czekania rozpoznaje się po ack
 
 
 class NotConnected(Exception):
@@ -120,6 +121,7 @@ class HostService:
         self._boot_ids: dict[str, str] = {}
         self._background: set[asyncio.Task[None]] = set()
         self._pending: dict[str, tuple[str, asyncio.Future[AckBody]]] = {}
+        self._unawaited: dict[str, None] = {}  # ostatnie akcje wysłane bez czekania na ack
         self._action_seq = 0
         self._started = clock.monotonic()
         self._last_touch = self._started
@@ -337,6 +339,10 @@ class HostService:
         if wait_ack:
             future = asyncio.get_running_loop().create_future()
             self._pending[action_id] = (target, future)
+        else:
+            self._unawaited[action_id] = None
+            while len(self._unawaited) > UNAWAITED_ACKS:
+                del self._unawaited[next(iter(self._unawaited))]
         try:
             try:
                 await ws.send_text(frame)
@@ -378,7 +384,10 @@ class HostService:
             ]
         )
         pending = self._pending.get(ack.ref)
-        if pending is None:
+        if pending is None and ack.ref in self._unawaited:
+            del self._unawaited[ack.ref]
+            log.debug("ack dla akcji wysłanej bez czekania: %s", ack.ref)
+        elif pending is None:
             log.warning("ack dla nieznanej lub zakończonej akcji: %s", ack.ref)
         elif pending[0] != device:
             log.warning("ack dla %s od innego urządzenia (%s)", ack.ref, device)

@@ -2,41 +2,77 @@
 <html lang="pl">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#1d2b3a">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e6e9ec" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#15181c" media="(prefers-color-scheme: dark)">
+  <meta name="description" content="Rozmowa głosowa z IRIS przez mikrofon i głośnik tego urządzenia">
   <title>IRIS</title>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="stylesheet" href="style.css">
 </head>
-<body>
-  <main>
-    <h1>IRIS</h1>
-    <p id="unsupported" class="warn" hidden>
-      Ta przeglądarka nie obsługuje WebCodecs (Opus) albo strona nie jest otwarta przez HTTPS lub localhost.
-      Mikrofon i odtwarzanie nie zadziałają.
-    </p>
+<body data-state="offline" data-link="down">
+  <header class="bar">
+    <span class="wordmark">IRIS</span>
+    <span class="link" id="status" title="Połączenie z hostem">nie połączono</span>
+    <button class="icon-button" id="open-settings" type="button" aria-label="Ustawienia połączenia">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M4 7h9M17 7h3M4 17h3M11 17h9"/>
+        <circle cx="15" cy="7" r="2"/>
+        <circle cx="9" cy="17" r="2"/>
+      </svg>
+    </button>
+  </header>
 
-    <form id="settings" onsubmit="return false">
-      <label>Nazwa urządzenia
-        <input id="device" autocomplete="off" pattern="[a-z0-9][a-z0-9\-]{0,31}" maxlength="32" required>
-      </label>
-      <label>Token (gdy host go wymaga)
-        <input id="token" type="password" autocomplete="current-password">
-      </label>
-      <button id="connect" type="button">Połącz</button>
-      <button id="disconnect" type="button" hidden>Rozłącz</button>
-    </form>
+  <main class="stage">
+    <section class="presence" aria-label="IRIS">
+      <canvas id="aperture" class="aperture" aria-hidden="true"></canvas>
+      <p id="state" class="state" role="status" aria-live="polite">Brak połączenia z hostem</p>
+    </section>
 
-    <p id="status" role="status">Rozłączono</p>
-    <p id="active"></p>
-
-    <button id="talk" class="talk" type="button" disabled>Przytrzymaj i mów</button>
-    <button id="activate" type="button" hidden>Używaj tego urządzenia</button>
-
-    <h2>Zdarzenia</h2>
-    <ul id="log"></ul>
+    <section class="talk-log" aria-label="Rozmowa">
+      <p id="hint" class="hint">Tu pojawi się zapis rozmowy. Zostaje tylko na tej stronie.</p>
+      <ol id="turns" class="turns"></ol>
+    </section>
   </main>
+
+  <footer class="dock">
+    <p id="notice" class="notice" role="alert"></p>
+    <p id="unsupported" class="notice" hidden>
+      Ta przeglądarka nie nagrywa ani nie odtwarza mowy (brak WebCodecs z Opus albo strona otwarta bez HTTPS).
+      Użyj Chrome lub Edge przez HTTPS albo na localhost.
+    </p>
+    <button id="talk" class="talk" type="button" aria-pressed="false" disabled>
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect x="9" y="3" width="6" height="11" rx="3"/>
+        <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/>
+      </svg>
+      <span id="talk-label">Przytrzymaj i mów</span>
+    </button>
+    <button id="activate" class="secondary" type="button" hidden>Używaj tego urządzenia</button>
+    <button id="reconnect" class="secondary" type="button" hidden>Połącz</button>
+  </footer>
+
+  <dialog id="settings" class="sheet" aria-labelledby="settings-title">
+    <form id="settings-form" method="dialog">
+      <h2 id="settings-title">Połączenie z hostem</h2>
+      <label for="device">Nazwa tego urządzenia</label>
+      <input id="device" name="device" autocomplete="off" autocapitalize="none" spellcheck="false"
+             pattern="[a-z0-9][a-z0-9\-]{0,31}" maxlength="32" required aria-describedby="device-help">
+      <p id="device-help" class="help">Małe litery, cyfry i myślnik, np. telefon albo laptop. Po tej nazwie przełączasz urządzenia.</p>
+      <label for="token">Token</label>
+      <input id="token" name="token" type="password" autocomplete="current-password" aria-describedby="token-help">
+      <p id="token-help" class="help">Ten sam co IRIS_TOKEN na hoście. Zostaw puste, jeśli host go nie wymaga.</p>
+      <p class="help">Napisy rozmowy zostają tylko na tej stronie i znikają po jej zamknięciu.</p>
+      <div class="actions">
+        <button id="connect" type="submit" value="connect">Połącz</button>
+        <button id="disconnect" class="secondary" type="button" hidden>Rozłącz</button>
+        <button id="close-settings" class="secondary" type="button">Zamknij</button>
+      </div>
+    </form>
+  </dialog>
+
   <script type="module" src="app.js"></script>
 </body>
 </html>

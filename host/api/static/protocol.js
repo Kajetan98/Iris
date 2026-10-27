@@ -2,7 +2,7 @@
 // odtwarzania. Bez DOM i audio, więc te same reguły da się sprawdzić obok symulatora i firmware.
 
 export const PROTOCOL_VERSION = 1;
-export const MAX_HOST_FRAME_BYTES = 512;
+export const MAX_HOST_FRAME_BYTES = 4096; // urządzenie z `display` (spec, sekcja 5)
 export const OUTBOX_LIMIT = 64;
 export const KIND_MIC = 1;
 export const KIND_PLAYBACK = 2;
@@ -14,6 +14,7 @@ export const HAPTIC_PATTERNS = {
   critical: [200, 100, 200, 100, 200],
 };
 const CONFIG_KEYS = ["volume", "batt_warn_pct", "temp_warn_c"];
+const DISPLAY_KINDS = ["heard", "reply", "nothing", "failed"];
 const DEVICE_ID = /^[a-z0-9][a-z0-9-]{0,31}$/;
 
 export function validDeviceId(id) {
@@ -37,7 +38,7 @@ function audioIdOf(x) {
 
 export class Body {
   // io: send(text), sendBinary(Uint8Array), play({audioId, packets}) -> czas trwania w s,
-  //     vibrate(pattern) albo null, setVolume(0..1); caps: {has: [...], ...}
+  //     vibrate(pattern) albo null, setVolume(0..1), onActive(active), onDisplay(body)
   constructor({ io, now = () => performance.now(), random = Math.random, has = ["mic", "speaker"] }) {
     this.io = io;
     this.now = now;
@@ -234,6 +235,13 @@ export class Body {
         if ((key === "volume" || key === "batt_warn_pct") && !(value >= 0 && value <= 100)) return "bad_value";
         this.settings[key] = value;
         if (key === "volume" && this.io.setVolume) this.io.setVolume(value / 100);
+        return null;
+      }
+      case "display": {
+        if (!DISPLAY_KINDS.includes(body.kind)) return typeof body.kind === "string" ? "bad_value" : "bad_body";
+        const withText = body.kind === "heard" || body.kind === "reply";
+        if (withText !== (typeof body.text === "string")) return "bad_body";
+        if (this.io.onDisplay) this.io.onDisplay(body);
         return null;
       }
       case "device.active":

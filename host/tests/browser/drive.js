@@ -13,6 +13,33 @@ async function connect(page, device, token = "") {
   await page.click("#connect");
 }
 
+// Stan widoku z <body data-state> (offline, connecting, inactive, idle, listening, thinking, speaking).
+async function waitState(page, name, timeout = 10000) {
+  await page.waitForSelector(`body[data-state="${name}"]`, { timeout });
+}
+
+// Zapis kolejnych stanów widoku i napisy rozmowy, do sprawdzenia po turze.
+async function recordStates(page) {
+  await page.evaluate(() => {
+    window.__states = [document.body.dataset.state];
+    new MutationObserver(() => {
+      const s = document.body.dataset.state;
+      if (window.__states.at(-1) !== s) window.__states.push(s);
+    }).observe(document.body, { attributes: true, attributeFilter: ["data-state"] });
+  });
+}
+
+function captions(page) {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll("#turns li"), (li) => ({
+      heard: li.querySelector(".heard").hidden ? null : li.querySelector(".heard").textContent,
+      reply: li.querySelector(".reply").hidden ? null : li.querySelector(".reply").textContent,
+      pending: li.querySelectorAll(".word.pending").length,
+      note: li.querySelector(".note").hidden ? null : li.querySelector(".note").textContent,
+    })),
+  );
+}
+
 async function waitText(page, selector, text, timeout = 10000) {
   await page.waitForFunction(
     ([sel, t]) => document.querySelector(sel).textContent.includes(t),
@@ -38,12 +65,16 @@ const scenarios = {
   // Wypowiedź z PCM (ten sam tor co mikrofon), odpowiedź odtworzona w przeglądarce.
   async voice(page) {
     await connect(page, opts.device, opts.token);
-    await waitText(page, "#status", "Połączono");
-    await waitText(page, "#active", "Aktywne urządzenie");
+    await waitText(page, "#status", "połączono");
+    await waitState(page, "idle");
+    await recordStates(page);
     const t = Array.from({ length: 16000 * opts.seconds }, (_, i) => 0.4 * Math.sin((2 * Math.PI * opts.hz * i) / 16000));
     const uttId = await page.evaluate((samples) => window.iris.sayPcm(samples), t);
     await page.waitForFunction(() => window.iris.state.played.length >= 1, null, { timeout: 20000 });
-    return page.evaluate((uttId) => {
+    await waitState(page, "idle");
+    const turns = await captions(page);
+    const states = await page.evaluate(() => window.__states);
+    return page.evaluate(([uttId, turns, states]) => {
       const { samples, rate } = window.iris.state.lastSamples;
       const step = Math.max(1, Math.round(rate / 16000));
       return {
@@ -52,48 +83,76 @@ const scenarios = {
         rate: rate / step,
         samples: Array.from(samples.filter((_, i) => i % step === 0), (x) => Math.round(x * 32767)),
         caps: window.iris.body.caps(),
-        log: Array.from(document.querySelectorAll("#log li"), (li) => li.textContent),
+        turns,
+        states,
       };
-    }, uttId);
+    }, [uttId, turns, states]);
+  },
+
+  // Wypowiedź bez rozpoznanego tekstu albo z błędem hosta: napis z uwagą, powrót do spoczynku.
+  async noReply(page) {
+    await connect(page, opts.device, opts.token);
+    await waitState(page, "idle");
+    const t = new Array(16000).fill(0);
+    await page.evaluate((samples) => window.iris.sayPcm(samples), t);
+    await page.waitForFunction(() => document.querySelector("#turns .note:not([hidden])"), null, { timeout: 20000 });
+    await waitState(page, "idle");
+    return { turns: await captions(page), state: await page.textContent("#state") };
   },
 
   // Prawdziwy mikrofon (sztuczne urządzenie Chromium): przycisk wciśnięty przez opts.ms.
   async mic(page) {
     await connect(page, opts.device, opts.token);
-    await waitText(page, "#active", "Aktywne urządzenie");
+    await waitState(page, "idle");
+    await page.waitForTimeout(1300); // sprawdzenie głosu na hoście po pierwszej sekundzie
+    await page.waitForSelector("#talk:not([disabled])");
     const box = await page.locator("#talk").boundingBox();
     await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
     await page.mouse.down();
+    await waitState(page, "listening");
+    const pressed = await page.getAttribute("#talk", "aria-pressed");
     await page.waitForTimeout(opts.ms);
     await page.mouse.up();
     await page.waitForTimeout(1500); // koniec kodowania i wysyłki
-    return { classOn: await page.locator("#talk.on").count() };
+    return { pressed, released: await page.getAttribute("#talk", "aria-pressed") };
   },
 
   // Urządzenie w spoczynku i przycisk "Używaj tego urządzenia".
   async switching(page) {
     await connect(page, opts.device, opts.token);
-    await waitText(page, "#active", "W spoczynku");
-    const talkDisabled = await page.locator("#talk").isDisabled();
+    await waitState(page, "inactive");
+    const talkHidden = await page.locator("#talk").isHidden();
     const before = await page.evaluate(() => window.iris.body.active);
     await page.click("#activate");
-    await waitText(page, "#active", "Aktywne urządzenie");
-    return { talkDisabled, before, after: await page.evaluate(() => window.iris.body.active), activateHidden: await page.locator("#activate").isHidden() };
+    await waitState(page, "idle");
+    return {
+      talkHidden,
+      before,
+      after: await page.evaluate(() => window.iris.body.active),
+      activateHidden: await page.locator("#activate").isHidden(),
+      talkVisible: await page.locator("#talk").isVisible(),
+    };
   },
 
   // Samo połączenie: stan widoczny w interfejsie i możliwości wysłane do hosta.
   async connectOnly(page) {
     await connect(page, opts.device, opts.token);
-    await waitText(page, "#status", "Połączono");
+    await waitText(page, "#status", "połączono");
     await page.waitForTimeout(opts.stayMs || 0);
-    return { status: await page.textContent("#status"), active: await page.textContent("#active"), caps: await page.evaluate(() => window.iris.body.caps()) };
+    return {
+      status: await page.textContent("#status"),
+      state: await page.textContent("#state"),
+      notice: await page.textContent("#notice"),
+      talkDisabled: await page.locator("#talk").isDisabled(),
+      caps: await page.evaluate(() => window.iris.body.caps()),
+    };
   },
 
   // Zły token: kod 4003 i komunikat, bez połączenia.
   async badToken(page) {
     await connect(page, opts.device, opts.token);
-    await waitText(page, "#log", "brak lub zły token");
-    return { status: await page.textContent("#status") };
+    await waitText(page, "#notice", "Host odrzucił token");
+    return { notice: await page.textContent("#notice"), state: await page.textContent("#state") };
   },
 
   // Aplikacja do zainstalowania: manifest, service worker i pliki w pamięci podręcznej.

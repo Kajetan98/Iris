@@ -335,6 +335,27 @@ def test_action_round_trip_with_ack():
     asyncio.run(scenario())
 
 
+def test_ack_of_unawaited_action_is_not_a_warning(caplog):
+    async def scenario():
+        service, _, store = make()
+        ws = FakeWS()
+        task = asyncio.create_task(service.serve_connection(ws))
+        await settle()
+        await service.send_action("ping", {}, wait_ack=False)
+        ws.feed_text(frame("ping", {"ref": "h1", "ok": True}, t="ack"))
+        ws.feed_text(frame("ping", {"ref": "h1", "ok": True}, t="ack"))  # drugi raz: już nieznana
+        ws.feed_text(frame("ping", {"ref": "h9", "ok": True}, t="ack"))
+        await settle()
+        assert [e.data["ref"] for e in store.events(types=["action.ack"])] == ["h1", "h1", "h9"]
+        ws.disconnect()
+        await task
+
+    with caplog.at_level(logging.WARNING, logger="host.api.service"):
+        asyncio.run(scenario())
+    warned = [r.getMessage() for r in caplog.records if "ack dla" in r.getMessage()]
+    assert warned == ["ack dla nieznanej lub zakończonej akcji: h1", "ack dla nieznanej lub zakończonej akcji: h9"]
+
+
 def test_ack_with_error_is_returned():
     async def scenario():
         service, _, _ = make()
