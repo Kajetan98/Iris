@@ -7,6 +7,9 @@
 - Heartbeat: ciało wysyła `body.heartbeat` co 1 s. Brak heartbeatu przez 5 s oznacza `link.lost` (wartości początkowe).
 - Wersja protokołu w polu `v`. Zmiana niezgodna wstecz podnosi `v`.
 - Nowe połączenie zastępuje poprzednie: host zamyka stare z kodem 4000 (ciało po zerwaniu łącza łączy się ponownie, a stare gniazdo może być jeszcze otwarte po stronie hosta).
+- Ciało łączy się przez `ws://` (TLS i uwierzytelnianie: sekcja 13). Po zerwaniu łącza, także po zamknięciu z kodem 4000, ponawia połączenie po 0,5 s, z opóźnieniem podwajanym do 5 s. Udane połączenie zeruje opóźnienie.
+- Utrzymanie łącza po stronie ciała: ping WebSocket po 5 s bez danych od hosta, zerwanie połączenia po 10 s bez danych (wartości początkowe). Ciało odpowiada pong na ping hosta (uvicorn wysyła go domyślnie co 20 s).
+- Wiadomość od hosta większa niż bufor łącza ciała (tekst do 512 B, sekcja 5; binarna do 5 B nagłówka i 1275 B pakietu Opus) ciało odrzuca jak uszkodzoną ramkę i liczy w `frame_errors`. Połączenie zostaje.
 - Odrzucona ramka nie zamyka połączenia (sekcja 11).
 - Akcje host wysyła jako ramki tekstowe. `id` ma postać `h<licznik>`, `ts` to milisekundy od startu hosta (zegar monotoniczny).
 
@@ -257,5 +260,5 @@ Silnik Claude API (`brain.llm.engine = "claude"`):
 - Sposób ustawiania trybu ciszy (endpoint REST, komenda głosowa lub oba).
 - Czy `battery_critical` może omijać limit inicjatywy.
 - Retencja i usuwanie zdarzeń, w tym zapisanych odczytów `gps` i `imu`.
-- Uwierzytelnianie API i WebSocket (ciało łączy się przez sieć, więc host będzie musiał nasłuchiwać poza 127.0.0.1).
-- Port firmware na STM32L476: moduł sieciowy (L476 nie ma Wi-Fi ani Ethernetu), klient WebSocket nad nim, kodek mikrofonu i koder Opus (CPU i RAM), czujniki, sterownik haptyki, pomiar baterii.
+- Uwierzytelnianie API i WebSocket oraz TLS (`wss://`) dla łącza ciała (ciało łączy się przez sieć, więc host będzie musiał nasłuchiwać poza 127.0.0.1).
+- Port firmware na STM32L476: moduł sieciowy (L476 nie ma Wi-Fi ani Ethernetu) z transportem TCP dla klienta `fw_ws`, kodek mikrofonu i koder Opus (CPU i RAM), czujniki, sterownik haptyki, pomiar baterii.

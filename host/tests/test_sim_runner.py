@@ -186,9 +186,15 @@ def test_reconnects_after_host_closes_connection():
             runner = runner_for(port)
             task = await start(runner)
             await until(lambda: host.sockets)
-            await host.sockets[0].close(code=4000, reason="replaced")
-            await until(lambda: runner.connections == 2, timeout=5)
-            await until(lambda: "body.heartbeat" in host.types(2))
+            loop = asyncio.get_running_loop()
+            # 0,5 s po każdym zamknięciu, czystym i z kodem 4000 (spec, sekcja 1)
+            for n, code in ((2, 4000), (3, 1000)):
+                await until(lambda n=n: len(host.sockets) == n - 1)
+                closed_at = loop.time()
+                await host.sockets[-1].close(code=code)
+                await until(lambda n=n: runner.connections == n, timeout=5)
+                assert loop.time() - closed_at >= 0.45, code
+            await until(lambda: "body.heartbeat" in host.types(3))
             await finish(runner, task)
 
     asyncio.run(scenario())

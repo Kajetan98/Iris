@@ -138,8 +138,10 @@ class SimRunner:
                 await asyncio.sleep(backoff)
                 backoff = min(BACKOFF_MAX_S, backoff * 2)
             else:
-                log.info("połączenie zamknięte")
-                await asyncio.sleep(TICK_S)
+                # także po zastąpieniu połączenia (kod 4000), spec sekcja 1
+                log.info("połączenie zamknięte, ponawiam za %.1f s", backoff)
+                await asyncio.sleep(backoff)
+                backoff = min(BACKOFF_MAX_S, backoff * 2)
 
     async def _attach(self, ws: ClientConnection) -> None:
         """Najpierw zbuforowane zdarzenia, potem bieżący ruch. Bez await między ostatnim
