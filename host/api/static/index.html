@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#1d2b3a">
+  <title>IRIS</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main>
+    <h1>IRIS</h1>
+    <p id="unsupported" class="warn" hidden>
+      Ta przeglądarka nie obsługuje WebCodecs (Opus) albo strona nie jest otwarta przez HTTPS lub localhost.
+      Mikrofon i odtwarzanie nie zadziałają.
+    </p>
+
+    <form id="settings" onsubmit="return false">
+      <label>Nazwa urządzenia
+        <input id="device" autocomplete="off" pattern="[a-z0-9][a-z0-9\-]{0,31}" maxlength="32" required>
+      </label>
+      <label>Token (gdy host go wymaga)
+        <input id="token" type="password" autocomplete="current-password">
+      </label>
+      <button id="connect" type="button">Połącz</button>
+      <button id="disconnect" type="button" hidden>Rozłącz</button>
+    </form>
+
+    <p id="status" role="status">Rozłączono</p>
+    <p id="active"></p>
+
+    <button id="talk" class="talk" type="button" disabled>Przytrzymaj i mów</button>
+    <button id="activate" type="button" hidden>Używaj tego urządzenia</button>
+
+    <h2>Zdarzenia</h2>
+    <ul id="log"></ul>
+  </main>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

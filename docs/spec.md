@@ -28,6 +28,17 @@ IRIS może działać przez różne urządzenia: HERMES, przeglądarkę, program 
 - Host dopasowuje odpowiedź głosową do mniejszego z buforów: z konfiguracji i z `playback_bytes`/`playback_packets`. Bez `speaker` w `has` host nie syntezuje odpowiedzi na wypowiedź. Klip błędu wysyła tylko, gdy jego nazwa jest w `clips`. Akcję, której urządzenie nie obsługuje (np. `gpio.set` w przeglądarce), urządzenie potwierdza z `err: "unsupported"`.
 - Akcje hosta (odpowiedzi głosowe, klip błędu, `POST /actions` bez `device`) trafiają do aktywnego urządzenia. Odpowiedź na wypowiedź trafia na urządzenie, z którego wypowiedź przyszła, o ile jest ono nadal aktywne. Po przełączeniu w trakcie tury odpowiedź przepada, bez klipu błędu.
 
+### Klient w przeglądarce
+
+Host serwuje klienta pod `/app/` (pliki publiczne, sekcja 10). Ten sam klient działa na komputerze i na telefonie, gdzie można go zainstalować jako aplikację (PWA).
+
+- Wymaga bezpiecznego kontekstu (`localhost` albo HTTPS), bo bez niego przeglądarka nie daje mikrofonu ani WebCodecs. Mowę koduje i dekoduje przez WebCodecs (Opus, 16 kHz, mono, pakiety 20 ms, 24 kbit/s), jak opisuje sekcja 6.
+- Mówi się z przyciskiem: wciśnięcie wysyła `audio.utterance.start`, puszczenie kończy wypowiedź (`audio.utterance.end`, najwyżej 60 s).
+- `device.caps`: `mic`, `speaker`, `haptic` (gdy przeglądarka ma wibracje), `battery` (gdy podaje poziom baterii), bez klipów. `gpio.set` i `haptic` bez wibracji dają `unsupported`, `speak.clip` daje `unknown_clip`. Pozostałe reguły `ack` jak w firmware.
+- Heartbeat bez `link_rssi`. Przeglądarka nie może wysyłać pingów WebSocket, więc zerwane łącze wykrywa dopiero przy błędzie wysyłki albo po pingu hosta.
+- Nazwę urządzenia i token klient trzyma w pamięci przeglądarki (`localStorage`) na tym urządzeniu.
+- HTTPS: `python -m host.api.serve` uruchamia host na zwykłym porcie (dla HERMES) i drugim porcie z TLS (dla przeglądarek), z tym samym stanem. Instalacja jako aplikacja wymaga certyfikatu, któremu telefon ufa; z samopodpisanym klient działa w karcie po akceptacji ostrzeżenia.
+
 ## 2. Koperta
 
 ```
@@ -45,7 +56,7 @@ IRIS może działać przez różne urządzenia: HERMES, przeglądarkę, program 
 | type | body | uwagi |
 |---|---|---|
 | `system.boot` | `boot_id`, `fw`, `reset_reason` | wysyłane po starcie |
-| `body.heartbeat` | `batt_pct` (opcjonalne), `link_rssi`, `frame_errors` (opcjonalne) | co 1 s; `frame_errors` to licznik odrzuconych ramek (sekcja 11); urządzenie bez baterii pomija `batt_pct` |
+| `body.heartbeat` | `batt_pct`, `link_rssi`, `frame_errors` (wszystkie opcjonalne) | co 1 s; `frame_errors` to licznik odrzuconych ramek (sekcja 11); urządzenie bez baterii pomija `batt_pct`, bez pomiaru sygnału (przeglądarka) pomija `link_rssi` |
 | `body.sensor` | `temp_c`, `imu`, `presence`, `gps` (pola opcjonalne) | co zmianę lub co N s |
 | `body.fault` | `sensor`, `code` | sensor niedostępny lub błędny |
 | `body.fault.clear` | `sensor` | sensor znów działa |
@@ -242,6 +253,7 @@ Gdy host ma token (sekcja 1), każde żądanie wymaga nagłówka `Authorization:
 | `POST /chat` | wypowiedź tekstowa do asystenta (wymaga włączonego LLM) |
 | `GET /facts`, `PATCH /facts/{id}`, `DELETE /facts/{id}` | pamięć o użytkowniku |
 | `GET /health` | stan hosta i łącza |
+| `GET /app/` | klient w przeglądarce (publiczny; `/` przekierowuje tutaj) |
 
 - `GET /self`: `{"self": {...}, "body": {...}}` (sekcja 7).
 - `GET /self/history`: `{"since": "<ISO>", "snapshots": [{id, session_id, at, self, body}], "events": [...]}`. `since` domyślnie oznacza start bieżącej sesji. Zdarzenia to typy zmian stanu: `host.start`, `host.stop`, `link.lost`, `link.restored`, `drive.enter`, `drive.exit`, `system.boot`, `body.fault`, `body.fault.clear`, `device.switch`. `limit` (1-1000, domyślnie 1000) dotyczy każdej z list.

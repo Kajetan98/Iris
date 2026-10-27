@@ -60,7 +60,7 @@ class SystemBoot(_Body):
 
 class BodyHeartbeat(_Body):
     batt_pct: float | None = Field(None, ge=0, le=100)  # brak: urządzenie bez baterii
-    link_rssi: int
+    link_rssi: int | None = None  # brak: urządzenie bez pomiaru sygnału (przeglądarka)
     frame_errors: int | None = None
 
 

@@ -1,0 +1,82 @@
+:root {
+  --bg: #f4f6f8;
+  --fg: #1d2b3a;
+  --accent: #2f6fb2;
+  --on: #b23a2f;
+  --muted: #5c6b7a;
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11181f;
+    --fg: #e4ebf2;
+    --accent: #6ea8e0;
+    --on: #e07b6e;
+    --muted: #9aa8b5;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.4 system-ui, sans-serif;
+}
+
+main {
+  max-width: 32rem;
+  margin: 0 auto;
+  padding: 1rem;
+}
+
+label {
+  display: block;
+  margin-bottom: 0.75rem;
+}
+
+input {
+  display: block;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 0.5rem;
+  font: inherit;
+}
+
+button {
+  font: inherit;
+  padding: 0.6rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 0.4rem;
+  background: transparent;
+  color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.4;
+}
+
+.talk {
+  display: block;
+  width: 100%;
+  margin: 1.5rem 0 1rem;
+  padding: 2.5rem 1rem;
+  font-size: 1.25rem;
+  touch-action: none;
+  user-select: none;
+}
+
+.talk.on {
+  border-color: var(--on);
+  color: var(--on);
+}
+
+.warn {
+  color: var(--on);
+}
+
+#log {
+  padding-left: 1.2rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}

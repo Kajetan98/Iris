@@ -107,7 +107,7 @@ def test_rejected_frames_are_logged_and_ignored(caplog):
     with caplog.at_level(logging.WARNING):
         assert core.handle_frame("{not json") == []
         assert core.handle_frame(frame("teleport", {})) == []
-        assert core.handle_frame(frame("body.heartbeat", {"batt_pct": 50}, t="event")) == []
+        assert core.handle_frame(frame("body.heartbeat", {"batt_pct": 150}, t="event")) == []
     assert len(caplog.records) == 3
     assert core.body.link == "unknown"
 

@@ -11,9 +11,12 @@ import logging
 import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.responses import RedirectResponse
+from fastapi.staticfiles import StaticFiles
 
 from host.api.auth import token_from_env
 from host.api.rest import router, ws_router
@@ -23,6 +26,8 @@ from host.core.config import Config
 from host.store import Store
 
 log = logging.getLogger(__name__)
+
+STATIC = Path(__file__).parent / "static"  # klient w przeglądarce (spec, sekcja 1)
 
 
 def _preload(*engines: Any) -> None:
@@ -117,6 +122,13 @@ def create_app(
     app.state.token = token
     app.include_router(router)
     app.include_router(ws_router)
+    # Klient w przeglądarce jest publiczny: nie zawiera danych, token podaje użytkownik.
+    app.mount("/app", StaticFiles(directory=STATIC, html=True), name="app")
+
+    @app.get("/", include_in_schema=False)
+    async def root() -> RedirectResponse:
+        return RedirectResponse("/app/")
+
     return app
 
 

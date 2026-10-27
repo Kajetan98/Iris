@@ -64,7 +64,7 @@ def test_decodes_ack():
         (b"\xff\xfe", "UTF-8"),
         (frame("body.heartbeat", {"batt_pct": 50, "link_rssi": -50}, v=2), "wersja"),
         (frame("unknown.type", {}), "nieznany typ"),
-        (frame("body.heartbeat", {"batt_pct": 50}), "link_rssi"),
+        (frame("body.heartbeat", {"batt_pct": 50, "link_rssi": "mocny"}), "link_rssi"),
         (frame("body.heartbeat", {"batt_pct": 101, "link_rssi": -50}), "batt_pct"),
         (frame("button", {"id": "b", "kind": "double"}), "kind"),
         (frame("speak", {"audio_id": 1}, t="action"), "akcji"),
@@ -133,6 +133,8 @@ def test_encode_action_enforces_body_frame_limit():
 def test_heartbeat_without_battery_and_device_caps():
     ev = decode_frame(frame("body.heartbeat", {"link_rssi": -40}))
     assert ev.body.batt_pct is None  # urządzenie bez baterii (spec, sekcja 3)
+    ev = decode_frame(frame("body.heartbeat", {}))
+    assert ev.body.link_rssi is None and ev.body.batt_pct is None  # przeglądarka na zasilaczu
     caps = decode_frame(frame("device.caps", {"has": ["mic", "speaker", "teleport"], "clips": ["ready"],
                                               "playback_bytes": 8000})).body
     assert caps.has == ["mic", "speaker", "teleport"] and caps.clips == ["ready"]
