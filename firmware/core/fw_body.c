@@ -423,6 +423,11 @@ void fw_body_playback_done(fw_body_t *b)
     playback_reset(b);
 }
 
+void fw_body_frame_error(fw_body_t *b)
+{
+    b->frame_errors++;
+}
+
 /* ---------- akcje od hosta ---------- */
 
 static void send_ack(fw_body_t *b, const char *type, const char *ref, const char *err, uint32_t now_ms)

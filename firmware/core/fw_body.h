@@ -94,6 +94,8 @@ void fw_body_set_link(fw_body_t *b, int up);
 void fw_body_on_text(fw_body_t *b, const char *frame, size_t len, uint32_t now_ms);
 void fw_body_on_binary(fw_body_t *b, const uint8_t *frame, size_t len);
 void fw_body_playback_done(fw_body_t *b);
+/* Port zgłasza wiadomość od hosta odrzuconą przed rdzeniem (za duża dla bufora łącza). */
+void fw_body_frame_error(fw_body_t *b);
 
 void fw_body_set_battery(fw_body_t *b, int32_t pct_x10);
 void fw_body_set_rssi(fw_body_t *b, int16_t rssi);

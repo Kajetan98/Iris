@@ -522,6 +522,9 @@ static void test_oversized_frame_is_rejected(void)
     strcpy(frame + FW_RX_TEXT_MAX - 2, "\"}}");
     fw_body_on_text(&body, frame, strlen(frame), 2000);
     CHECK(fake.out_count == 0 && body.frame_errors == 1);
+    fw_body_frame_error(&body); /* wiadomość odrzucona już przez fw_ws */
+    fw_body_tick(&body, 2000);
+    CHECK(fake.out_count == 1 && out_has(0, "\"frame_errors\":2"));
 }
 
 /* ---------- ciało: odtwarzanie ---------- */
