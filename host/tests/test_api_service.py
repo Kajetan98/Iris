@@ -30,8 +30,9 @@ class FakeWS:
         self.accepted = False
         self._q = asyncio.Queue()
 
-    async def accept(self):
+    async def accept(self, subprotocol=None):
         self.accepted = True
+        self.subprotocol = subprotocol
 
     async def receive(self):
         return await self._q.get()

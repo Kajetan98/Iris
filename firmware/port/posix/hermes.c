@@ -2,6 +2,7 @@
  *
  *   build/hermes --url ws://127.0.0.1:8000/ws [--device ID] [--audio-out KATALOG]
  *
+ * Token hosta (IRIS_TOKEN) czytany ze zmiennej środowiskowej, nie z argumentów, bo te widać w ps.
  * Do sprawdzania firmware z prawdziwym hostem bez sprzętu. Odczyty czujników ustawiają
  * komendy ze stdin (help). Wywołania sprzętu (gpio, haptyka, klipy, odtwarzanie) i stan
  * łącza idą na stdout, po jednym w linii; odpowiedzi na komendy i błędy na stderr.
@@ -42,6 +43,7 @@ static fw_ws_t ws;
 static fw_hal_t hal;
 static fw_settings_t settings;
 static url_t url;
+static char protocols[160]; /* "iris, token.<IRIS_TOKEN>" albo pusty bez tokenu */
 static const char *url_text = "ws://localhost:8000/ws";
 
 static int sock = -1;
@@ -186,7 +188,7 @@ static void connected(uint32_t now)
     addrs = NULL;
     addr_cur = NULL;
     connecting = 0;
-    if (fw_ws_start(&ws, &ws_io, url.host_header, url.path, now) != 0) {
+    if (fw_ws_start(&ws, &ws_io, url.host_header, url.path, protocols[0] ? protocols : NULL, now) != 0) {
         fprintf(stderr, "handshake: %s\n", ws.error);
         close_socket();
         schedule_retry(now);
@@ -626,6 +628,30 @@ static int add_device(url_t *u, const char *device)
     return 0;
 }
 
+/* Token jak na hoście: 16-128 znaków A-Z, a-z, 0-9, _ i - (spec, sekcja 1). */
+static int load_token(void)
+{
+    const char *token = getenv("IRIS_TOKEN");
+    size_t n;
+    size_t i;
+    if (!token || !*token) {
+        return 0;
+    }
+    n = strlen(token);
+    if (n < 16 || n > 128) {
+        return -1;
+    }
+    for (i = 0; i < n; i++) {
+        char c = token[i];
+        if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' ||
+              c == '-')) {
+            return -1;
+        }
+    }
+    snprintf(protocols, sizeof(protocols), "iris, token.%s", token);
+    return 0;
+}
+
 static int parse_pins(const char *s)
 {
     while (*s) {
@@ -706,6 +732,10 @@ int main(int argc, char **argv)
         fprintf(stderr, "niepoprawne --device: %s (a-z, 0-9, -, do 32 znaków)\n", device);
         return 2;
     }
+    if (load_token() != 0) {
+        fprintf(stderr, "niepoprawny IRIS_TOKEN: 16-128 znaków A-Z, a-z, 0-9, _ i -\n");
+        return 2;
+    }
     if (parse_pins(pins) != 0) {
         fprintf(stderr, "niepoprawne --gpio-pins: %s\n", pins);
         return 2;
@@ -743,7 +773,8 @@ int main(int argc, char **argv)
     fw_body_set_rssi(&body, (int16_t)lround(rssi));
     fw_body_set_temp(&body, (int32_t)lround(temp * 10));
     retry_at = t0;
-    fprintf(stderr, "HERMES %s, boot_id %s, host ws://%s%s\n", FW_VERSION, body.boot_id, url.host_header, url.path);
+    fprintf(stderr, "HERMES %s, boot_id %s, host ws://%s%s, token: %s\n", FW_VERSION, body.boot_id,
+            url.host_header, url.path, protocols[0] ? "tak" : "nie");
 
     for (;;) {
         struct pollfd fds[2];

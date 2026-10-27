@@ -418,7 +418,7 @@ def test_two_c_bodies_switch_between_each_other(hermes, bodies, tmp_path):
         laptop = bodies(hermes, url, "--device", "laptop", "--batt", "15")
         laptop.wait(r"^link up$")
         laptop.wait(r"^active 0$")  # host: urządzenie w spoczynku
-        laptop.wait(r"\?device=laptop$", stream=laptop.err)
+        laptop.wait(r"\?device=laptop, token: nie$", stream=laptop.err)
         with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=10) as http:
             body = http.get("/devices").json()
             assert body["active"] == "hermes"

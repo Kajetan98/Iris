@@ -2,9 +2,9 @@
  *
  * Budżet RAM (STM32L476: 128 KB): stan fw_body_t to 71 968 B (sprawdza test_ram_budget):
  * bufor odtwarzania 53 248 B (dane 48 KB + tablice seq), bufor zdarzeń 16 512 B
- * (64 x 258 B), reszta ok. 2 KB. Klient WebSocket fw_ws_t to 2 904 B (test_ram w test_ws.c):
+ * (64 x 258 B), reszta ok. 2 KB. Klient WebSocket fw_ws_t to 2 912 B (test_ram w test_ws.c):
  * odbiór i wysyłka po FW_WS_MSG_MAX. Na sterownik modułu sieciowego, koder Opus i stos
- * zostaje 56 200 B (ok. 55 KB). RAM L476 to SRAM1 (96 KB) i SRAM2 (32 KB), więc fw_body_t
+ * zostaje 56 192 B (ok. 55 KB). RAM L476 to SRAM1 (96 KB) i SRAM2 (32 KB), więc fw_body_t
  * musi trafić do SRAM1.
  */
 #ifndef FW_CONFIG_H

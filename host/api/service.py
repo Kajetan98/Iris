@@ -83,7 +83,7 @@ class ChatError(Exception):
 
 
 class WebSocketLike(Protocol):
-    async def accept(self) -> None: ...
+    async def accept(self, subprotocol: str | None = None) -> None: ...
     async def receive(self) -> dict[str, Any]: ...
     async def send_text(self, data: str) -> None: ...
     async def send_bytes(self, data: bytes) -> None: ...
@@ -171,8 +171,10 @@ class HostService:
         core = self.core
         return None if core is None or core.active_device is None else self._boot_ids.get(core.active_device)
 
-    async def serve_connection(self, ws: WebSocketLike, device: str | None = None) -> None:
-        await ws.accept()
+    async def serve_connection(
+        self, ws: WebSocketLike, device: str | None = None, *, subprotocol: str | None = None
+    ) -> None:
+        await ws.accept(subprotocol=subprotocol)
         device = DEFAULT_DEVICE if device is None else device
         if not valid_device_id(device):
             log.warning("odrzucone połączenie: niepoprawny device")

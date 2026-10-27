@@ -221,7 +221,7 @@ static void start(void)
 {
     memset(&t, 0, sizeof(t));
     t.rnd = 12345;
-    CHECK(fw_ws_start(&ws, &io, "127.0.0.1:8000", "/ws", 1000) == 0);
+    CHECK(fw_ws_start(&ws, &io, "127.0.0.1:8000", "/ws", NULL, 1000) == 0);
 }
 
 /* Połączenie po handshake, bufor wyjścia pusty. */
@@ -324,7 +324,7 @@ static void test_handshake_request(void)
     t.out_len = 0;
     {
         char key2[25];
-        CHECK(fw_ws_start(&ws, &io, "h", "/ws", 0) == 0);
+        CHECK(fw_ws_start(&ws, &io, "h", "/ws", NULL, 0) == 0);
         CHECK(find_key(key2) != NULL && strcmp(key, key2) != 0);
     }
 
@@ -333,13 +333,13 @@ static void test_handshake_request(void)
         static char host[FW_WS_TX_MAX];
         memset(host, 'h', sizeof(host) - 1);
         host[sizeof(host) - 1] = '\0';
-        CHECK(fw_ws_start(&ws, &io, host, "/ws", 0) == -1 && ws.state == FW_WS_CLOSED);
-        CHECK(fw_ws_start(&ws, &io, "h", "ws", 0) == -1);
+        CHECK(fw_ws_start(&ws, &io, host, "/ws", NULL, 0) == -1 && ws.state == FW_WS_CLOSED);
+        CHECK(fw_ws_start(&ws, &io, "h", "ws", NULL, 0) == -1);
     }
     /* błąd zapisu żądania: bez on_close */
     t.closes = 0;
     t.fail_write = 1;
-    CHECK(fw_ws_start(&ws, &io, "h", "/ws", 0) == -1);
+    CHECK(fw_ws_start(&ws, &io, "h", "/ws", NULL, 0) == -1);
     fw_ws_tick(&ws, 100000);
     CHECK(t.closes == 0 && ws.state == FW_WS_CLOSED);
 }
@@ -455,6 +455,38 @@ static void test_handshake_rejections(void)
                                "Sec-WebSocket-Accept: %s\r\n\r\n", accept);
     feed(buf, strlen(buf), 1002);
     CHECK(t.opened == 0 && t.closes == 1);
+}
+
+static int open_with_protocol(const char *offered, const char *chosen)
+{
+    char key[25];
+    char accept[29];
+    char buf[600];
+    memset(&t, 0, sizeof(t));
+    t.rnd = 5;
+    CHECK(fw_ws_start(&ws, &io, "h", "/ws", offered, 0) == 0);
+    accept_for(find_key(key), accept);
+    snprintf(buf, sizeof(buf),
+             "HTTP/1.1 101 x\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: %s\r\n"
+             "%s%s%s\r\n",
+             accept, chosen ? "Sec-WebSocket-Protocol: " : "", chosen ? chosen : "", chosen ? "\r\n" : "");
+    feed(buf, strlen(buf), 0);
+    return ws.state == FW_WS_OPEN;
+}
+
+static void test_subprotocols(void)
+{
+    static const char offered[] = "iris, token.abcdefghijklmnop";
+    CHECK(open_with_protocol(offered, "iris"));
+    CHECK(strstr((const char *)t.out, "\r\nSec-WebSocket-Protocol: iris, token.abcdefghijklmnop\r\n\r\n"));
+    CHECK(open_with_protocol(offered, NULL)); /* serwer może nie wybrać żadnego */
+    CHECK(!open_with_protocol(offered, "chat") && t.closes == 1);
+    CHECK_STR(ws.error, "handshake_header");
+    CHECK(!open_with_protocol(offered, "token.abcdefghijklmno")); /* nie cały element listy */
+    CHECK(!open_with_protocol(offered, "iris, chat"));
+    CHECK(!open_with_protocol(NULL, "iris")); /* nie oferowaliśmy */
+    CHECK(open_with_protocol(NULL, NULL));
+    CHECK(strstr((const char *)t.out, "Sec-WebSocket-Protocol") == NULL);
 }
 
 /* ---------- wysyłka ---------- */
@@ -730,7 +762,7 @@ static void test_keepalive(void)
     memset(&t, 0, sizeof(t));
     {
         char resp[512];
-        CHECK(fw_ws_start(&ws, &io, "h", "/ws", 0xFFFFF000u) == 0);
+        CHECK(fw_ws_start(&ws, &io, "h", "/ws", NULL, 0xFFFFF000u) == 0);
         feed(resp, response(resp, sizeof(resp), ""), 0xFFFFF000u);
         t.out_len = t.out_read = 0;
         fw_ws_tick(&ws, 0xFFFFF000u + FW_WS_PING_MS);
@@ -797,7 +829,7 @@ static void test_random_input_never_breaks_invariants(void)
 static void test_ram(void)
 {
     printf("sizeof(fw_ws_t) = %zu B\n", sizeof(fw_ws_t));
-    CHECK(sizeof(fw_ws_t) <= 2904u); /* zmiana wymaga poprawki budżetu w fw_config.h */
+    CHECK(sizeof(fw_ws_t) <= 2912u); /* zmiana wymaga poprawki budżetu w fw_config.h */
 }
 
 int main(void)
@@ -809,6 +841,7 @@ int main(void)
     test_handshake_byte_by_byte_with_frame_after();
     test_handshake_header_variants_accepted();
     test_handshake_rejections();
+    test_subprotocols();
     test_send_masks_frames();
     test_write_failure_closes_outside_callbacks();
     test_receive_lengths();

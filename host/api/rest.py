@@ -5,10 +5,13 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Literal
 
+import logging
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import Response
 
+from host.api.auth import UNAUTHORIZED_CLOSE_CODE, WS_PROTOCOL, bearer_ok, ws_token_ok
 from host.api.service import (
     AckTimeout,
     ChatDisabled,
@@ -20,7 +23,18 @@ from host.api.service import (
 from host.core.protocol import valid_device_id
 from host.store.models import Fact, Snapshot, StoredEvent
 
-router = APIRouter()
+log = logging.getLogger(__name__)
+
+
+def require_token(request: Request) -> None:
+    """401 bez poprawnego `Authorization: Bearer`, gdy host ma token (spec, sekcja 10)."""
+    token = getattr(request.app.state, "token", None)
+    if token is not None and not bearer_ok(request.headers.get("authorization"), token):
+        raise HTTPException(401, "wymagany token", headers={"WWW-Authenticate": "Bearer"})
+
+
+router = APIRouter(dependencies=[Depends(require_token)])
+ws_router = APIRouter()  # /ws sprawdza token sam: zamyka połączenie kodem 4003
 
 STATE_EVENT_TYPES = [
     "host.start",
@@ -239,7 +253,17 @@ async def delete_fact(fact_id: int, service: HostService = Depends(get_service))
 # --- WebSocket ---
 
 
-@router.websocket("/ws")
+@ws_router.websocket("/ws")
 async def body_socket(websocket: WebSocket) -> None:
+    offered = websocket.scope.get("subprotocols") or []
+    subprotocol = WS_PROTOCOL if WS_PROTOCOL in offered else None
+    token = getattr(websocket.app.state, "token", None)
+    if token is not None and not ws_token_ok(offered, token):
+        log.warning("połączenie odrzucone: brak lub zły token")
+        await websocket.accept(subprotocol=subprotocol)
+        await websocket.close(code=UNAUTHORIZED_CLOSE_CODE, reason="unauthorized")
+        return
     # device czytany ręcznie: niepoprawny ma dać kod zamknięcia 4002, nie odrzucony handshake
-    await websocket.app.state.service.serve_connection(websocket, websocket.query_params.get("device"))
+    await websocket.app.state.service.serve_connection(
+        websocket, websocket.query_params.get("device"), subprotocol=subprotocol
+    )

@@ -15,7 +15,8 @@ from typing import Any
 
 from fastapi import FastAPI
 
-from host.api.rest import router
+from host.api.auth import token_from_env
+from host.api.rest import router, ws_router
 from host.api.service import HostService
 from host.core.clock import Clock, SystemClock
 from host.core.config import Config
@@ -45,6 +46,9 @@ def load_config() -> Config:
     return Config.load(path) if path else Config()
 
 
+_FROM_ENV = object()
+
+
 def create_app(
     config: Config | None = None,
     clock: Clock | None = None,
@@ -54,9 +58,16 @@ def create_app(
     tts: Any = None,
     *,
     run_tick_loop: bool = True,
+    token: Any = _FROM_ENV,
 ) -> FastAPI:
+    """token: None wyłącza uwierzytelnianie; domyślnie IRIS_TOKEN (spec, sekcja 1)."""
+    if token is _FROM_ENV:
+        token = token_from_env()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+        if token is None:
+            log.warning("brak IRIS_TOKEN: API i /ws bez uwierzytelniania, nasłuchuj tylko na 127.0.0.1")
         cfg = config or load_config()
         clk = clock or SystemClock()
         owned_store = store is None
@@ -103,7 +114,9 @@ def create_app(
                 st.close()
 
     app = FastAPI(title="IRIS host", lifespan=lifespan)
+    app.state.token = token
     app.include_router(router)
+    app.include_router(ws_router)
     return app
 
 

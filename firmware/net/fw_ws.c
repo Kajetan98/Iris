@@ -282,7 +282,8 @@ static int append(fw_ws_t *ws, size_t *pos, const char *s)
     return 0;
 }
 
-int fw_ws_start(fw_ws_t *ws, const fw_ws_io_t *io, const char *host, const char *path, uint32_t now_ms)
+int fw_ws_start(fw_ws_t *ws, const fw_ws_io_t *io, const char *host, const char *path,
+                const char *protocols, uint32_t now_ms)
 {
     uint8_t nonce[16];
     char key[25];
@@ -293,6 +294,7 @@ int fw_ws_start(fw_ws_t *ws, const fw_ws_io_t *io, const char *host, const char 
 
     memset(ws, 0, sizeof(*ws));
     ws->io = *io;
+    ws->protocols = protocols;
     ws->hdr_need = 2;
     for (i = 0; i < 4; i++) {
         uint32_t r = io->random32(io->ctx);
@@ -310,7 +312,10 @@ int fw_ws_start(fw_ws_t *ws, const fw_ws_io_t *io, const char *host, const char 
     if (path[0] != '/' || append(ws, &pos, "GET ") || append(ws, &pos, path) ||
         append(ws, &pos, " HTTP/1.1\r\nHost: ") || append(ws, &pos, host) ||
         append(ws, &pos, "\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: ") ||
-        append(ws, &pos, key) || append(ws, &pos, "\r\nSec-WebSocket-Version: 13\r\n\r\n")) {
+        append(ws, &pos, key) || append(ws, &pos, "\r\nSec-WebSocket-Version: 13\r\n") ||
+        (protocols && (append(ws, &pos, "Sec-WebSocket-Protocol: ") || append(ws, &pos, protocols) ||
+                       append(ws, &pos, "\r\n"))) ||
+        append(ws, &pos, "\r\n")) {
         ws->error = "request_size";
         return -1;
     }
@@ -370,6 +375,31 @@ static int has_token(const char *v, size_t n, const char *token)
     return 0;
 }
 
+/* Czy value (bez białych znaków) jest jednym z elementów listy rozdzielonej przecinkami. */
+static int offered(const char *list, const char *value, size_t n)
+{
+    const char *p = list;
+    while (*p) {
+        const char *start;
+        const char *end;
+        while (*p == ' ' || *p == ',') {
+            p++;
+        }
+        start = p;
+        while (*p && *p != ',') {
+            p++;
+        }
+        end = p;
+        while (end > start && end[-1] == ' ') {
+            end--;
+        }
+        if ((size_t)(end - start) == n && n > 0 && memcmp(start, value, n) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 /* Odpowiedź serwera bez końcowego CRLF CRLF; NULL = poprawna (RFC 6455, sekcja 4.1). */
 static const char *check_response(const fw_ws_t *ws, size_t len)
 {
@@ -421,8 +451,12 @@ static const char *check_response(const fw_ws_t *ws, size_t len)
             } else {
                 accept_bad = 1;
             }
-        } else if (ieq(line, name_len, "sec-websocket-extensions") ||
-                   ieq(line, name_len, "sec-websocket-protocol")) {
+        } else if (ieq(line, name_len, "sec-websocket-protocol")) {
+            /* jeden z oferowanych, dokładnie (RFC 6455, sekcja 4.1) */
+            if (!ws->protocols || !offered(ws->protocols, value, value_len)) {
+                return "handshake_header";
+            }
+        } else if (ieq(line, name_len, "sec-websocket-extensions")) {
             return "handshake_header"; /* nie prosiliśmy o żadne */
         }
     }

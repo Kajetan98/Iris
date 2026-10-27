@@ -2,6 +2,8 @@
 
     python -m sim.body --url ws://localhost:8000/ws [--device laptop]
 
+Token hosta (IRIS_TOKEN) czytany ze zmiennej środowiskowej i wysyłany jako podprotokół (spec, sekcja 1).
+
 Komendy z konsoli (stdin) i ze skryptu (`--script`, linie `<sekundy> <komenda>`) opisuje `help`.
 Przy braku łącza symulator buforuje zdarzenia (limit `--buffer-limit`) i łączy się ponownie.
 """
@@ -11,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import logging
+import os
 import sys
 import threading
 import time
@@ -19,6 +22,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from websockets.asyncio.client import ClientConnection, connect
 from websockets.exceptions import ConnectionClosed, WebSocketException
+from websockets.typing import Subprotocol
 
 from sim.model import BodyModel, Out, SimConfig, parse_script
 
@@ -39,8 +43,10 @@ class SimRunner:
         console: bool = False,
         clock: Callable[[], float] = time.monotonic,
         say: Callable[[str], None] = print,
+        token: str | None = None,
     ) -> None:
         self.url = url
+        self._subprotocols = [Subprotocol("iris"), Subprotocol(f"token.{token}")] if token else None
         self.clock = clock
         self.say = say
         self.model = BodyModel(cfg, clock())
@@ -120,7 +126,7 @@ class SimRunner:
             while self.clock() < self.model.offline_until:
                 await asyncio.sleep(TICK_S)
             try:
-                async with connect(self.url, ping_interval=None) as ws:
+                async with connect(self.url, ping_interval=None, subprotocols=self._subprotocols) as ws:
                     backoff = BACKOFF_START_S
                     await self._attach(ws)
                     log.info("połączono z %s", self.url)
@@ -229,7 +235,9 @@ def main(argv: list[str] | None = None) -> int:
             print(f"skrypt: {e}", file=sys.stderr)
             return 2
     url = with_device(args.url, args.device) if args.device else args.url
-    runner = SimRunner(build_config(args), url, script=script, console=not args.no_console)
+    runner = SimRunner(
+        build_config(args), url, script=script, console=not args.no_console, token=os.environ.get("IRIS_TOKEN") or None
+    )
     try:
         asyncio.run(runner.run())
     except KeyboardInterrupt:

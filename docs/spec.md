@@ -7,10 +7,11 @@
 - Heartbeat: ciało wysyła `body.heartbeat` co 1 s. Brak heartbeatu przez 5 s oznacza `link.lost` (wartości początkowe).
 - Wersja protokołu w polu `v`. Zmiana niezgodna wstecz podnosi `v`.
 - Nowe połączenie urządzenia zastępuje jego poprzednie połączenie: host zamyka stare z kodem 4000 (ciało po zerwaniu łącza łączy się ponownie, a stare gniazdo może być jeszcze otwarte po stronie hosta). Połączenia różnych urządzeń działają obok siebie.
-- Ciało łączy się przez `ws://` (TLS i uwierzytelnianie: sekcja 13). Po zerwaniu łącza, także po zamknięciu z kodem od hosta (4000-4002), ponawia połączenie po 0,5 s, z opóźnieniem podwajanym do 5 s. Udane połączenie zeruje opóźnienie.
+- Ciało łączy się przez `ws://` albo, gdy ma TLS, przez `wss://` (firmware HERMES: tylko `ws://`, sekcja 13). Po zerwaniu łącza, także po zamknięciu z kodem od hosta (4000-4003), ponawia połączenie po 0,5 s, z opóźnieniem podwajanym do 5 s. Udane połączenie zeruje opóźnienie.
 - Utrzymanie łącza po stronie ciała: ping WebSocket po 5 s bez danych od hosta, zerwanie połączenia po 10 s bez danych (wartości początkowe). Ciało odpowiada pong na ping hosta (uvicorn wysyła go domyślnie co 20 s).
 - Wiadomość od hosta większa niż bufor łącza ciała (tekst do 512 B, sekcja 5; binarna do 5 B nagłówka i 1275 B pakietu Opus) ciało odrzuca jak uszkodzoną ramkę i liczy w `frame_errors`. Połączenie zostaje.
 - Odrzucona ramka nie zamyka połączenia (sekcja 11).
+- Uwierzytelnianie: gdy host ma token (zmienna środowiskowa `IRIS_TOKEN`, 16-128 znaków `A-Z`, `a-z`, `0-9`, `_`, `-`; inna wartość zatrzymuje start hosta), urządzenie oferuje w handshake podprotokoły `iris` i `token.<token>` (nagłówek `Sec-WebSocket-Protocol`; przeglądarka nie może ustawić innych nagłówków, a adres z tokenem trafiłby do logów). Host wybiera `iris`, także bez tokenu. Brak lub zły token: host przyjmuje połączenie i od razu zamyka je z kodem 4003. Token nie trafia do logów ani do bazy.
 - Akcje host wysyła jako ramki tekstowe. `id` ma postać `h<licznik>` (jeden licznik dla wszystkich urządzeń), `ts` to milisekundy od startu hosta (zegar monotoniczny).
 
 ### Urządzenia
@@ -18,7 +19,7 @@
 IRIS może działać przez różne urządzenia: HERMES, przeglądarkę, program na komputerze, Raspberry Pi, telefon. Połączonych może być kilka naraz, ale słucha i mówi tylko jedno, aktywne. Pozostałe są połączone w spoczynku.
 
 - `device` to identyfikator urządzenia: 1-32 znaki `a-z`, `0-9` i `-`, pierwszy znak to litera lub cyfra (np. `hermes`, `laptop`, `pi-kuchnia`). Brak parametru oznacza `hermes` (zgodność z wersją z jednym ciałem).
-- Kody zamknięcia od hosta: 4000 (zastąpione przez nowe połączenie tego samego urządzenia), 4001 (połączonych jest już `devices.max_connected` urządzeń, wartość początkowa 8), 4002 (niepoprawny `device`). Przy 4001 i 4002 host zamyka połączenie zaraz po jego przyjęciu.
+- Kody zamknięcia od hosta: 4000 (zastąpione przez nowe połączenie tego samego urządzenia), 4001 (połączonych jest już `devices.max_connected` urządzeń, wartość początkowa 8), 4002 (niepoprawny `device`), 4003 (brak lub zły token). Przy 4001-4003 host zamyka połączenie zaraz po jego przyjęciu.
 - Aktywne jest najwyżej jedno urządzenie. Host pamięta wybór między uruchomieniami (sekcja 9). Gdy żadne nie jest wybrane, aktywne staje się pierwsze urządzenie, które się połączy.
 - Przełączenie jest ręczne: `POST /devices/{id}/activate` (sekcja 10) albo zdarzenie `device.activate` z urządzenia, które ma zostać aktywne (np. przycisk "używaj tego urządzenia" w przeglądarce). Można wybrać urządzenie znane, ale niepołączone; IRIS jest wtedy w trybie `offline`, dopóki się nie połączy. Przełączenie komendą głosową: sekcja 13.
 - Po każdym połączeniu urządzenie uznaje się za aktywne, dopóki nie dostanie akcji `device.active` z `active: false`. Host wysyła ją zaraz po połączeniu urządzenia nieaktywnego. Przy przełączeniu wysyła `false` do poprzedniego i `true` do nowego urządzenia, jeśli są połączone.
@@ -226,7 +227,9 @@ Co host zapisuje (wartości początkowe w konfiguracji `api`):
 
 ## 10. REST
 
-Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lub przesunięcie, w URL `+` jako `%2B`), czas bez strefy daje 422. API nie ma jeszcze uwierzytelniania (sekcja 13), więc host domyślnie nasłuchuje tylko na 127.0.0.1.
+Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lub przesunięcie, w URL `+` jako `%2B`), czas bez strefy daje 422.
+
+Gdy host ma token (sekcja 1), każde żądanie wymaga nagłówka `Authorization: Bearer <token>`, inaczej 401. Wyjątkiem są pliki klienta przeglądarkowego (`/app/`): są publiczne i nie zawierają danych. Bez tokenu host powinien nasłuchiwać tylko na 127.0.0.1.
 
 | metoda i ścieżka | opis |
 |---|---|
@@ -296,6 +299,6 @@ Silnik Claude API (`brain.llm.engine = "claude"`):
 - Sposób ustawiania trybu ciszy (endpoint REST, komenda głosowa lub oba).
 - Czy `battery_critical` może omijać limit inicjatywy.
 - Retencja i usuwanie zdarzeń, w tym zapisanych odczytów `gps` i `imu`.
-- Uwierzytelnianie API i WebSocket oraz TLS (`wss://`) dla łącza ciała (ciało łączy się przez sieć, więc host będzie musiał nasłuchiwać poza 127.0.0.1). Przy wielu urządzeniach bez uwierzytelniania każde urządzenie w sieci może się połączyć i przełączyć IRIS na siebie.
+- TLS w firmware HERMES (`wss://`, np. mbedTLS: pamięć RAM i flash). Bez TLS token i rozmowa idą przez sieć jawnie, więc HERMES powinien łączyć się tylko w zaufanej sieci.
 - Przełączanie urządzenia komendą głosową ("przełącz na laptop", wzorzec rozpoznawany na hoście przed LLM) i ewentualnie automatyczne (np. według obecności).
 - Port firmware na STM32L476: moduł sieciowy (L476 nie ma Wi-Fi ani Ethernetu) z transportem TCP dla klienta `fw_ws`, kodek mikrofonu i koder Opus (CPU i RAM), czujniki, sterownik haptyki, pomiar baterii.

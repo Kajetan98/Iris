@@ -49,6 +49,7 @@ typedef struct {
     uint16_t close_code;
     int close_pending; /* on_close czeka na fw_ws_tick() albo koniec fw_ws_feed() */
     char accept[29];   /* oczekiwany Sec-WebSocket-Accept */
+    const char *protocols; /* oferowane podprotokoły (np. "iris, token.x") albo NULL */
     uint32_t state_ms; /* start handshake albo wysłanie close */
     uint32_t last_rx_ms;
     int ping_sent;
@@ -74,8 +75,11 @@ typedef struct {
 } fw_ws_t;
 
 /* Wysyła żądanie handshake. host to wartość nagłówka Host (z portem, gdy inny niż 80).
+ * protocols: Sec-WebSocket-Protocol (lista po przecinkach, np. "iris, token.<token>") albo NULL;
+ * napis musi istnieć do końca połączenia. Serwer może wybrać jeden z nich albo żadnego.
  * Zwraca 0 albo -1 (za długie host/path, błąd zapisu); przy -1 on_close nie będzie wołane. */
-int fw_ws_start(fw_ws_t *ws, const fw_ws_io_t *io, const char *host, const char *path, uint32_t now_ms);
+int fw_ws_start(fw_ws_t *ws, const fw_ws_io_t *io, const char *host, const char *path,
+                const char *protocols, uint32_t now_ms);
 void fw_ws_feed(fw_ws_t *ws, const uint8_t *data, size_t len, uint32_t now_ms);
 void fw_ws_tick(fw_ws_t *ws, uint32_t now_ms);
 /* Wiadomość w jednej ramce. 0 albo -1, gdy połączenie nie jest otwarte. Błąd zapisu zamyka
