@@ -22,7 +22,16 @@ typedef enum {
     FW_SENSOR_COUNT
 } fw_sensor_t;
 
+/* Możliwości urządzenia w device.caps (spec, sekcja 1). */
+#define FW_HAS_MIC 0x01u
+#define FW_HAS_SPEAKER 0x02u
+#define FW_HAS_HAPTIC 0x04u
+#define FW_HAS_GPIO 0x08u
+#define FW_HAS_BATTERY 0x10u /* bez niej heartbeat pomija batt_pct */
+#define FW_HAS_ALL 0x1Fu
+
 typedef struct {
+    uint8_t has; /* FW_HAS_* */
     uint8_t gpio_pins[FW_GPIO_MAX]; /* biała lista dla gpio.set */
     uint8_t gpio_count;
     const char *clips[FW_CLIPS_MAX]; /* klipy zapisane w ciele (speak.clip) */
@@ -89,9 +98,10 @@ typedef struct {
 void fw_body_init(fw_body_t *b, const fw_hal_t *hal, const fw_settings_t *settings,
                   uint32_t now_ms, uint32_t random32, const char *reset_reason);
 void fw_body_tick(fw_body_t *b, uint32_t now_ms);
-/* Port zgłasza zestawienie (1) i zerwanie (0) połączenia; po zestawieniu idą zaległe zdarzenia,
- * a urządzenie uznaje się za aktywne, dopóki host nie przyśle device.active (spec, sekcja 1). */
-void fw_body_set_link(fw_body_t *b, int up);
+/* Port zgłasza zestawienie (1) i zerwanie (0) połączenia. Po zestawieniu idzie device.caps, potem
+ * zaległe zdarzenia, a urządzenie uznaje się za aktywne, dopóki host nie przyśle device.active
+ * (spec, sekcja 1). */
+void fw_body_set_link(fw_body_t *b, int up, uint32_t now_ms);
 
 void fw_body_on_text(fw_body_t *b, const char *frame, size_t len, uint32_t now_ms);
 void fw_body_on_binary(fw_body_t *b, const uint8_t *frame, size_t len);

@@ -42,27 +42,61 @@ void fw_jw_init(fw_jw_t *w, char *buf, size_t cap)
     w->cap = cap;
 }
 
-void fw_jw_open(fw_jw_t *w)
+/* Przecinek przed kolejnym elementem tablicy (w obiekcie stawia go fw_jw_key). */
+static void value_sep(fw_jw_t *w)
+{
+    if (w->depth > 0 && w->arr[w->depth - 1]) {
+        if (!w->first[w->depth - 1]) {
+            put(w, ',');
+        }
+        w->first[w->depth - 1] = 0;
+    }
+}
+
+static void open_level(fw_jw_t *w, char c, uint8_t is_array)
 {
     if (w->depth >= (int)sizeof(w->first)) {
         w->overflow = 1;
         return;
     }
-    put(w, '{');
-    w->first[w->depth++] = 1;
+    value_sep(w);
+    put(w, c);
+    w->first[w->depth] = 1;
+    w->arr[w->depth] = is_array;
+    w->depth++;
+}
+
+static void close_level(fw_jw_t *w, char c, uint8_t is_array)
+{
+    if (w->depth <= 0 || w->arr[w->depth - 1] != is_array) {
+        w->overflow = 1; /* zamknięcie bez otwarcia albo nie tego rodzaju */
+        return;
+    }
+    put(w, c);
+    w->depth--;
+}
+
+void fw_jw_open(fw_jw_t *w)
+{
+    open_level(w, '{', 0);
 }
 
 void fw_jw_close(fw_jw_t *w)
 {
-    if (w->depth <= 0) {
-        w->overflow = 1;
-        return;
-    }
-    put(w, '}');
-    w->depth--;
+    close_level(w, '}', 0);
 }
 
-void fw_jw_str(fw_jw_t *w, const char *s)
+void fw_jw_arr_open(fw_jw_t *w)
+{
+    open_level(w, '[', 1);
+}
+
+void fw_jw_arr_close(fw_jw_t *w)
+{
+    close_level(w, ']', 1);
+}
+
+static void put_str(fw_jw_t *w, const char *s)
 {
     static const char hex[] = "0123456789abcdef";
     put(w, '"');
@@ -88,27 +122,35 @@ void fw_jw_str(fw_jw_t *w, const char *s)
     put(w, '"');
 }
 
+void fw_jw_str(fw_jw_t *w, const char *s)
+{
+    value_sep(w);
+    put_str(w, s);
+}
+
 void fw_jw_key(fw_jw_t *w, const char *key)
 {
-    if (w->depth <= 0) {
-        w->overflow = 1;
+    if (w->depth <= 0 || w->arr[w->depth - 1]) {
+        w->overflow = 1; /* klucz poza obiektem */
         return;
     }
     if (!w->first[w->depth - 1]) {
         put(w, ',');
     }
     w->first[w->depth - 1] = 0;
-    fw_jw_str(w, key);
+    put_str(w, key);
     put(w, ':');
 }
 
 void fw_jw_uint(fw_jw_t *w, uint32_t v)
 {
+    value_sep(w);
     put_u(w, v);
 }
 
 void fw_jw_int(fw_jw_t *w, int32_t v)
 {
+    value_sep(w);
     if (v < 0) {
         put(w, '-');
         put_u(w, (uint32_t)(-(int64_t)v));
@@ -119,6 +161,7 @@ void fw_jw_int(fw_jw_t *w, int32_t v)
 
 void fw_jw_bool(fw_jw_t *w, int v)
 {
+    value_sep(w);
     put_s(w, v ? "true" : "false");
 }
 
@@ -135,6 +178,7 @@ void fw_jw_fixed(fw_jw_t *w, int32_t value, unsigned decimals)
         w->overflow = 1;
         return;
     }
+    value_sep(w);
     for (i = 0; i < decimals; i++) {
         div *= 10u;
     }

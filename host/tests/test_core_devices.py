@@ -228,3 +228,22 @@ def test_switch_restarts_hold_timers_of_inactive_drives():
     assert summary(drive_events(beat_all(core, clock, 2, hermes=15, laptop=15))) == [
         ("drive.enter", "laptop", "battery_low"),
     ]
+
+
+def test_caps_are_kept_per_device_and_survive_boot():
+    core, clock = make()
+    assert core.device_caps("hermes") is None
+    core.handle_event(make_event("device.caps", {"has": ["mic"], "clips": [], "playback_bytes": 9000}), "laptop")
+    core.handle_event(make_event("system.boot", {"boot_id": "b1", "fw": "web", "reset_reason": "power"}), "laptop")
+    caps = core.device_caps("laptop")
+    assert caps.has == ["mic"] and caps.playback_bytes == 9000
+    assert core.device_caps("hermes") is None and core.device_caps(None) is None
+
+
+def test_heartbeat_without_battery_leaves_battery_drives_alone():
+    core, clock = make()
+    for _ in range(40):
+        clock.advance(1)
+        core.handle_event(make_event("body.heartbeat", {"link_rssi": -40}), "laptop")
+    assert core.body.batt_pct is None and core.drives.active() == []
+    assert core.prompt_slice()["body_changes"].get("batt_pct") is None

@@ -231,9 +231,9 @@ def test_reconnects_after_replacement_drop_and_host_restart(hermes, bodies):
         server = start(create_app(host_config()), port)
         body.wait(r"^link up$", after=mark, timeout=8)
         with httpx.Client(base_url=f"http://127.0.0.1:{port}", timeout=10) as http:
-            got = poll(lambda: [e for e in events(http) if e["source"] == "body" and e["type"] != "body.sensor"][:2])
-            assert [e["type"] for e in got] == ["button", "local.command"]
-            assert got[1]["data"]["cmd"] == "lampa"
+            got = poll(lambda: [e for e in events(http) if e["source"] == "body" and e["type"] != "body.sensor"][:3])
+            assert [e["type"] for e in got] == ["device.caps", "button", "local.command"]
+            assert got[2]["data"]["cmd"] == "lampa"
             assert body.status()["outbox"] == "0"
             assert not events(http, "system.boot")  # ciało się nie restartowało
     finally:

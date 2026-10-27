@@ -23,6 +23,8 @@ IRIS może działać przez różne urządzenia: HERMES, przeglądarkę, program 
 - Przełączenie jest ręczne: `POST /devices/{id}/activate` (sekcja 10) albo zdarzenie `device.activate` z urządzenia, które ma zostać aktywne (np. przycisk "używaj tego urządzenia" w przeglądarce). Można wybrać urządzenie znane, ale niepołączone; IRIS jest wtedy w trybie `offline`, dopóki się nie połączy. Przełączenie komendą głosową: sekcja 13.
 - Po każdym połączeniu urządzenie uznaje się za aktywne, dopóki nie dostanie akcji `device.active` z `active: false`. Host wysyła ją zaraz po połączeniu urządzenia nieaktywnego. Przy przełączeniu wysyła `false` do poprzedniego i `true` do nowego urządzenia, jeśli są połączone.
 - Zdarzenia z urządzenia nieaktywnego host zapisuje i uwzględnia w jego stanie na liście urządzeń (`GET /devices`), ale nie wpływają one na `body`, drives, interakcje ani rozmowę. Wyjątkiem jest `device.activate`. Audio z urządzenia nieaktywnego host pomija, a urządzenie nieaktywne nie powinno go wysyłać.
+- Możliwości urządzenia opisuje `device.caps`. Host pamięta ostatnie dla każdego urządzenia do końca sesji. Bez `device.caps` host przyjmuje możliwości HERMES: wszystkie z listy `has`, dowolne klipy i bufor odtwarzania z konfiguracji (`body_buffer_bytes`, `body_max_packets`, sekcja 6). Brak pola w `device.caps` oznacza: `has` i `clips` puste, bufor z konfiguracji.
+- Host dopasowuje odpowiedź głosową do mniejszego z buforów: z konfiguracji i z `playback_bytes`/`playback_packets`. Bez `speaker` w `has` host nie syntezuje odpowiedzi na wypowiedź. Klip błędu wysyła tylko, gdy jego nazwa jest w `clips`. Akcję, której urządzenie nie obsługuje (np. `gpio.set` w przeglądarce), urządzenie potwierdza z `err: "unsupported"`.
 - Akcje hosta (odpowiedzi głosowe, klip błędu, `POST /actions` bez `device`) trafiają do aktywnego urządzenia. Odpowiedź na wypowiedź trafia na urządzenie, z którego wypowiedź przyszła, o ile jest ono nadal aktywne. Po przełączeniu w trakcie tury odpowiedź przepada, bez klipu błędu.
 
 ## 2. Koperta
@@ -42,7 +44,7 @@ IRIS może działać przez różne urządzenia: HERMES, przeglądarkę, program 
 | type | body | uwagi |
 |---|---|---|
 | `system.boot` | `boot_id`, `fw`, `reset_reason` | wysyłane po starcie |
-| `body.heartbeat` | `batt_pct`, `link_rssi`, `frame_errors` (opcjonalne) | co 1 s; `frame_errors` to licznik odrzuconych ramek (sekcja 11) |
+| `body.heartbeat` | `batt_pct` (opcjonalne), `link_rssi`, `frame_errors` (opcjonalne) | co 1 s; `frame_errors` to licznik odrzuconych ramek (sekcja 11); urządzenie bez baterii pomija `batt_pct` |
 | `body.sensor` | `temp_c`, `imu`, `presence`, `gps` (pola opcjonalne) | co zmianę lub co N s |
 | `body.fault` | `sensor`, `code` | sensor niedostępny lub błędny |
 | `body.fault.clear` | `sensor` | sensor znów działa |
@@ -50,6 +52,7 @@ IRIS może działać przez różne urządzenia: HERMES, przeglądarkę, program 
 | `audio.utterance.end` | `utt_id`, `dur_ms` | po VAD |
 | `local.command` | `cmd`, `result` | komenda obsłużona lokalnie na STM32 |
 | `button` | `id`, `kind` (`press`, `long`) | |
+| `device.caps` | `has` (lista: `mic`, `speaker`, `haptic`, `gpio`, `battery`), `clips` (lista nazw klipów), `playback_bytes`, `playback_packets` (pola opcjonalne) | możliwości urządzenia (sekcja 1); wysyłane po każdym zestawieniu połączenia, przed zaległymi zdarzeniami, bez buforowania |
 | `device.activate` | – | urządzenie prosi o przełączenie na siebie (sekcja 1); liczy się jako interakcja; bez łącza przepada (nie jest buforowane), bo spóźnione przełączyłoby IRIS nieoczekiwanie |
 
 ## 4. Zdarzenia hosta (wewnętrzne, widoczne w `/events`)
@@ -90,6 +93,7 @@ Ciało odrzuca akcję spoza listy i odsyła `ack` z `ok:false`.
 | `unknown_clip` | klip, którego ciało nie ma |
 | `no_audio` | `speak` bez odebranych ramek tego `audio_id` |
 | `busy` | trwa odtwarzanie innego `audio_id` |
+| `unsupported` | urządzenie nie ma sprzętu do tej akcji (sekcja 1) |
 
 ## 6. Audio
 
@@ -244,7 +248,7 @@ Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lu
 - `GET /facts?source=`: `{"facts": [{id, text, source, confidence, created_at, updated_at}]}`.
 - `PATCH /facts/{id}`: ciało z co najmniej jednym polem z `text`, `source`, `confidence`. 200 z faktem, 404 lub 422. Reguły korekty w sekcji 9.
 - `DELETE /facts/{id}`: 204 lub 404.
-- `GET /devices`: `{"active": "<id>|null", "devices": [{id, active, connected, link, batt_pct, rssi, first_seen_at, last_seen_at}]}` rosnąco po `id`. `link`, `batt_pct` i `rssi` są `null` dla urządzeń bez stanu w bieżącej sesji.
+- `GET /devices`: `{"active": "<id>|null", "devices": [{id, active, connected, link, batt_pct, rssi, caps, first_seen_at, last_seen_at}]}` rosnąco po `id`. `link`, `batt_pct` i `rssi` są `null` dla urządzeń bez stanu w bieżącej sesji, `caps` (body ostatniego `device.caps`) przed pierwszym `device.caps` w sesji.
 - `POST /devices/{id}/activate`: 200 `{"active": "<id>"}`, także gdy urządzenie już było aktywne (wtedy bez zdarzenia). 404 dla urządzenia, które nigdy się nie połączyło, 422 dla niepoprawnego `id`.
 - `GET /health`: zawsze 200, `{"status": "ok|degraded", "uptime_s", "session_id", "device", "devices_connected", "link": {"state", "connected", "rssi", "last_seen_ms"}, "store": "ok|error", "voice": "disabled|ready|error"}`. `link` dotyczy aktywnego urządzenia (`device`, albo `null`). `status` to `ok` tylko przy `link.state` = `ok`. `connected` oznacza otwarte połączenie WebSocket aktywnego urządzenia.
 
@@ -294,5 +298,4 @@ Silnik Claude API (`brain.llm.engine = "claude"`):
 - Retencja i usuwanie zdarzeń, w tym zapisanych odczytów `gps` i `imu`.
 - Uwierzytelnianie API i WebSocket oraz TLS (`wss://`) dla łącza ciała (ciało łączy się przez sieć, więc host będzie musiał nasłuchiwać poza 127.0.0.1). Przy wielu urządzeniach bez uwierzytelniania każde urządzenie w sieci może się połączyć i przełączyć IRIS na siebie.
 - Przełączanie urządzenia komendą głosową ("przełącz na laptop", wzorzec rozpoznawany na hoście przed LLM) i ewentualnie automatyczne (np. według obecności).
-- Możliwości urządzeń (mikrofon, głośnik, haptyka, GPIO, rozmiar bufora odtwarzania) zgłaszane w `system.boot`, żeby host nie wysyłał akcji, których urządzenie nie obsługuje, i dopasował długość odpowiedzi. Na razie `body_buffer_bytes` dotyczy wszystkich urządzeń.
 - Port firmware na STM32L476: moduł sieciowy (L476 nie ma Wi-Fi ani Ethernetu) z transportem TCP dla klienta `fw_ws`, kodek mikrofonu i koder Opus (CPU i RAM), czujniki, sterownik haptyki, pomiar baterii.

@@ -18,7 +18,7 @@ from host.store import Store
 from host.tests.audio_helpers import opus_packets
 from host.tests.brain_helpers import ScriptedEngine
 from host.tests.test_api_service import FakeWS, frame, hb, settle
-from host.tests.test_api_voice import LLM_CFG, say
+from host.tests.test_api_voice import LLM_CFG, say, until
 from host.tests.test_brain_voice import FakeSTT, FakeTTS
 
 run = asyncio.run
@@ -329,3 +329,85 @@ def test_rest_bad_device_id_closes_with_4002(client):
         with pytest.raises(WebSocketDisconnect) as e:
             ws.receive_text()
     assert e.value.code == 4002
+
+
+# --- możliwości urządzeń ---
+
+
+def caps_frame(**caps):
+    return frame("device.caps", caps)
+
+
+def test_devices_list_shows_caps():
+    async def scenario():
+        service, _, _ = make()
+        ws, t = await connect(service, "laptop")
+        assert service.devices()["devices"][0]["caps"] is None
+        ws.feed_text(caps_frame(has=["mic", "speaker"], clips=["ready"], playback_bytes=8000))
+        await settle()
+        assert service.devices()["devices"][0]["caps"] == {
+            "has": ["mic", "speaker"], "clips": ["ready"], "playback_bytes": 8000, "playback_packets": None,
+        }
+        ws.disconnect()
+        await t
+
+    run(scenario())
+
+
+def test_reply_fits_the_smaller_buffer_of_the_device():
+    async def scenario():
+        service = voice_service()
+        ws, t = await connect(service, "laptop")
+        ws.feed_text(caps_frame(has=["mic", "speaker"], playback_packets=10))
+        say(ws, 1, opus_packets(440, 1.0))
+        await asyncio.gather(*await wait_tasks(service))
+        assert len(ws.sent_bytes) == 10  # 10 pakietów zamiast 0,8 s mowy
+        ws.disconnect()
+        await t
+
+    run(scenario())
+
+
+def test_device_without_speaker_gets_no_reply_and_unknown_clip_is_not_sent():
+    async def scenario():
+        service = voice_service()
+        ws, t = await connect(service, "laptop")
+        ws.feed_text(caps_frame(has=["mic"]))
+        say(ws, 1, opus_packets(440, 1.0))
+        await settle(50)
+        assert not service._voice_tasks and service.stt.calls == []
+        # klip błędu tylko, gdy urządzenie go ma
+        ws.feed_text(caps_frame(has=["mic", "speaker"], clips=["ready"]))
+        await settle()
+        failures = []
+
+        async def fail_stt(pcm, rate):
+            from host.brain.speech import SpeechError
+
+            failures.append(rate)
+            raise SpeechError("stt nie działa")
+
+        service.stt.transcribe = fail_stt  # nieudana tura: klip błędu, jeśli urządzenie go ma
+        say(ws, 2, opus_packets(440, 1.0))
+        await until(lambda: len(failures) == 1)
+        await asyncio.gather(*list(service._voice_tasks))
+        assert not actions(ws, "speak.clip")
+        ws.feed_text(caps_frame(has=["mic", "speaker"], clips=["error"]))
+        await settle()
+        say(ws, 3, opus_packets(440, 1.0))
+        await until(lambda: actions(ws, "speak.clip"))
+        assert [a["body"] for a in actions(ws, "speak.clip")] == [{"clip": "error"}]
+        ws.disconnect()
+        await t
+
+    run(scenario())
+
+
+async def wait_tasks(service, timeout=3.0):
+    """Czeka, aż ruszy tura głosowa, i zwraca jej zadania."""
+    loop = asyncio.get_running_loop()
+    end = loop.time() + timeout
+    while not service._voice_tasks and loop.time() < end:
+        await asyncio.sleep(0.01)
+    assert service._voice_tasks, "tura głosowa nie ruszyła"
+    return list(service._voice_tasks)

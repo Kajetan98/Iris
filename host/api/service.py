@@ -274,6 +274,7 @@ class HostService:
                     "link": state.get("link"),
                     "batt_pct": state.get("batt_pct"),
                     "rssi": state.get("rssi"),
+                    "caps": None if (caps := core.device_caps(device)) is None else caps.model_dump(),
                     "first_seen_at": row.first_seen_at if row else None,
                     "last_seen_at": row.last_seen_at if row else None,
                 }
@@ -395,6 +396,7 @@ class HostService:
             announce=self._announce_speech,
             audio=self.config.brain.audio,
             min_text_chars=self.config.brain.stt.min_text_chars,
+            limits=self._turn_limits,
         )
         self.voice_status = "ready"
 
@@ -408,6 +410,10 @@ class HostService:
             # Wypowiedź trzeba pobrać od razu: następny start nie może jej porzucić.
             raw = voice.take_utterance(body.utt_id, body.dur_ms)
             if raw is None:
+                return
+            caps = self._require_core().device_caps(device)
+            if caps is not None and "speaker" not in caps.has:
+                log.info("urządzenie %s nie ma głośnika, wypowiedź bez odpowiedzi", device)
                 return
             if len(self._voice_tasks) >= self.config.brain.audio.max_pending_turns:
                 log.warning("zbyt wiele tur głosowych w toku, wypowiedź pominięta")
@@ -441,6 +447,15 @@ class HostService:
             log.exception("tura głosowa: nieoczekiwany błąd")
             await self._play_error_clip()
 
+    def _turn_limits(self) -> tuple[int, int] | None:
+        """Bufor odtwarzania urządzenia tury z device.caps (None: możliwości HERMES)."""
+        device = _turn_device.get() or self._require_core().active_device
+        caps = self._require_core().device_caps(device)
+        if caps is None:
+            return None
+        audio = self.config.brain.audio
+        return (caps.playback_bytes or audio.body_buffer_bytes, caps.playback_packets or audio.body_max_packets)
+
     def _turn_target(self) -> str | None:
         """Urządzenie tury głosowej. DeviceSwitched, gdy przestało być aktywne."""
         active = self._require_core().active_device
@@ -457,6 +472,9 @@ class HostService:
             return
         if not clip or device not in self._conns:
             return
+        caps = self._require_core().device_caps(device)
+        if caps is not None and clip not in caps.clips:
+            return  # urządzenie nie ma tego klipu (spec, sekcja 1)
         try:
             await self.send_action("speak.clip", {"clip": clip}, wait_ack=False, device=device)
         except (NotConnected, ValueError):

@@ -41,10 +41,25 @@ static int out_has(int i, const char *needle)
     return strstr(out_text(i), needle) != NULL;
 }
 
+/* Zestawienie łącza bez ramki device.caps w zrzucie (jej kolejność sprawdza osobny test). */
+static void link_up(void)
+{
+    int i;
+    int kept = 0;
+    fw_body_set_link(&body, 1, 1000);
+    for (i = 0; i < fake.out_count; i++) {
+        if (!out_has(i, "\"type\":\"device.caps\"")) {
+            fake.out[kept++] = fake.out[i];
+        }
+    }
+    fake.out_count = kept;
+}
+
 static void setup(int link)
 {
     fake_hal_init(&fake, &hal);
     memset(&settings, 0, sizeof(settings));
+    settings.has = FW_HAS_ALL;
     settings.gpio_pins[0] = 5;
     settings.gpio_pins[1] = 6;
     settings.gpio_count = 2;
@@ -55,7 +70,7 @@ static void setup(int link)
     fw_body_set_battery(&body, 710);
     fw_body_set_rssi(&body, -58);
     if (link) {
-        fw_body_set_link(&body, 1);
+        link_up();
     }
 }
 
@@ -144,6 +159,48 @@ static void test_writer_overflow_and_balance(void)
     fw_jw_init(&w, buf, sizeof(buf));
     fw_jw_open(&w);
     CHECK(fw_jw_finish(&w) == 0); /* niezamknięty obiekt */
+}
+
+static void test_writer_arrays(void)
+{
+    char buf[128];
+    fw_jw_t w;
+    fw_jw_init(&w, buf, sizeof(buf));
+    fw_jw_open(&w);
+    fw_jw_key(&w, "a");
+    fw_jw_arr_open(&w);
+    fw_jw_str(&w, "x");
+    fw_jw_int(&w, -1);
+    fw_jw_fixed(&w, 15, 1);
+    fw_jw_bool(&w, 0);
+    fw_jw_open(&w);
+    fw_jw_key(&w, "k");
+    fw_jw_uint(&w, 2);
+    fw_jw_close(&w);
+    fw_jw_arr_open(&w);
+    fw_jw_arr_close(&w);
+    fw_jw_arr_close(&w);
+    fw_jw_key(&w, "e");
+    fw_jw_arr_open(&w);
+    fw_jw_arr_close(&w);
+    fw_jw_close(&w);
+    CHECK(fw_jw_finish(&w) > 0);
+    CHECK_STR(buf, "{\"a\":[\"x\",-1,1.5,false,{\"k\":2},[]],\"e\":[]}");
+
+    /* klucz w tablicy i zamknięcie nie tego rodzaju to błąd */
+    fw_jw_init(&w, buf, sizeof(buf));
+    fw_jw_arr_open(&w);
+    fw_jw_key(&w, "k");
+    fw_jw_arr_close(&w);
+    CHECK(fw_jw_finish(&w) == 0);
+    fw_jw_init(&w, buf, sizeof(buf));
+    fw_jw_arr_open(&w);
+    fw_jw_close(&w);
+    CHECK(fw_jw_finish(&w) == 0);
+    fw_jw_init(&w, buf, sizeof(buf));
+    fw_jw_open(&w);
+    fw_jw_arr_close(&w);
+    CHECK(fw_jw_finish(&w) == 0);
 }
 
 /* ---------- odczyt JSON ---------- */
@@ -259,7 +316,7 @@ static void test_boot_waits_in_outbox_until_link(void)
 {
     setup(0);
     CHECK(fake.out_count == 0 && body.outbox_count == 1);
-    fw_body_set_link(&body, 1);
+    link_up();
     CHECK(fake.out_count == 1 && body.outbox_count == 0);
     CHECK_STR(out_text(0), "{\"v\":1,\"t\":\"event\",\"id\":\"a1b2.1\",\"ts\":0,\"type\":\"system.boot\","
                            "\"body\":{\"boot_id\":\"a1b2c3d4\",\"fw\":\"" FW_VERSION "\",\"reset_reason\":\"power\"}}");
@@ -281,11 +338,11 @@ static void test_heartbeat_cadence(void)
 static void test_heartbeat_skipped_without_link_and_resumes(void)
 {
     setup(1);
-    fw_body_set_link(&body, 0);
+    fw_body_set_link(&body, 0, 1000);
     fake_hal_clear(&fake);
     fw_body_tick(&body, 5000);
     CHECK(fake.out_count == 0 && body.outbox_count == 0); /* heartbeat nie jest buforowany */
-    fw_body_set_link(&body, 1);
+    link_up();
     fw_body_tick(&body, 5001);
     CHECK(fake.out_count == 1 && out_has(0, "body.heartbeat"));
 }
@@ -293,12 +350,12 @@ static void test_heartbeat_skipped_without_link_and_resumes(void)
 static void test_events_are_buffered_in_order_and_flushed(void)
 {
     setup(1);
-    fw_body_set_link(&body, 0);
+    fw_body_set_link(&body, 0, 1000);
     fake_hal_clear(&fake);
     fw_body_button(&body, "b1", 0, 1100);
     fw_body_local_command(&body, "volume_up", "ok", 1200);
     CHECK(fake.out_count == 0 && body.outbox_count == 2);
-    fw_body_set_link(&body, 1);
+    link_up();
     CHECK(fake.out_count == 2 && out_has(0, "\"type\":\"button\"") && out_has(1, "\"type\":\"local.command\""));
     CHECK(out_has(0, "\"ts\":100") && out_has(1, "\"ts\":200")); /* czas powstania, nie wysłania */
 }
@@ -307,7 +364,7 @@ static void test_outbox_drops_oldest_when_full(void)
 {
     unsigned i;
     setup(1);
-    fw_body_set_link(&body, 0);
+    fw_body_set_link(&body, 0, 1000);
     fake_hal_clear(&fake);
     for (i = 0; i < FW_OUTBOX_LEN + 3; i++) {
         char cmd[16];
@@ -315,7 +372,7 @@ static void test_outbox_drops_oldest_when_full(void)
         fw_body_local_command(&body, cmd, "ok", 1000 + i);
     }
     CHECK(body.outbox_count == FW_OUTBOX_LEN && body.dropped_events == 3);
-    fw_body_set_link(&body, 1);
+    link_up();
     CHECK(fake.out_count == (int)FW_OUTBOX_LEN && out_has(0, "\"cmd\":\"c3\""));
 }
 
@@ -327,22 +384,22 @@ static void test_send_failure_marks_link_down_and_buffers(void)
     fw_body_button(&body, "b1", 1, 1500);
     CHECK(!body.link_up && body.outbox_count == 1);
     fake.link_ok = 1;
-    fw_body_set_link(&body, 1);
+    link_up();
     CHECK(fake.out_count == 1 && out_has(0, "\"kind\":\"long\""));
 }
 
 static void test_flush_stops_at_first_failure_keeping_order(void)
 {
     setup(1);
-    fw_body_set_link(&body, 0);
+    fw_body_set_link(&body, 0, 1000);
     fw_body_button(&body, "b1", 0, 1100);
     fw_body_button(&body, "b2", 0, 1200);
     fake_hal_clear(&fake);
     fake.link_ok = 0;
-    fw_body_set_link(&body, 1);
+    link_up();
     CHECK(body.outbox_count == 2 && !body.link_up);
     fake.link_ok = 1;
-    fw_body_set_link(&body, 1);
+    link_up();
     CHECK(fake.out_count == 2 && out_has(0, "\"id\":\"b1\"") && out_has(1, "\"id\":\"b2\""));
 }
 
@@ -420,7 +477,7 @@ static void test_ping_ack_echoes_type_and_ref(void)
     setup(1);
     fake_hal_clear(&fake);
     action("{\"v\":1,\"t\":\"action\",\"id\":\"h7\",\"ts\":5,\"type\":\"ping\",\"body\":{}}");
-    CHECK_STR(last_ack(), "{\"v\":1,\"t\":\"ack\",\"id\":\"a1b2.2\",\"ts\":1000,\"type\":\"ping\",\"body\":{\"ref\":\"h7\",\"ok\":true}}");
+    CHECK_STR(last_ack(), "{\"v\":1,\"t\":\"ack\",\"id\":\"a1b2.3\",\"ts\":1000,\"type\":\"ping\",\"body\":{\"ref\":\"h7\",\"ok\":true}}");
 }
 
 static void test_body_may_be_absent(void)
@@ -645,7 +702,7 @@ static void test_mic_fault_blocks_utterances_and_link_drop_loses_audio(void)
     fw_body_fault(&body, FW_SENSOR_MIC, "dead", 1100);
     CHECK(fw_body_utterance_start(&body, 1200) == 0);
     fw_body_fault_clear(&body, FW_SENSOR_MIC, 1300);
-    fw_body_set_link(&body, 0);
+    fw_body_set_link(&body, 0, 1000);
     fake_hal_clear(&fake);
     CHECK(fw_body_utterance_start(&body, 1400) == 1);
     fw_body_mic_packet(&body, pkt, sizeof(pkt));
@@ -664,8 +721,8 @@ static void test_inactive_device_keeps_quiet_until_told_or_reconnected(void)
     action("{\"v\":1,\"t\":\"action\",\"id\":\"h2\",\"type\":\"device.active\",\"body\":{\"active\":false}}");
     CHECK(strcmp(fake.log, "active 0\n") == 0); /* bez zmiany: bez wywołania sprzętu */
     /* nowe połączenie: aktywne, dopóki host nie powie inaczej (spec, sekcja 1) */
-    fw_body_set_link(&body, 0);
-    fw_body_set_link(&body, 1);
+    fw_body_set_link(&body, 0, 1000);
+    link_up();
     CHECK(body.active == 1 && strcmp(fake.log, "active 0\nactive 1\n") == 0);
     CHECK(fw_body_utterance_start(&body, 2200) == 1);
 }
@@ -677,11 +734,47 @@ static void test_request_active_is_sent_but_never_buffered(void)
     fw_body_request_active(&body, 3000);
     CHECK(fake.out_count == 1 && out_has(0, "\"type\":\"device.activate\",\"body\":{}}"));
     CHECK(out_has(0, "\"t\":\"event\"") && out_has(0, "\"ts\":2000"));
-    fw_body_set_link(&body, 0);
+    fw_body_set_link(&body, 0, 1000);
     fw_body_request_active(&body, 3100);
     CHECK(body.outbox_count == 0);
-    fw_body_set_link(&body, 1);
+    link_up();
     CHECK(fake.out_count == 1);
+}
+
+static void test_caps_go_first_on_every_connection(void)
+{
+    setup(0);
+    fw_body_button(&body, "b1", 0, 1100);
+    fake_hal_clear(&fake);
+    fw_body_set_link(&body, 1, 1500);
+    CHECK(fake.out_count == 3); /* caps, potem zaległe: boot i przycisk */
+    CHECK(out_has(0, "\"type\":\"device.caps\",\"body\":{\"has\":[\"mic\",\"speaker\",\"haptic\","
+                     "\"gpio\",\"battery\"],\"clips\":[\"ready\",\"error\"],\"playback_bytes\":49152,"
+                     "\"playback_packets\":1024}}"));
+    CHECK(out_has(0, "\"ts\":500") && out_has(1, "system.boot") && out_has(2, "\"type\":\"button\""));
+    /* bez łącza caps nie trafiają do bufora; przy następnym połączeniu idą znowu */
+    fake.link_ok = 0;
+    fw_body_set_link(&body, 0, 1600);
+    fw_body_set_link(&body, 1, 1700);
+    CHECK(body.outbox_count == 0 && body.link_up == 0);
+    fake.link_ok = 1;
+    fake_hal_clear(&fake);
+    fw_body_set_link(&body, 1, 1800);
+    CHECK(fake.out_count == 1 && out_has(0, "device.caps"));
+}
+
+static void test_device_without_battery_and_gpio(void)
+{
+    fake_hal_init(&fake, &hal);
+    memset(&settings, 0, sizeof(settings));
+    settings.has = FW_HAS_MIC | FW_HAS_SPEAKER;
+    fw_body_init(&body, &hal, &settings, 1000, 1, "power");
+    fw_body_set_rssi(&body, -40);
+    fake_hal_clear(&fake);
+    fw_body_set_link(&body, 1, 1000);
+    fw_body_tick(&body, 1000);
+    CHECK(out_has(0, "\"has\":[\"mic\",\"speaker\"],\"clips\":[]"));
+    CHECK(out_has(2, "body.heartbeat") && out_has(2, "\"body\":{\"link_rssi\":-40,\"frame_errors\":0}"));
 }
 
 static void test_ram_budget(void)
@@ -695,6 +788,7 @@ int main(void)
     test_writer();
     test_writer_fixed_point();
     test_writer_overflow_and_balance();
+    test_writer_arrays();
     test_parser_accepts_valid_json();
     test_parser_rejects_invalid_json();
     test_parser_token_limit();
@@ -726,6 +820,8 @@ int main(void)
     test_mic_fault_blocks_utterances_and_link_drop_loses_audio();
     test_inactive_device_keeps_quiet_until_told_or_reconnected();
     test_request_active_is_sent_but_never_buffered();
+    test_caps_go_first_on_every_connection();
+    test_device_without_battery_and_gpio();
     test_ram_budget();
     printf("%d sprawdzeń, %d błędów\n", checks, failures);
     return failures ? 1 : 0;

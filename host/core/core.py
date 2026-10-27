@@ -24,6 +24,7 @@ from host.core.protocol import (
     INTERACTION_EVENTS,
     DecodedAck,
     DecodedEvent,
+    DeviceCaps,
     FrameRejected,
     decode_frame,
 )
@@ -122,6 +123,11 @@ class HostCore:
         """Stan urządzenia w bieżącej sesji albo None, gdy się nie łączyło."""
         body = self._bodies.get(device)
         return None if body is None else body.snapshot()
+
+    def device_caps(self, device: str | None) -> DeviceCaps | None:
+        """Ostatnie device.caps urządzenia w tej sesji albo None (możliwości HERMES)."""
+        body = None if device is None else self._bodies.get(device)
+        return None if body is None else body.caps
 
     def known_devices(self) -> list[str]:
         return sorted(self._bodies)

@@ -62,6 +62,10 @@ class SimConfig:
     audio_bitrate_bps: int = 24000
     seed: int = 1
     fw: str = "sim-0.1"
+    # Możliwości urządzenia (device.caps); domyślnie jak HERMES, bufor jak w firmware.
+    has: tuple[str, ...] = ("mic", "speaker", "haptic", "gpio", "battery")
+    playback_bytes: int = 49152
+    playback_packets: int = 1024
 
 
 @dataclass(frozen=True)
@@ -167,8 +171,16 @@ class BodyModel:
         self.buffer.clear()
         return out
 
-    def on_connect(self) -> None:
+    def on_connect(self, now: float) -> Out:
+        """Nowe połączenie: urządzenie aktywne i device.caps do wysłania przed zaległymi zdarzeniami."""
         self.active = True
+        caps = {
+            "has": list(self.cfg.has),
+            "clips": sorted(self.cfg.clips),
+            "playback_bytes": self.cfg.playback_bytes,
+            "playback_packets": self.cfg.playback_packets,
+        }
+        return Out(self._frame("event", "device.caps", caps, now))
 
     # --- upływ czasu ---
 
@@ -181,16 +193,10 @@ class BodyModel:
             return
         if now >= self._next_hb:
             self._next_hb = now + self.cfg.heartbeat_interval_s
-            self._emit_event(
-                "body.heartbeat",
-                {
-                    "batt_pct": _num(self.batt),
-                    "link_rssi": self.cfg.rssi,
-                    "frame_errors": self.frame_errors,
-                },
-                now,
-                bufferable=False,
-            )
+            hb: dict[str, Any] = {"link_rssi": self.cfg.rssi, "frame_errors": self.frame_errors}
+            if "battery" in self.cfg.has:
+                hb = {"batt_pct": _num(self.batt), **hb}
+            self._emit_event("body.heartbeat", hb, now, bufferable=False)
         self._maybe_sensor(now)
 
     def _maybe_sensor(self, now: float) -> None:

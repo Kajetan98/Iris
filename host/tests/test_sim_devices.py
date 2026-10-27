@@ -29,7 +29,7 @@ def test_device_active_action_and_reconnect():
         m.on_host_text(action("device.active", bad), 1.0)
         assert acks(m) == [{"ref": "h1", "ok": False, "err": "bad_body"}]
     assert m.active is False
-    m.on_connect()  # nowe połączenie: aktywne, dopóki host nie powie inaczej
+    m.on_connect(2.0)  # nowe połączenie: aktywne, dopóki host nie powie inaczej
     assert m.active is True
 
 

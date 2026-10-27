@@ -72,11 +72,14 @@ static void set_active(fw_body_t *b, int active)
     }
 }
 
-void fw_body_set_link(fw_body_t *b, int up)
+static void send_caps(fw_body_t *b, uint32_t now_ms);
+
+void fw_body_set_link(fw_body_t *b, int up, uint32_t now_ms)
 {
     b->link_up = up ? 1 : 0;
     if (up) {
         set_active(b, 1);
+        send_caps(b, now_ms);
     }
     while (b->link_up && b->outbox_count) {
         fw_slot_t *slot = &b->outbox[b->outbox_head];
@@ -184,13 +187,43 @@ static void send_heartbeat(fw_body_t *b, uint32_t now_ms)
 {
     fw_jw_t w;
     begin(b, &w, "event", "body.heartbeat", now_ms);
-    fw_jw_key(&w, "batt_pct");
-    fw_jw_fixed(&w, b->batt_x10, 1);
+    if (b->settings.has & FW_HAS_BATTERY) {
+        fw_jw_key(&w, "batt_pct");
+        fw_jw_fixed(&w, b->batt_x10, 1);
+    }
     fw_jw_key(&w, "link_rssi");
     fw_jw_int(&w, b->rssi);
     fw_jw_key(&w, "frame_errors");
     fw_jw_uint(&w, b->frame_errors);
     emit(b, finish(&w), 0);
+}
+
+/* Po każdym zestawieniu łącza, bez buforowania: host zna możliwości także po swoim restarcie. */
+static void send_caps(fw_body_t *b, uint32_t now_ms)
+{
+    static const char *const names[] = {"mic", "speaker", "haptic", "gpio", "battery"};
+    fw_jw_t w;
+    unsigned i;
+    begin(b, &w, "event", "device.caps", now_ms);
+    fw_jw_key(&w, "has");
+    fw_jw_arr_open(&w);
+    for (i = 0; i < 5; i++) {
+        if (b->settings.has & (1u << i)) {
+            fw_jw_str(&w, names[i]);
+        }
+    }
+    fw_jw_arr_close(&w);
+    fw_jw_key(&w, "clips");
+    fw_jw_arr_open(&w);
+    for (i = 0; i < b->settings.clip_count; i++) {
+        fw_jw_str(&w, b->settings.clips[i]);
+    }
+    fw_jw_arr_close(&w);
+    fw_jw_key(&w, "playback_bytes");
+    fw_jw_uint(&w, FW_PLAYBACK_BYTES);
+    fw_jw_key(&w, "playback_packets");
+    fw_jw_uint(&w, FW_PLAYBACK_MAX_PACKETS);
+    emit(b, finish(&w), 0); /* za długa lista klipów: ramka przepada, host przyjmie możliwości HERMES */
 }
 
 static int faulted(const fw_body_t *b, fw_sensor_t s)

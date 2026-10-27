@@ -13,6 +13,7 @@ from host.core.protocol import (
     BodyHeartbeat,
     BodySensor,
     DecodedEvent,
+    DeviceCaps,
     SystemBoot,
 )
 
@@ -32,6 +33,7 @@ class BodyState:
         self.fw: str | None = None
         self.reset_reason: str | None = None
         self.frame_errors: int | None = None
+        self.caps: DeviceCaps | None = None  # ostatnie device.caps w tej sesji
         self._last_heartbeat: float | None = None
         self._last_frame: float | None = None
 
@@ -49,6 +51,8 @@ class BodyState:
             self.faults[body.sensor] = body.code
         elif isinstance(body, BodyFaultClear):
             self.faults.pop(body.sensor, None)
+        elif isinstance(body, DeviceCaps):
+            self.caps = body
         elif isinstance(body, SystemBoot):
             self.boot_id, self.fw, self.reset_reason = body.boot_id, body.fw, body.reset_reason
             self.faults.clear()

@@ -147,7 +147,7 @@ static void on_open(void *ctx)
     (void)ctx;
     backoff = FW_RECONNECT_MIN_MS; /* udane połączenie zeruje opóźnienie (spec, sekcja 1) */
     printf("link up\n");
-    fw_body_set_link(&body, 1);
+    fw_body_set_link(&body, 1, now_ms());
 }
 
 static void on_message(void *ctx, int binary, const uint8_t *data, size_t len)
@@ -170,7 +170,7 @@ static void on_close(void *ctx, uint16_t code)
 {
     (void)ctx;
     printf("link down %u %s\n", code, ws.error ? ws.error : "-");
-    fw_body_set_link(&body, 0);
+    fw_body_set_link(&body, 0, now_ms());
     close_socket();
     ws_up = 0;
     schedule_retry(now_ms());
@@ -714,6 +714,7 @@ int main(int argc, char **argv)
         settings.clips[i] = clips[i];
     }
     settings.clip_count = 4;
+    settings.has = FW_HAS_ALL;
 
     setvbuf(stdout, NULL, _IOLBF, 0);
     signal(SIGPIPE, SIG_IGN);

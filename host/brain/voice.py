@@ -50,14 +50,21 @@ class VoiceTurn:
     spoken: Spoken
 
 
-def fit_body_buffer(packets: list[bytes], audio: AudioConfig) -> list[bytes]:
-    """Najdłuższy początek odpowiedzi, który mieści się w buforze odtwarzania ciała."""
+def fit_body_buffer(
+    packets: list[bytes], audio: AudioConfig, limits: tuple[int, int] | None = None
+) -> list[bytes]:
+    """Najdłuższy początek odpowiedzi, który mieści się w buforze odtwarzania ciała.
+
+    limits: (bajty, pakiety) urządzenia; liczy się mniejsza z wartości urządzenia i konfiguracji."""
+    max_bytes, max_packets = audio.body_buffer_bytes, audio.body_max_packets
+    if limits is not None:
+        max_bytes, max_packets = min(max_bytes, limits[0]), min(max_packets, limits[1])
     total = 0
-    for i, p in enumerate(packets[: audio.body_max_packets]):
+    for i, p in enumerate(packets[:max_packets]):
         total += len(p)
-        if total > audio.body_buffer_bytes:
+        if total > max_bytes:
             return packets[:i]
-    return packets[: audio.body_max_packets]
+    return packets[:max_packets]
 
 
 def split_sentences(text: str) -> list[str]:
@@ -77,6 +84,7 @@ class VoicePipeline:
         min_text_chars: int = 2,
         decoder_factory: Callable[[], OpusDecoder] = OpusDecoder,
         sleep: Callable[[float], Awaitable[None]] = asyncio.sleep,
+        limits: Callable[[], tuple[int, int] | None] = lambda: None,
     ) -> None:
         self._stt = stt
         self._tts = tts
@@ -86,6 +94,7 @@ class VoicePipeline:
         self._audio = audio
         self._min_text_chars = min_text_chars
         self._sleep = sleep
+        self._limits = limits  # bufor odtwarzania urządzenia, które dostanie odpowiedź
         self.assembler = UtteranceAssembler(audio, decoder_factory)
         self._say_lock = asyncio.Lock()
         self._next_audio_id = 1
@@ -145,7 +154,7 @@ class VoicePipeline:
         async with self._say_lock:
             pcm, sentences, shortened = await self._synthesize_limited(text)
             packets = await asyncio.to_thread(encode_speech, pcm, self._audio.playback_rate_hz, self._audio)
-            fitted = fit_body_buffer(packets, self._audio)
+            fitted = fit_body_buffer(packets, self._audio, self._limits())
             if len(fitted) < len(packets):
                 log.warning("odpowiedź ucięta do %d z %d pakietów (bufor ciała)", len(fitted), len(packets))
                 shortened = True

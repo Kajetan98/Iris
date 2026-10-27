@@ -14,12 +14,15 @@ typedef struct {
     size_t len;
     int overflow;
     int depth;
-    uint8_t first[8]; /* czy następny element obiektu na danym poziomie jest pierwszy */
+    uint8_t first[8]; /* czy następny element na danym poziomie jest pierwszy */
+    uint8_t arr[8];   /* poziom jest tablicą: przecinki przed wartościami, nie przed kluczami */
 } fw_jw_t;
 
 void fw_jw_init(fw_jw_t *w, char *buf, size_t cap);
 void fw_jw_open(fw_jw_t *w);   /* { */
 void fw_jw_close(fw_jw_t *w);  /* } */
+void fw_jw_arr_open(fw_jw_t *w);   /* [ */
+void fw_jw_arr_close(fw_jw_t *w);  /* ] */
 void fw_jw_key(fw_jw_t *w, const char *key);
 void fw_jw_str(fw_jw_t *w, const char *s);
 void fw_jw_int(fw_jw_t *w, int32_t v);

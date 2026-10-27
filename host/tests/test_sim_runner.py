@@ -69,7 +69,7 @@ def test_boot_comes_first_then_heartbeats():
             runner = runner_for(port)
             task = await start(runner)
             await until(lambda: host.types().count("body.heartbeat") >= 3)
-            assert host.types()[0] == "system.boot"
+            assert host.types()[:2] == ["device.caps", "system.boot"]  # możliwości przed zaległymi
             await finish(runner, task)
 
     asyncio.run(scenario())
@@ -148,7 +148,8 @@ def test_drop_buffers_events_and_reconnects_in_order():
             runner.command("local mute_mic")
             await until(lambda: runner.connections == 2)
             second = host.types(2)
-            assert second[:2] == ["button", "local.command"]  # zaległe zdarzenia przed bieżącym ruchem
+            # możliwości, potem zaległe zdarzenia, potem bieżący ruch
+            assert second[:3] == ["device.caps", "button", "local.command"]
             assert "system.boot" not in second  # to samo ciało, nie restart
             await until(lambda: "body.heartbeat" in host.types(2))
             await finish(runner, task)

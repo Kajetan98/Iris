@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 from host.core.clock import ManualClock
+from host.core.config import Config
 from host.core.core import HostCore
 from host.core.protocol import (
     AckBody,
@@ -52,7 +53,7 @@ def fwlib(tmp_path_factory):
     u32, i32, sz, cstr, bytes_p = ctypes.c_uint32, ctypes.c_int32, ctypes.c_size_t, ctypes.c_char_p, ctypes.c_char_p
     sig = {
         "ffi_init": ([u32, u32, cstr, bytes_p, ctypes.c_int], None),
-        "ffi_link": ([ctypes.c_int], None),
+        "ffi_link": ([ctypes.c_int, u32], None),
         "ffi_transport_ok": ([ctypes.c_int], None),
         "ffi_tick": ([u32], None),
         "ffi_on_text": ([bytes_p, sz, u32], None),
@@ -96,7 +97,7 @@ class Firmware:
         self.lib.ffi_set_rssi(-61)
 
     def link(self, up=True):
-        self.lib.ffi_link(1 if up else 0)
+        self.lib.ffi_link(1 if up else 0, 1000)
 
     def outputs(self):
         out = []
@@ -447,3 +448,17 @@ def test_busy_while_playing(fw):
 
 def test_ram_budget_is_what_the_config_says(fw):
     assert fw.lib.ffi_sizeof_body() == 71968
+
+
+def test_caps_match_the_simulator_and_the_host_defaults(fw):
+    fw.clear()
+    fw.link()
+    first = decode_frame(fw.outputs()[0][1])
+    assert first.type == "device.caps"
+    sim = decode_frame(BodyModel(SimConfig(gpio_pins=frozenset(PINS)), 0.0).on_connect(0.0).data)
+    c_caps, py_caps = first.body, sim.body
+    assert c_caps.has == py_caps.has == ["mic", "speaker", "haptic", "gpio", "battery"]
+    assert sorted(c_caps.clips) == py_caps.clips
+    audio = Config().brain.audio
+    assert (c_caps.playback_bytes, c_caps.playback_packets) == (audio.body_buffer_bytes, audio.body_max_packets)
+    assert (py_caps.playback_bytes, py_caps.playback_packets) == (audio.body_buffer_bytes, audio.body_max_packets)

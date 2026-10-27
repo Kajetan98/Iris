@@ -147,7 +147,7 @@ class SimRunner:
     async def _attach(self, ws: ClientConnection) -> None:
         """Najpierw zbuforowane zdarzenia, potem bieżący ruch. Bez await między ostatnim
         odczytem bufora a ustawieniem _ws, więc nic nie wyprzedzi zaległych zdarzeń."""
-        self.model.on_connect()
+        await ws.send(self.model.on_connect(self.clock()).data)
         while True:
             pending = self.model.take_buffer()
             if not pending:

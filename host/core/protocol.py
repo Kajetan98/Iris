@@ -59,7 +59,7 @@ class SystemBoot(_Body):
 
 
 class BodyHeartbeat(_Body):
-    batt_pct: float = Field(ge=0, le=100)
+    batt_pct: float | None = Field(None, ge=0, le=100)  # brak: urządzenie bez baterii
     link_rssi: int
     frame_errors: int | None = None
 
@@ -103,6 +103,18 @@ class DeviceActivate(_Body):
     pass
 
 
+CAPABILITIES = ("mic", "speaker", "haptic", "gpio", "battery")
+
+
+class DeviceCaps(_Body):
+    """Możliwości urządzenia (spec, sekcja 1). Nieznane nazwy w `has` są pomijane."""
+
+    has: list[str] = Field(default_factory=list)
+    clips: list[str] = Field(default_factory=list)
+    playback_bytes: int | None = Field(None, gt=0)
+    playback_packets: int | None = Field(None, gt=0)
+
+
 EVENT_MODELS: dict[str, type[_Body]] = {
     "system.boot": SystemBoot,
     "body.heartbeat": BodyHeartbeat,
@@ -114,6 +126,7 @@ EVENT_MODELS: dict[str, type[_Body]] = {
     "local.command": LocalCommand,
     "button": Button,
     "device.activate": DeviceActivate,
+    "device.caps": DeviceCaps,
 }
 
 # Zdarzenia, które liczą się jako interakcja użytkownika (spec, sekcje 3 i 8).

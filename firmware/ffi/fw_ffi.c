@@ -16,6 +16,7 @@ void ffi_init(uint32_t now_ms, uint32_t random32, const char *reset_reason, cons
     int i;
     fake_hal_init(&fake, &hal);
     memset(&settings, 0, sizeof(settings));
+    settings.has = FW_HAS_ALL;
     for (i = 0; i < npins && i < (int)FW_GPIO_MAX; i++) {
         settings.gpio_pins[i] = pins[i];
     }
@@ -27,8 +28,8 @@ void ffi_init(uint32_t now_ms, uint32_t random32, const char *reset_reason, cons
     fw_body_init(&body, &hal, &settings, now_ms, random32, reset_reason);
 }
 
-void ffi_link(int up);
-void ffi_link(int up) { fw_body_set_link(&body, up); }
+void ffi_link(int up, uint32_t now_ms);
+void ffi_link(int up, uint32_t now_ms) { fw_body_set_link(&body, up, now_ms); }
 void ffi_transport_ok(int ok);
 void ffi_transport_ok(int ok) { fake.link_ok = ok; }
 void ffi_tick(uint32_t now_ms);
