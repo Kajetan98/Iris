@@ -224,6 +224,19 @@ def test_token_in_the_browser():
         stop(*server)
 
 
+@pytest.mark.parametrize("reduced", [False, True])
+def test_voice_wave_is_drawn(reduced):
+    port = free_port()
+    server = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=None), port)
+    try:
+        out = browser("connectOnly", f"http://127.0.0.1:{port}", device="laptop", token="", stayMs=800,
+                      reducedMotion=reduced)
+    finally:
+        stop(*server)
+    assert out["state"] == "Przytrzymaj przycisk i mów"
+    assert out["waveLit"] > 200, out["waveLit"]  # linia fali w spoczynku, także bez ruchu
+
+
 def test_installable_app():
     port = free_port()
     server = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=None), port)
@@ -234,7 +247,7 @@ def test_installable_app():
     m = out["manifest"]
     assert (m["name"], m["start_url"], m["display"]) == ("IRIS", "/app/", "standalone")
     assert {i["sizes"] for i in m["icons"]} >= {"192x192", "512x512"}
-    assert {"/app/", "/app/app.js", "/app/protocol.js", "/app/aperture.js", "/app/icon-512.png"} <= set(out["cached"])
+    assert {"/app/", "/app/app.js", "/app/protocol.js", "/app/wave.js", "/app/icon-512.png"} <= set(out["cached"])
     assert out["secure"]
 
 

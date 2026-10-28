@@ -3,8 +3,8 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="theme-color" content="#e6e9ec" media="(prefers-color-scheme: light)">
-  <meta name="theme-color" content="#15181c" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#07060b">
+  <meta name="color-scheme" content="dark">
   <meta name="description" content="Rozmowa głosowa z IRIS przez mikrofon i głośnik tego urządzenia">
   <title>IRIS</title>
   <link rel="manifest" href="manifest.json">
@@ -14,7 +14,7 @@
 </head>
 <body data-state="offline" data-link="down">
   <header class="bar">
-    <span class="wordmark">IRIS</span>
+    <svg class="wordmark" viewBox="204 423 616 177" role="img" aria-label="IRIS"><g fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><path d="M225 424V583A16 16 0 0 1 209 599H205V440A16 16 0 0 1 221 424Z"/><path d="M286 424H427.5A48.5 48.5 0 0 1 427.5 521H357A48 48 0 0 0 309 569V594H289V569A68 68 0 0 1 357 501H427.5A28.5 28.5 0 0 0 427.5 444H291Z"/><path d="M403 521H430L498 594H471Z"/><path d="M583 424V583A16 16 0 0 1 567 599H563V440A16 16 0 0 1 579 424Z"/><path d="M796 424A20 20 0 0 1 776 444H697.5A28.5 28.5 0 0 0 697.5 501H769.5A48.5 48.5 0 0 1 769.5 598H660A20 20 0 0 1 680 578H769.5A28.5 28.5 0 0 0 769.5 521H697.5A48.5 48.5 0 0 1 697.5 424Z"/></g></svg>
     <span class="link" id="status" title="Połączenie z hostem">nie połączono</span>
     <button class="icon-button" id="open-settings" type="button" aria-label="Ustawienia połączenia">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
@@ -27,7 +27,7 @@
 
   <main class="stage">
     <section class="presence" aria-label="IRIS">
-      <canvas id="aperture" class="aperture" aria-hidden="true"></canvas>
+      <canvas id="wave" class="wave" aria-hidden="true"></canvas>
       <p id="state" class="state" role="status" aria-live="polite">Brak połączenia z hostem</p>
     </section>
 

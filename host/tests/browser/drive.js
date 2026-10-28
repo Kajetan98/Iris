@@ -145,6 +145,14 @@ const scenarios = {
       notice: await page.textContent("#notice"),
       talkDisabled: await page.locator("#talk").isDisabled(),
       caps: await page.evaluate(() => window.iris.body.caps()),
+      // jasne piksele fali na canvas (fala jest narysowana)
+      waveLit: await page.evaluate(() => {
+        const c = document.getElementById("wave");
+        const d = c.getContext("2d").getImageData(0, 0, c.width, c.height).data;
+        let n = 0;
+        for (let i = 3; i < d.length; i += 4) if (d[i] > 200) n++;
+        return n;
+      }),
     };
   },
 
@@ -173,7 +181,11 @@ const scenarios = {
   const browser = await chromium.launch({
     args: ["--use-fake-device-for-media-stream", "--use-fake-ui-for-media-stream", "--autoplay-policy=no-user-gesture-required"],
   });
-  const context = await browser.newContext({ ignoreHTTPSErrors: true, permissions: ["microphone"] });
+  const context = await browser.newContext({
+    ignoreHTTPSErrors: true,
+    permissions: ["microphone"],
+    reducedMotion: opts.reducedMotion ? "reduce" : "no-preference",
+  });
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (e) => errors.push(String(e)));

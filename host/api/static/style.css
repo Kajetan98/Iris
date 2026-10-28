@@ -1,17 +1,18 @@
-/* IRIS w przeglądarce: przysłona i napisy. Jeden mocny element (przysłona), reszta cicha. */
+/* IRIS w przeglądarce: fala głosu i napisy na ciemnym tle. Fala jest jedynym barwnym elementem. */
 
 :root {
-  /* dzień: grafit na mglistej szarości */
-  --mist: #e6e9ec;
-  --surface: #f5f6f7;
-  --ink: #1e2227;
-  --ink-2: #4d555e;
-  --line: #c3c9cf;
-  --blade: #2b3036;
-  --seam: #4a525b;
-  --focus: #1f5f85;
-  --press: #1f5f85;
-  --warn: #8a3b12;
+  --bg: #07060b;
+  --haze: #1a1224; /* poświata tła za falą */
+  --surface: #13111a;
+  --field: #0c0b11;
+  --ink: #eeedf3;
+  --ink-2: #a8a4b6;
+  --line: #2c2938;
+  --edge: rgb(255 255 255 / 0.26); /* obrys przycisków */
+  --you: #8fb3ff; /* Twoje słowa: chłodny kolor fali przy słuchaniu */
+  --focus: #9db8ff;
+  --warn: #ffb08a;
+  --voice: linear-gradient(100deg, #2f62e6, #6a45dc 55%, #a8408a); /* kolory fali, przycisk wciśnięty */
 
   --speech: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", "URW Palladio L", Georgia, serif;
   --ui: "Avenir Next", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -21,27 +22,9 @@
   --step-1: 1.2rem;
   --step-speech: clamp(1.45rem, 1.05rem + 1.9vw, 2.1rem);
 
-  --gap: 1rem;
   --radius-control: 999px;
   --radius-sheet: 1.25rem;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* noc: przysłona jaśniejsza od tła, żeby listki było widać */
-    --mist: #15181c;
-    --surface: #1e2227;
-    --ink: #e3e7eb;
-    --ink-2: #a3acb6;
-    --line: #353c44;
-    --blade: #2e343b;
-    --seam: #59626c;
-    --focus: #8cc3e6;
-    --press: #8cc3e6;
-    --warn: #f0a77d;
-    color-scheme: dark;
-  }
+  color-scheme: dark;
 }
 
 *,
@@ -50,17 +33,18 @@
   box-sizing: border-box;
 }
 
-html,
-body {
+html {
   height: 100%;
+  background: var(--bg);
 }
 
 body {
   margin: 0;
+  height: 100%;
+  min-height: 100dvh;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  min-height: 100dvh;
-  background: var(--mist);
+  background: radial-gradient(ellipse 90% 45% at 50% 26%, var(--haze), transparent 70%) var(--bg);
   color: var(--ink);
   font: var(--step-0) / 1.5 var(--ui);
   -webkit-text-size-adjust: 100%;
@@ -87,10 +71,12 @@ input {
     max(1rem, env(safe-area-inset-left));
 }
 
+/* logo IRIS (wektor w index.html, kolor tekstu) */
 .wordmark {
-  font-family: var(--speech);
-  font-size: var(--step-1);
-  letter-spacing: 0.08em;
+  display: block;
+  height: 1.05rem;
+  width: auto;
+  color: var(--ink);
 }
 
 .link {
@@ -135,37 +121,30 @@ input {
   stroke-linecap: round;
 }
 
-/* --- scena: przysłona i napisy --- */
+/* --- scena: fala i napisy --- */
 
 .stage {
   display: grid;
   grid-template-rows: auto 1fr;
   min-height: 0;
-  padding: 0 max(1.25rem, env(safe-area-inset-right)) 0 max(1.25rem, env(safe-area-inset-left));
 }
 
 .presence {
   display: grid;
   justify-items: center;
-  gap: 0.75rem;
-  padding: 0.5rem 0 1rem;
+  padding: 0.25rem 0 0.75rem;
 }
 
-.aperture {
-  width: min(72vw, 38dvh, 24rem);
-  aspect-ratio: 1;
-  transition: opacity 400ms ease-out;
-}
-
-/* bez połączenia i w spoczynku przysłona jest przygaszona */
-[data-state="offline"] .aperture,
-[data-state="connecting"] .aperture,
-[data-state="inactive"] .aperture {
-  opacity: 0.5;
+/* fala na całą szerokość ekranu, bez marginesów */
+.wave {
+  display: block;
+  width: 100%;
+  height: clamp(9rem, 30dvh, 17rem);
 }
 
 .state {
-  margin: 0;
+  margin: -0.5rem 0 0;
+  padding: 0 1.25rem;
   min-height: 1.5em;
   color: var(--ink-2);
   text-align: center;
@@ -173,12 +152,14 @@ input {
 
 .talk-log {
   width: 100%;
-  max-width: 36rem;
+  max-width: 38rem;
   margin: 0 auto;
   min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-bottom: 1rem;
+  padding: 0.75rem max(1.25rem, env(safe-area-inset-right)) 1rem max(1.25rem, env(safe-area-inset-left));
+  /* starsze napisy chowają się pod falą łagodnie, bez ostrej krawędzi */
+  mask-image: linear-gradient(to bottom, transparent, #000 1.5rem);
 }
 
 .hint {
@@ -202,7 +183,7 @@ input {
 
 /* wcześniejsze tury cichsze, bieżąca pełnym kolorem */
 .turn:not(:last-child) {
-  opacity: 0.62;
+  opacity: 0.55;
 }
 
 .heard {
@@ -212,7 +193,7 @@ input {
 
 .who {
   font-weight: 600;
-  color: var(--ink);
+  color: var(--you);
 }
 
 .reply {
@@ -233,7 +214,7 @@ input {
 }
 
 .word.pending {
-  opacity: 0.18;
+  opacity: 0.2;
 }
 
 .note {
@@ -274,16 +255,20 @@ input {
   gap: 0.6rem;
   width: min(100%, 26rem);
   min-height: 4.5rem;
-  border: 2px solid var(--ink);
+  border: 1.5px solid var(--edge);
   border-radius: var(--radius-control);
-  background: var(--surface);
+  background: rgb(255 255 255 / 0.04);
   font-size: var(--step-1);
   cursor: pointer;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   -webkit-touch-callout: none;
-  transition: transform 120ms ease-out, background-color 120ms ease-out;
+  transition: transform 120ms ease-out, border-color 120ms ease-out;
+}
+
+.talk:hover:not(:disabled) {
+  border-color: rgb(255 255 255 / 0.5);
 }
 
 .talk svg {
@@ -296,14 +281,14 @@ input {
 }
 
 .talk[aria-pressed="true"] {
-  background: var(--press);
-  border-color: var(--press);
-  color: var(--surface);
+  background: var(--voice);
+  border-color: transparent;
+  color: #fff;
   transform: scale(0.98);
 }
 
 .talk:disabled {
-  opacity: 0.4;
+  opacity: 0.38;
   cursor: default;
 }
 
@@ -316,7 +301,7 @@ button.secondary,
 .actions button {
   min-height: 2.9rem;
   padding: 0.55rem 1.25rem;
-  border: 1.5px solid var(--ink);
+  border: 1.5px solid var(--edge);
   border-radius: var(--radius-control);
   background: transparent;
   cursor: pointer;
@@ -324,7 +309,8 @@ button.secondary,
 
 .actions button[type="submit"] {
   background: var(--ink);
-  color: var(--mist);
+  border-color: var(--ink);
+  color: var(--bg);
 }
 
 /* --- ustawienia --- */
@@ -339,7 +325,7 @@ button.secondary,
 }
 
 .sheet::backdrop {
-  background: rgb(10 12 14 / 0.45);
+  background: rgb(0 0 0 / 0.6);
 }
 
 .sheet h2 {
@@ -363,7 +349,7 @@ button.secondary,
   padding: 0.5rem 0.75rem;
   border: 1.5px solid var(--line);
   border-radius: 0.6rem;
-  background: var(--mist);
+  background: var(--field);
 }
 
 .sheet input:user-invalid {
@@ -383,59 +369,24 @@ button.secondary,
   margin-top: 1.5rem;
 }
 
-/* --- komputer: przysłona po lewej, rozmowa po prawej --- */
+/* --- komputer: wyższa fala, napisy w kolumnie pod nią --- */
 
 @media (min-width: 900px) and (min-height: 560px) {
-  body {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
-    grid-template-rows: auto 1fr auto;
-  }
-
-  .bar {
-    grid-column: 1 / -1;
-  }
-
-  .stage {
-    display: contents;
-  }
-
-  .presence {
-    grid-column: 1;
-    grid-row: 2 / 4;
-    align-content: center;
-  }
-
-  .aperture {
-    width: min(34vw, 60dvh, 26rem);
+  .wave {
+    height: clamp(12rem, 36dvh, 22rem);
   }
 
   .talk-log {
-    grid-column: 2;
-    grid-row: 2;
-    align-self: end;
-    margin: 0;
-    padding: 2rem 2rem 1rem 0;
+    max-width: 42rem;
   }
 
-  .hint {
-    text-align: left;
-  }
-
-  .dock {
-    grid-column: 2;
-    grid-row: 3;
-    justify-items: start;
-    padding-left: 0;
-  }
-
-  .notice {
-    text-align: left;
+  .reply {
+    max-width: 34ch;
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .word,
-  .aperture,
   .talk {
     transition: none;
   }

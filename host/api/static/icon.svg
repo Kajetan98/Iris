@@ -1,5 +1,38 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="96" fill="#1d2b3a"/>
-  <circle cx="256" cy="256" r="150" fill="none" stroke="#6ea8e0" stroke-width="28"/>
-  <circle cx="256" cy="256" r="62" fill="#6ea8e0"/>
+  <defs>
+    <linearGradient id="warm" x1="56" x2="456" y1="0" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ff8a5c" stop-opacity="0"/>
+      <stop offset="0.25" stop-color="#c45cff"/>
+      <stop offset="0.5" stop-color="#3d7bff"/>
+      <stop offset="0.75" stop-color="#ff6fa0"/>
+      <stop offset="1" stop-color="#ff8a5c" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="56" x2="456" y1="0" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8b5cf6" stop-opacity="0"/>
+      <stop offset="0.45" stop-color="#ffd84a"/>
+      <stop offset="1" stop-color="#ff6fa0" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="white" x1="56" x2="456" y1="0" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset="0.3" stop-color="#fff"/>
+      <stop offset="0.7" stop-color="#fff"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="haze" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#3a1f52"/>
+      <stop offset="1" stop-color="#07060b" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-20%" y="-50%" width="140%" height="200%">
+      <feGaussianBlur stdDeviation="9" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="512" height="512" rx="96" fill="#07060b"/>
+  <ellipse cx="256" cy="300" rx="220" ry="150" fill="url(#haze)"/>
+  <g fill="none" stroke-linecap="round" filter="url(#glow)" transform="translate(0 186) scale(1 0.6)">
+    <path d="M56 256 C140 256 160 186 216 196 S262 330 312 300 S372 214 456 256" stroke="url(#warm)" stroke-width="16"/>
+    <path d="M56 256 C150 256 170 300 224 296 S284 190 330 214 S400 262 456 256" stroke="url(#gold)" stroke-width="10"/>
+    <path d="M56 256 C150 256 180 214 236 230 S290 290 336 270 S410 252 456 256" stroke="url(#white)" stroke-width="6"/>
+  </g>
+  <g transform="translate(-18.29 -54.02) scale(0.5357)" fill="#fff" stroke="#fff" stroke-width="1" stroke-linejoin="round"><path d="M225 424V583A16 16 0 0 1 209 599H205V440A16 16 0 0 1 221 424Z"/><path d="M286 424H427.5A48.5 48.5 0 0 1 427.5 521H357A48 48 0 0 0 309 569V594H289V569A68 68 0 0 1 357 501H427.5A28.5 28.5 0 0 0 427.5 444H291Z"/><path d="M403 521H430L498 594H471Z"/><path d="M583 424V583A16 16 0 0 1 567 599H563V440A16 16 0 0 1 579 424Z"/><path d="M796 424A20 20 0 0 1 776 444H697.5A28.5 28.5 0 0 0 697.5 501H769.5A48.5 48.5 0 0 1 769.5 598H660A20 20 0 0 1 680 578H769.5A28.5 28.5 0 0 0 769.5 521H697.5A48.5 48.5 0 0 1 697.5 424Z"/></g>
 </svg>

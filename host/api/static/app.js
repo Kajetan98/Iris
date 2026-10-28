@@ -1,7 +1,7 @@
 // Klient IRIS w przeglądarce (docs/spec.md, sekcja 1, "Klient w przeglądarce").
-// Przysłona IRIS, napisy rozmowy, mowa z przyciskiem (WebCodecs Opus) i odtwarzanie odpowiedzi.
+// Fala głosu IRIS, napisy rozmowy, mowa z przyciskiem (WebCodecs Opus) i odtwarzanie odpowiedzi.
 
-import { Aperture } from "./aperture.js";
+import { Wave } from "./wave.js";
 import { Body, validDeviceId } from "./protocol.js";
 
 const RATE = 16000; // spec, sekcja 6
@@ -76,7 +76,7 @@ const has = ["speaker", "display"];
 if (supported && navigator.mediaDevices?.getUserMedia) has.unshift("mic");
 if (navigator.vibrate) has.push("haptic");
 
-const aperture = new Aperture($("aperture"), { level: currentLevel, reducedMotion });
+const wave = new Wave($("wave"), { level: currentLevel, reducedMotion });
 
 const body = new Body({
   has,
@@ -123,7 +123,7 @@ function setUi(next) {
       setUi(restState());
     }, THINKING_TIMEOUT_MS);
   }
-  aperture.setState(next);
+  wave.setState(next);
   render();
 }
 
@@ -389,13 +389,14 @@ function rms(samples) {
   return Math.sqrt(sum / (samples.length || 1));
 }
 
-// Poziom dla przysłony: głos IRIS podczas mówienia, mikrofon podczas słuchania (0-1).
+// Poziom dla fali: głos IRIS podczas mówienia, mikrofon podczas słuchania (0-1).
+// Pierwiastek z RMS: cicha mowa też porusza falą, głośna nie wybija jej od razu do maksimum.
 function currentLevel() {
   if (state.ui === "speaking" && state.analyser) {
     state.analyser.getFloatTimeDomainData(state.levelBuf);
-    return Math.min(1, rms(state.levelBuf) * 6);
+    return Math.min(1, Math.sqrt(rms(state.levelBuf)) * 1.9);
   }
-  if (state.ui === "listening") return Math.min(1, state.micLevel * 8);
+  if (state.ui === "listening") return Math.min(1, Math.sqrt(state.micLevel) * 2.4);
   return 0;
 }
 
