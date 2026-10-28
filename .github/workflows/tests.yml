@@ -1,0 +1,43 @@
+# Testy przy każdym push i pull request: host (z klientem w Chromium) i firmware (natywnie, ASan i UBSan).
+name: testy
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  testy:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.11", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Biblioteki systemowe (PortAudio dla client/, valgrind dla firmware)
+        run: sudo apt-get update && sudo apt-get install -y libportaudio2 valgrind
+
+      - name: Zależności Pythona
+        run: pip install -e ".[dev,voice,desktop]"
+
+      - name: Playwright z Chromium (testy klienta w przeglądarce)
+        run: |
+          npm install --no-save playwright@1.63.0
+          npx playwright install --with-deps chromium
+
+      - name: Testy hosta
+        run: pytest host/tests -q
+
+      - name: Testy firmware
+        run: |
+          make -C firmware test
+          make -C firmware valgrind

@@ -4,3 +4,15 @@ __pycache__/
 .venv/
 *.db
 firmware/build/
+build/
+*.egg-info/
+node_modules/
+# lokalna konfiguracja, certyfikaty i sekrety (wzór konfiguracji: iris.example.toml)
+iris.toml
+*.pem
+*.key
+.env
+# głosy Pipera i modele (duże pliki, pobierane osobno)
+voices/
+*.onnx
+*.onnx.json

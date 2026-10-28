@@ -1,0 +1,25 @@
+# Przykładowa konfiguracja IRIS. Skopiuj do iris.toml (nie trafia do repozytorium):
+#   cp iris.example.toml iris.toml && export IRIS_CONFIG=iris.toml
+# Wszystkie opcje i wartości domyślne: host/core/config.py. Token i klucz API ustawia się tylko
+# w zmiennych środowiskowych (IRIS_TOKEN, ANTHROPIC_API_KEY), nigdy w tym pliku.
+
+[store]
+path = "iris.db"
+
+[brain.llm]
+engine = "ollama"            # albo "claude" (klucz w ANTHROPIC_API_KEY) albo "none" (bez rozmowy)
+model = "llama3.1"           # przykład: dowolny model pobrany w Ollamie
+send_facts = "local_only"    # zapamiętane fakty trafiają tylko do lokalnego modelu
+
+[brain.stt]
+engine = "faster-whisper"
+model = "small"              # pobierany z Hugging Face przy pierwszym uruchomieniu
+
+[brain.tts]
+engine = "piper"
+voice = "voices/pl_PL-gosia-medium.onnx"   # obok plik .onnx.json; głos trzeba pobrać ręcznie
+
+# Odmiany nazw urządzeń w komendzie "przełącz na ..."
+[devices.aliases]
+telefon = ["telefonu", "komórkę"]
+laptop = ["laptopa", "komputer", "komputera"]

@@ -210,3 +210,19 @@ def test_speech_limit_fits_with_defaults_and_smaller_settings():
     assert (a.body_buffer_bytes, a.body_max_packets) == (49152, 1024)
     Config.model_validate({"brain": {"audio": {"bitrate_bps": 32000, "max_speech_s": 10}}})
     Config.model_validate({"brain": {"audio": {"frame_ms": 40, "max_speech_s": 15}}})
+
+
+def test_example_config_is_valid_and_has_no_secrets():
+    from pathlib import Path
+
+    from host.core.commands import resolve_device
+
+    path = Path(__file__).parents[2] / "iris.example.toml"
+    cfg = Config.load(path)
+    assert (cfg.brain.llm.engine, cfg.brain.stt.engine, cfg.brain.tts.engine) == ("ollama", "faster-whisper", "piper")
+    assert cfg.brain.llm.send_facts == "local_only"
+    # aliasy z przykładu działają w komendzie "przełącz na ..."
+    assert resolve_device("komputer", {"laptop", "telefon"}, cfg.devices.aliases) == ["laptop"]
+    # token i klucz API tylko w zmiennych środowiskowych (spec, sekcja 1; CLAUDE.md)
+    text = path.read_text().lower()
+    assert "api_key" not in text.replace("anthropic_api_key", "") and "token =" not in text

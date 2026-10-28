@@ -1,0 +1,31 @@
+# IRIS jako usługa systemd użytkownika (komputer z Linuksem albo Raspberry Pi): host startuje sam
+# po włączeniu komputera i wraca po awarii, więc aplikacja na telefonie zawsze ma z czym rozmawiać.
+#
+# Zakłada repozytorium w ~/iris ze środowiskiem ~/iris/.venv i konfiguracją ~/iris/iris.toml.
+# Instalacja:
+#   mkdir -p ~/.config/systemd/user ~/.config/iris
+#   cp deploy/iris.service ~/.config/systemd/user/
+#   echo "IRIS_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" > ~/.config/iris/env
+#   chmod 600 ~/.config/iris/env
+#   systemctl --user daemon-reload && systemctl --user enable --now iris
+#   sudo loginctl enable-linger "$USER"     # start bez logowania się na komputerze
+# Logi: journalctl --user -u iris -f
+#
+# Host słucha na 127.0.0.1 (tunel do telefonu łączy się lokalnie). Dla HERMES w sieci domowej
+# zmień --host na 0.0.0.0; token w ~/.config/iris/env jest wtedy konieczny.
+
+[Unit]
+Description=IRIS (host asystenta głosowego)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/iris
+EnvironmentFile=%h/.config/iris/env
+Environment=IRIS_CONFIG=%h/iris/iris.toml
+ExecStart=%h/iris/.venv/bin/python -m uvicorn host.api.main:app --host 127.0.0.1 --port 8000
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=default.target

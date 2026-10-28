@@ -9,32 +9,24 @@ Szczegóły protokołu i modelu stanu: [docs/spec.md](docs/spec.md).
 Wymaga Pythona 3.11 lub nowszego.
 
 ```sh
-pip install pydantic fastapi uvicorn websockets httpx anthropic
-pip install faster-whisper piper-tts av numpy        # mowa
+git clone https://github.com/Kajetan98/Iris.git iris && cd iris
+python3 -m venv .venv && . .venv/bin/activate
+pip install -e ".[voice]"            # host z mową; bez mowy: pip install -e .
+cp iris.example.toml iris.toml       # konfiguracja: LLM, rozpoznawanie i synteza mowy
 export IRIS_TOKEN=$(python -c "import secrets; print(secrets.token_urlsafe(32))")
 export IRIS_CONFIG=iris.toml
 uvicorn host.api.main:app --host 127.0.0.1 --port 8000
 ```
 
-Przykładowy `iris.toml` z mową i lokalnym LLM (Ollama):
-
-```toml
-[brain.llm]
-engine = "ollama"
-model = "llama3.1"   # przykład, dowolny model pobrany w Ollamie
-
-[brain.stt]
-engine = "faster-whisper"
-model = "small"
-
-[brain.tts]
-engine = "piper"
-voice = "voices/pl_PL-gosia-medium.onnx"   # plik .onnx z .onnx.json obok, pobrany ręcznie
-```
+`iris.example.toml` ustawia lokalny LLM (Ollama), Whisper do rozpoznawania mowy i polski głos Pipera. Głos (plik `.onnx` z `.onnx.json` obok) trzeba pobrać ręcznie do katalogu `voices/`. `iris.toml`, `voices/`, certyfikaty i baza nie trafiają do repozytorium (`.gitignore`).
 
 Zamiast Ollamy można użyć Claude API: `engine = "claude"`, klucz w zmiennej `ANTHROPIC_API_KEY` (nigdy w pliku). Wszystkie opcje: `host/core/config.py`. Bez `[brain.stt]` i `[brain.tts]` host działa, ale nie rozmawia głosem. Sprawdzenie toru głosowego na prawdziwych modelach: `python -m host.brain.selftest --config iris.toml`.
 
 Na komputerze z hostem klient otwiera się pod `http://localhost:8000/app/`.
+
+### Na stałe (systemd)
+
+Żeby aplikacja na telefonie działała po każdym włączeniu komputera lub Raspberry Pi, host może działać jako usługa użytkownika: `deploy/iris.service` (instrukcja w komentarzu na początku pliku). Token trzyma wtedy plik `~/.config/iris/env` z prawami tylko dla właściciela. `tailscale serve --bg` według dokumentacji Tailscale działa dalej po zamknięciu terminala; czy wraca po restarcie komputera, sprawdź poleceniem `tailscale serve status`.
 
 ## Telefon: instalacja jako aplikacja
 
@@ -69,7 +61,7 @@ Bez tunelu, w sieci domowej, host może mieć własny certyfikat (`python -m hos
 
 ## Inne urządzenia
 
-- Program na komputer i Raspberry Pi: `python -m client.desktop --url ws://<host>:8000/ws --device laptop` (wymaga `sounddevice` i systemowego `libportaudio2`).
+- Program na komputer i Raspberry Pi: `python -m client.desktop --url ws://<host>:8000/ws --device laptop` (instalacja: `pip install -e ".[desktop]"` i systemowe `libportaudio2`).
 - Symulator ciała: `python -m sim.body --url ws://localhost:8000/ws`.
 - Firmware HERMES i jego port na komputer: katalog `firmware/`, `make -C firmware test`.
 
@@ -78,12 +70,12 @@ HERMES łączy się przez zwykły `ws://` (bez TLS), więc host musi być dla ni
 ## Testy
 
 ```sh
-pip install pytest
+pip install -e ".[dev,voice,desktop]"
 pytest host/tests
 make -C firmware test
 ```
 
-Testy przeglądarki (`host/tests/test_browser.py`) wymagają Node i Playwright z Chromium; bez nich są pomijane.
+Testy przeglądarki (`host/tests/test_browser.py`) wymagają Node i Playwright z Chromium; bez nich są pomijane. Na GitHubie te same testy uruchamia `.github/workflows/tests.yml` przy każdym push (Python 3.11 i 3.13, Chromium, firmware z ASan, UBSan i valgrindem).
 
 ## Dane i bezpieczeństwo
 
