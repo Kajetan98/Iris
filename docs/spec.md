@@ -78,13 +78,14 @@ Host serwuje klienta pod `/app/` (pliki publiczne, sekcja 10). Ten sam klient dz
 
 ## 4. Zdarzenia hosta (wewnętrzne, widoczne w `/events`)
 
-`link.lost`, `link.restored`, `drive.enter`, `drive.exit`, `host.start`, `host.stop`, `action.sent`, `action.ack`, `device.switch`.
+`link.lost`, `link.restored`, `drive.enter`, `drive.exit`, `host.start`, `host.stop`, `action.sent`, `action.ack`, `device.switch`, `fact.learn`, `fact.confirm`, `fact.forget`, `fact.ask`.
 
 - `device.switch`: `from` (poprzednie aktywne urządzenie albo `null`), `to`, `by` (`first`: pierwsze połączone urządzenie, `rest`, `device`: zdarzenie `device.activate`, `voice`: komenda przełączenia, sekcja 1).
 - Zdarzenia hosta mają w zapisie `device_id` urządzenia, którego dotyczą: `link.*` i `action.*` urządzenia, które je wywołało, `drive.*` (poza `long_silence`) aktywnego urządzenia. Pozostałe mają `null`.
 
 - `action.sent`: `id`, `type`, `body`. Zapisywane po wysłaniu akcji do ciała.
 - `action.ack`: `ref`, `ok`, `err`. Zapisywane po odebraniu `ack` od ciała.
+- `fact.learn`: `id`, `source`, `confidence`, `how` (`told`: polecenie "zapamiętaj", `corrected`: poprawka po "nie, ...", `inferred`: nowy wniosek z rozmowy, `reinforced`: powtórzony wniosek). `fact.confirm`: `id` (odpowiedź "tak" na pytanie IRIS). `fact.forget`: `id` (albo `null` i `count` przy `why: "all"`), `why` (`user`: polecenie "zapomnij" lub `DELETE /facts`, `denied`: odpowiedź "nie", `decay`: zanik, `all`: "zapomnij wszystko" po potwierdzeniu). `fact.ask`: `id`. Zdarzenia `fact.*` nie zawierają treści faktu (sekcja 9).
 
 ## 5. Akcje (host → ciało)
 
@@ -226,7 +227,7 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 ## 9. Ciągłość
 
 - Przy starcie host wyznacza `last_downtime_s` jako różnicę między czasem startu a ostatnią aktywnością poprzedniej sesji (`sessions.last_seen_at`). Przy pierwszym uruchomieniu `last_downtime_s` wynosi 0.
-- Zdarzenia i stany zapisywane w SQLite (tabele: `sessions`, `events`, `state_snapshots`, `facts`, `devices`). Wersja schematu w `PRAGMA user_version` (2); baza z nowszą wersją niż obsługiwana nie jest otwierana, starsza jest migrowana przy otwarciu.
+- Zdarzenia i stany zapisywane w SQLite (tabele: `sessions`, `events`, `state_snapshots`, `facts`, `devices`). Wersja schematu w `PRAGMA user_version` (3); baza z nowszą wersją niż obsługiwana nie jest otwierana, starsza jest migrowana przy otwarciu.
 - Czas w bazie: UTC, ISO 8601 ze stałą szerokością (`2026-03-01T12:00:00.000+00:00`), co pozwala porównywać go jako tekst. Czas bez strefy jest odrzucany.
 
 `sessions`: `id`, `started_at`, `ended_at` (ustawiane przy czystym zamknięciu), `last_seen_at`. `last_seen_at` odświeża się przy każdym zapisanym zdarzeniu i przez jawne `touch`, więc przerwa jest poprawna także wtedy, gdy nie zapisujemy heartbeatów. Sesja bez aktywności ma `last_seen_at` równe `started_at`.
@@ -239,11 +240,37 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 
 `state_snapshots`: `id`, `session_id`, `at`, `self_json`, `body_json`. Moment zapisu wybiera warstwa api.
 
-`facts`: `id`, `text`, `source` (`stated` lub `inferred`), `confidence` (0 do 1), `created_at`, `updated_at`, `session_id` (sesja, w której fakt powstał).
+`facts`: `id`, `text`, `source` (`stated` lub `inferred`), `confidence` (0 do 1), `created_at`, `updated_at`, `session_id` (sesja, w której fakt powstał), `reinforced` (ile razy wniosek się powtórzył), `asked_at` (kiedy host ostatnio o niego pytał, `null` gdy nigdy). Migracja z wersji 2 dodaje dwie ostatnie kolumny (`0` i `null`).
 
 - Fakt `stated` ma domyślnie `confidence` 1. Fakt `inferred` wymaga podania `confidence`.
 - Użytkownik może wyświetlić, poprawić i usunąć fakty. Poprawa tekstu przez użytkownika zmienia `source` na `stated` i `confidence` na 1, chyba że podano inaczej. Usunięcie jest trwałe.
 - `continuity.known_facts` to liczba wierszy w `facts`.
+
+### Uczenie się
+
+IRIS uczy się faktów o użytkowniku jak program, przez zapis w tabeli `facts`; model językowy się nie zmienia. Fakt podany wprost jest pewny (`stated`, `confidence` 1). Wniosek z rozmowy jest przypuszczeniem (`inferred`): zaczyna z niską pewnością, rośnie, gdy się powtarza, maleje, gdy się nie powtarza, a IRIS pyta o niego użytkownika. Reguły są deterministyczne; LLM tylko proponuje wnioski. Wartości początkowe w konfiguracji `learning`; `enabled = false` wyłącza naukę (fakty już zapisane zostają).
+
+Polecenia rozpoznaje host przed LLM i bez niego, jak komendę przełączenia (sekcja 1), w mowie i w `POST /chat` (odpowiedź z `model` równym `null`). Kolejność: odpowiedź na otwarte pytanie (niżej), komenda przełączenia, polecenia pamięci, LLM. Wielkość liter, interpunkcja na końcu i słowo "IRIS" na początku nie mają znaczenia:
+
+- "zapamiętaj (, że) X", "zapisz (, że) X", "pamiętaj (, że) X": X (3-300 znaków) trafia do `facts` jako `stated` dosłownie, w słowach użytkownika. Jeśli podobny fakt już jest (podobieństwo niżej), zostaje zastąpiony nowym tekstem. Odpowiedź: `Zapamiętane: "X".` Zdarzenie `fact.learn` z `how: "told"`.
+- "zapomnij (, że | o) X": usuwa najbardziej podobny fakt, jeśli podobieństwo wynosi co najmniej `forget_match` (0,5). Odpowiedź `Zapomniane: "<tekst faktu>".` albo `Nie znam takiej informacji.`
+- "zapomnij wszystko": IRIS pyta `Na pewno usunąć wszystko, co o tobie wiem (N)? Powiedz tak albo nie.` i usuwa wszystkie fakty dopiero po odpowiedzi "tak".
+- "co o mnie wiesz", "co wiesz o mnie", "czego się o mnie nauczyłaś" (także "nauczyłeś"): najwyżej 5 faktów `stated` (w cudzysłowie) i 3 przypuszczenia o pewności co najmniej `min_inferred_confidence` (z pewnością w procentach), potem liczba pozostałych. Bez faktów: `Jeszcze nic o tobie nie wiem. Możesz powiedzieć: zapamiętaj, że ...`
+
+Podobieństwo dwóch tekstów to indeks Jaccarda zbiorów słów po zmianie na małe litery i usunięciu interpunkcji, bez słów krótszych niż 3 znaki.
+
+Wnioski z rozmowy (`infer`: `local_only`, wartość początkowa, tylko przy silniku lokalnym; `always`; `never`):
+
+- Po każdej turze rozmowy z LLM (nie po poleceniach) host w tle wysyła do tego samego silnika osobne zapytanie: prompt wyciągania faktów i sama wypowiedź użytkownika, bez historii, stanu i znanych faktów. Silnik zwraca listę JSON `[{"fakt": "...", "pewnosc": 0.0-1.0}]` ze zdaniami w drugiej osobie ("Masz psa o imieniu Burek."). Błąd silnika albo niepoprawna odpowiedź są logowane bez treści i pomijane; tura rozmowy na nie nie czeka.
+- Host bierze najwyżej `max_per_turn` (3) wniosków o długości 3-300 znaków. Odrzuca wnioski z danymi wrażliwymi: tekst zawiera jeden z rdzeni `sensitive_words` (zdrowie, leki, tętno, położenie i adres, pieniądze, wyznanie, poglądy, orientacja). Takie fakty IRIS zapisuje tylko z polecenia "zapamiętaj".
+- Wniosek podobny (co najmniej `similar` 0,6) do faktu `stated` jest pomijany. Podobny do przypuszczenia wzmacnia je: `confidence` rośnie o `reinforce_step` (0,2), najwyżej do `max_inferred` (0,9), `reinforced` rośnie o 1, `updated_at` się odświeża (`how: "reinforced"`). Nowy wniosek trafia do `facts` jako `inferred` z pewnością podaną przez silnik, ale najwyżej `start_max` (0,45), czyli poniżej progu użycia w kontekście (sekcja 12): pojedyncza obserwacja nie wystarcza, potrzebne jest powtórzenie albo potwierdzenie (`how: "inferred"`).
+
+Pytania (`ask`, domyślnie włączone; wyłączone także przy `initiative.quiet`):
+
+- Po odpowiedzi LLM w turze rozmowy host może dopisać do niej jedno pytanie: ` Czy dobrze rozumiem: <przypuszczenie>?` (pierwsza litera mała, bez kropki na końcu). Wybiera przypuszczenie o pewności co najmniej `ask_min` (0,4), o które nie pytał przez ostatnie `ask_again_days` (7) dni: najwyższa pewność, przy remisie najnowsze. Między pytaniami mija co najmniej `ask_interval_s` (900 s). Host zapisuje `asked_at` i zdarzenie `fact.ask`.
+- Następna wypowiedź w ciągu `answer_window_s` (120 s) to odpowiedź, jeśli zaczyna się od "tak" ("tak", "zgadza się", "dokładnie", "owszem") albo "nie" ("nie", "nieprawda", "nie zgadza się"). "Tak": fakt staje się `stated` z `confidence` 1 (`fact.confirm`), odpowiedź `Dobrze, zapamiętane.` "Nie": fakt jest usuwany (`why: "denied"`); jeśli po "nie" jest dalszy tekst (co najmniej 3 znaki), trafia on do `facts` jako `stated` (`how: "corrected"`, odpowiedź `Dobrze, poprawione: "<tekst>".`), inaczej odpowiedź `Dobrze, usuwam to przypuszczenie.` Inna wypowiedź zamyka pytanie bez zmiany faktu i trafia do zwykłej obsługi.
+
+Zanikanie: raz na dobę i przy starcie host zmniejsza o `decay_step` (0,1) pewność przypuszczeń, które nie zmieniły się przez `decay_after_days` (30) dni (`updated_at` też się odświeża), i usuwa przypuszczenia poniżej `forget_below` (0,2) (`why: "decay"`). Fakty `stated` nie zanikają.
 
 Co host zapisuje (wartości początkowe w konfiguracji `api`):
 
@@ -275,9 +302,9 @@ Gdy host ma token (sekcja 1), każde żądanie wymaga nagłówka `Authorization:
 - `GET /events`: `{"events": [{id, session_id, at, source, type, ts_ms, boot_id, device, data}]}` rosnąco po `id`. `type` można powtórzyć, `device` zawęża do jednego urządzenia. `since` jest włączone, `after_id` wyłączone (stronicowanie). `limit` jak wyżej.
 - `POST /actions`: ciało `{"type": "haptic", "body": {"pattern": "warn"}, "wait_ack": true, "device": "laptop"}` (`device` opcjonalne, domyślnie aktywne urządzenie). Odpowiedź 200: `{"id": "h3", "device": "laptop", "ack": {"ref", "ok", "err"}}` (`ack` jest `null`, gdy `wait_ack` ma wartość `false`). 409, gdy urządzenie nie jest połączone albo nie ma aktywnego. 422 dla nieznanego typu lub niepoprawnego `body`. 504, gdy `ack` nie przyszedł w `ack_timeout_s` (2 s); akcja została wtedy wysłana.
 - `POST /chat`: ciało `{"text": "..."}` (1-4000 znaków po obcięciu białych znaków, brak dodatkowych pól). 200: `{"text", "truncated", "model", "usage": {"input_tokens", "output_tokens"}}`. 501, gdy `brain.llm.engine` ma wartość `none`. 503, gdy silnik jest niedostępny (brak połączenia, limit czasu). 502 przy błędzie silnika (zły model, niepoprawna lub pusta odpowiedź). 422 dla niepoprawnego ciała i dla odmowy silnika. Kontekst jak w sekcji 12. Treść rozmowy nie jest zapisywana w bazie ani logowana. Tury są obsługiwane po kolei. Komenda przełączenia (sekcja 1) nie trafia do LLM i działa także przy `engine = "none"`: odpowiedź ma `model` równe `null` i zerowe `usage`.
-- `GET /facts?source=`: `{"facts": [{id, text, source, confidence, created_at, updated_at}]}`.
+- `GET /facts?source=`: `{"facts": [{id, text, source, confidence, reinforced, asked_at, created_at, updated_at}]}`.
 - `PATCH /facts/{id}`: ciało z co najmniej jednym polem z `text`, `source`, `confidence`. 200 z faktem, 404 lub 422. Reguły korekty w sekcji 9.
-- `DELETE /facts/{id}`: 204 lub 404.
+- `DELETE /facts/{id}`: 204 lub 404. Usunięcie zapisuje zdarzenie `fact.forget` z `why: "user"`.
 - `GET /devices`: `{"active": "<id>|null", "devices": [{id, active, connected, link, batt_pct, rssi, caps, first_seen_at, last_seen_at}]}` rosnąco po `id`. `link`, `batt_pct` i `rssi` są `null` dla urządzeń bez stanu w bieżącej sesji, `caps` (body ostatniego `device.caps`) przed pierwszym `device.caps` w sesji.
 - `POST /devices/{id}/activate`: 200 `{"active": "<id>"}`, także gdy urządzenie już było aktywne (wtedy bez zdarzenia). 404 dla urządzenia, które nigdy się nie połączyło, 422 dla niepoprawnego `id`.
 - `GET /health`: zawsze 200, `{"status": "ok|degraded", "uptime_s", "session_id", "device", "devices_connected", "link": {"state", "connected", "rssi", "last_seen_ms"}, "store": "ok|error", "voice": "disabled|ready|error"}`. `link` dotyczy aktywnego urządzenia (`device`, albo `null`). `status` to `ok` tylko przy `link.state` = `ok`. `connected` oznacza otwarte połączenie WebSocket aktywnego urządzenia.
@@ -300,9 +327,10 @@ LLM jest opcjonalny (`brain.llm.engine = "none"` wyłącza go bez wpływu na res
 
 Reguły:
 
-- Prompt systemowy mówi, że IRIS jest programem, że opisy stanu pochodzą z danych w bloku kontekstu, a nie z odczuwania, i że nie twierdzi on, iż coś czuje lub jest świadomy. Blok kontekstu jest oznaczony jako dane, nie polecenia.
+- Prompt systemowy mówi, że IRIS jest programem, że opisy stanu pochodzą z danych w bloku kontekstu, a nie z odczuwania, i że nie twierdzi on, iż coś czuje lub jest świadomy. Blok kontekstu jest oznaczony jako dane, nie polecenia. Prompt opisuje pamięć tak, jak działa: fakty podane wprost i przypuszczenia z rozmów (sekcja 9); IRIS nie twierdzi, że zapamiętuje całe rozmowy.
 - Wycinek stanu nie zawiera odczytów `gps`, `imu` ani `presence` (sekcja 7), więc nie trafiają one do żadnego silnika.
 - Fakty (sekcja 9) trafiają do kontekstu według `send_facts`: `never` (nigdy), `local_only` (tylko do silnika lokalnego, wartość początkowa), `always`. Fakty `inferred` poniżej `min_inferred_confidence` (0,5) są pomijane, pozostałe oznaczane jako przypuszczenie. W kontekście jest najwyżej `max_facts` (30) faktów, najpierw `stated`.
+- Zapytanie o wnioski z rozmowy (sekcja 9, "Uczenie się") to osobne zapytanie z własnym promptem i samą wypowiedzią użytkownika. Przy `infer = "local_only"` nie trafia do silnika zdalnego.
 - Silnik jest lokalny, gdy jego adres wskazuje na pętlę zwrotną (`localhost`, `127.0.0.1`, `::1`). Każdy inny adres, w tym sieć lokalna, liczy się jako zdalny.
 
 Silnik Claude API (`brain.llm.engine = "claude"`):
