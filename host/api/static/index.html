@@ -67,6 +67,10 @@
       <input id="device" name="device" autocomplete="off" autocapitalize="none" spellcheck="false"
              pattern="[a-z0-9][a-z0-9\-]{0,31}" maxlength="32" required aria-describedby="device-help">
       <p id="device-help" class="help">Małe litery, cyfry i myślnik, np. telefon albo laptop. Po tej nazwie przełączasz urządzenia.</p>
+      <label for="host">Adres hosta (opcjonalnie)</label>
+      <input id="host" name="host" inputmode="url" autocomplete="off" autocapitalize="none" spellcheck="false"
+             placeholder="https://iris.przyklad.ts.net" aria-describedby="host-help">
+      <p id="host-help" class="help">Zostaw puste, gdy ta strona pochodzi z Twojego hosta. Po zainstalowaniu aplikacji z innego adresu wpisz tu adres swojego hosta (https).</p>
       <label for="token">Token</label>
       <input id="token" name="token" type="password" autocomplete="current-password" aria-describedby="token-help">
       <p id="token-help" class="help">Ten sam co IRIS_TOKEN na hoście. Zostaw puste, jeśli host go nie wymaga.</p>

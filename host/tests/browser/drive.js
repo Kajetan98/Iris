@@ -6,10 +6,11 @@ const { chromium } = require("playwright");
 const [scenario, base, rawOpts] = process.argv.slice(2);
 const opts = JSON.parse(rawOpts || "{}");
 
-async function connect(page, device, token = "") {
+async function connect(page, device, token = "", host = "") {
   await page.goto(`${base}/app/`);
   await page.fill("#device", device);
   await page.fill("#token", token);
+  await page.fill("#host", host);
   await page.click("#connect");
 }
 
@@ -196,6 +197,30 @@ const scenarios = {
     await page.click("#facts li:first-child button");
     await page.waitForFunction((n) => document.querySelectorAll("#facts li").length === n - 1, before.length);
     return { before, after: await read(), status: await page.textContent("#memory-status") };
+  },
+
+  // Klient pobrany z jednego hosta, połączony z drugim (adres hosta w ustawieniach, spec sekcja 1).
+  async remoteHost(page) {
+    await connect(page, opts.device, opts.token, opts.hostUrl);
+    await page.waitForFunction(() => document.body.dataset.link === "up" || /Host|host/.test(document.getElementById("notice").textContent), null, { timeout: 15000 });
+    await page.waitForTimeout(1600); // sprawdzenie /health po sekundzie
+    const out = { link: await page.getAttribute("body", "data-link"), notice: await page.textContent("#notice"), saved: await page.evaluate(() => localStorage.getItem("iris.host")) };
+    if (opts.memory) {
+      await page.click("#open-memory");
+      await page.waitForTimeout(1200);
+      out.facts = await page.evaluate(() => Array.from(document.querySelectorAll("#facts .fact-text"), (e) => e.textContent));
+      out.memoryStatus = await page.textContent("#memory-status");
+    }
+    return out;
+  },
+
+  // Zły adres hosta w ustawieniach: komunikat przy polu, bez połączenia.
+  async badHostAddress(page) {
+    await page.goto(`${base}/app/`);
+    await page.fill("#device", opts.device);
+    await page.fill("#host", opts.hostUrl);
+    await page.click("#connect");
+    return { message: await page.evaluate(() => document.getElementById("host").validationMessage), link: await page.getAttribute("body", "data-link") };
   },
 
   // Zły token: kod 4003 i komunikat, bez połączenia.

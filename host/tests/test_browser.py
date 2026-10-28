@@ -278,6 +278,69 @@ def test_voice_wave_is_drawn(reduced):
     assert out["waveLit"] > 200, out["waveLit"]  # linia fali w spoczynku, także bez ruchu
 
 
+def _host(origins, token=TOKEN):
+    port = free_port()
+    app = create_app(Config.model_validate({"store": {"path": ":memory:"}, "api": {"cors_origins": origins}}), token=token)
+    return app, port, start(app, port)
+
+
+def test_client_from_one_host_talks_to_another_host():
+    client_port, remote_port = free_port(), free_port()
+    client_origin, remote_origin = f"http://127.0.0.1:{client_port}", f"http://127.0.0.1:{remote_port}"
+    static = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=None), client_port)
+    remote_app = create_app(Config.model_validate({"store": {"path": ":memory:"}, "api": {"cors_origins": [client_origin]}}),
+                            token=TOKEN)
+    remote = start(remote_app, remote_port)
+    try:
+        remote_app.state.service.store.add_fact("mam psa Burka", "stated")
+        out = browser("remoteHost", client_origin, device="telefon", token=TOKEN, hostUrl=remote_origin + "/", memory=True)
+        assert out["link"] == "up" and out["saved"] == remote_origin + "/"
+        assert "api.cors_origins" not in out["notice"]  # zapytania z tej strony przechodzą
+        assert out["facts"] == ["mam psa Burka"]  # lista pamięci z drugiego hosta, z tokenem
+        with httpx.Client(base_url=remote_origin, headers={"Authorization": f"Bearer {TOKEN}"}) as http:
+            assert [d["id"] for d in http.get("/devices").json()["devices"]] == ["telefon"]  # tam się zarejestrował
+        with httpx.Client(base_url=client_origin) as http:
+            assert http.get("/devices").json()["devices"] == []  # a nie na hoście, z którego pobrano stronę
+    finally:
+        stop(*remote)
+        stop(*static)
+
+
+def test_remote_host_without_cors_gets_a_hint():
+    client_port, remote_port = free_port(), free_port()
+    client_origin, remote_origin = f"http://127.0.0.1:{client_port}", f"http://127.0.0.1:{remote_port}"
+    static = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=None), client_port)
+    remote = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=TOKEN), remote_port)
+    try:
+        # przeglądarka blokuje odpowiedź /health, więc w konsoli pojawia się błąd CORS (oczekiwany)
+        out = browser("remoteHost", client_origin, device="telefon", token=TOKEN, hostUrl=remote_origin,
+                      expected_errors=[
+                          f"Access to fetch at '{remote_origin}/health' from origin '{client_origin}' has been blocked by CORS "
+                          "policy: Response to preflight request doesn't pass access control check: "
+                          "No 'Access-Control-Allow-Origin' header is present on the requested resource.",
+                          "Failed to load resource: net::ERR_FAILED"])
+        assert out["link"] == "up"  # WebSocket nie podlega CORS i działa
+        assert f"Dodaj {client_origin} do api.cors_origins" in out["notice"]
+    finally:
+        stop(*remote)
+        stop(*static)
+
+
+@pytest.mark.parametrize("address, message", [
+    ("iris.example.net", "To nie jest adres"),
+    ("http://example.com", "Adres musi zaczynać się od https://"),
+    ("https://example.net/app", "bez ścieżki"),
+])
+def test_bad_host_address_is_refused_next_to_the_field(address, message):
+    port = free_port()
+    server = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=None), port)
+    try:
+        out = browser("badHostAddress", f"http://127.0.0.1:{port}", device="telefon", hostUrl=address)
+        assert message in out["message"] and out["link"] == "down"
+    finally:
+        stop(*server)
+
+
 def test_installable_app():
     port = free_port()
     server = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=None), port)
@@ -286,7 +349,8 @@ def test_installable_app():
     finally:
         stop(*server)
     m = out["manifest"]
-    assert (m["name"], m["start_url"], m["display"]) == ("IRIS", "/app/", "standalone")
+    # adresy względne: ten sam klient działa pod /app/ hosta i pod głównym adresem osobnej strony
+    assert (m["name"], m["start_url"], m["scope"], m["display"]) == ("IRIS", "./", "./", "standalone")
     assert {i["sizes"] for i in m["icons"]} >= {"192x192", "512x512"}
     assert {"/app/", "/app/app.js", "/app/protocol.js", "/app/wave.js", "/app/icon-512.png"} <= set(out["cached"])
     assert out["secure"]

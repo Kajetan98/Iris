@@ -16,3 +16,4 @@ iris.toml
 voices/
 *.onnx
 *.onnx.json
+public/

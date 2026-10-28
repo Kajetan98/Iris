@@ -1,6 +1,6 @@
 // Service worker klienta IRIS: pliki aplikacji z pamięci podręcznej, żeby dało się ją zainstalować
 // i otworzyć bez sieci (połączenie z hostem i tak wymaga sieci). API i /ws nie są buforowane.
-const CACHE = "iris-app-v4";
+const CACHE = "iris-app-v5";
 const SHELL = [
   "./",
   "index.html",
@@ -31,7 +31,9 @@ self.addEventListener("activate", (event) => {
 // Najpierw sieć (nowa wersja po aktualizacji hosta), pamięć podręczna bez sieci.
 self.addEventListener("fetch", (event) => {
   const url = new URL(event.request.url);
-  if (event.request.method !== "GET" || url.origin !== location.origin || !url.pathname.startsWith("/app/")) {
+  // Tylko pliki klienta, czyli adresy pod zakresem service workera (/app/ na hoście, / na osobnej stronie).
+  const scope = new URL(self.registration.scope).pathname;
+  if (event.request.method !== "GET" || url.origin !== location.origin || !url.pathname.startsWith(scope)) {
     return;
   }
   event.respondWith(

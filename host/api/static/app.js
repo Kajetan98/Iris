@@ -2,7 +2,7 @@
 // Fala głosu IRIS, napisy rozmowy, mowa z przyciskiem (WebCodecs Opus) i odtwarzanie odpowiedzi.
 
 import { Wave } from "./wave.js";
-import { Body, validDeviceId } from "./protocol.js";
+import { Body, parseHostAddress, validDeviceId } from "./protocol.js";
 
 const RATE = 16000; // spec, sekcja 6
 const FRAME = RATE / 50; // 20 ms
@@ -51,6 +51,7 @@ const state = {
   ws: null,
   wanted: false, // użytkownik chce być połączony (ponawiamy po zerwaniu)
   device: "",
+  base: "", // adres hosta z ustawień; "" to ten sam adres co strona (spec, sekcja 1)
   backoff: BACKOFF_MIN_MS,
   retry: null,
   heartbeat: null,
@@ -274,8 +275,14 @@ function sendBytes(bytes) {
 }
 
 function wsUrl(device) {
-  const scheme = location.protocol === "https:" ? "wss:" : "ws:";
-  return `${scheme}//${location.host}/ws?device=${encodeURIComponent(device)}`;
+  const origin = new URL(state.base || location.origin);
+  const scheme = origin.protocol === "https:" ? "wss:" : "ws:";
+  return `${scheme}//${origin.host}/ws?device=${encodeURIComponent(device)}`;
+}
+
+// Adres hosta z pola w ustawieniach; błędny adres to ten sam adres co strona (pole zgłasza błąd przy łączeniu).
+function currentBase() {
+  return parseHostAddress($("host").value, location.protocol).base;
 }
 
 function connect() {
@@ -287,8 +294,16 @@ function connect() {
     return false;
   }
   $("device").setCustomValidity("");
+  const host = parseHostAddress($("host").value, location.protocol);
+  $("host").setCustomValidity(host.error ?? "");
+  if (host.error) {
+    $("host").reportValidity();
+    return false;
+  }
   store.set("iris.device", device);
   store.set("iris.token", token);
+  store.set("iris.host", $("host").value.trim());
+  state.base = host.base;
   state.device = device;
   state.wanted = true;
   notice("");
@@ -336,7 +351,8 @@ function open(device, token) {
     const reason = CLOSE_REASONS[ev.code];
     if (state.wanted) {
       const delay = (state.backoff / 1000).toLocaleString("pl-PL");
-      notice(`${reason ?? "Połączenie przerwane."} Ponawiam za ${delay} s.`);
+      const lost = reason ?? (state.base ? "Brak połączenia z hostem. Sprawdź adres hosta i czy host działa." : "Połączenie przerwane.");
+      notice(`${lost} Ponawiam za ${delay} s.`);
       state.retry = setTimeout(() => open(device, token), state.backoff);
       state.backoff = Math.min(BACKOFF_MAX_MS, state.backoff * 2);
       setUi("connecting");
@@ -350,10 +366,14 @@ function open(device, token) {
 // Gdy stanu nie da się sprawdzić, przycisk działa.
 async function checkVoice(token) {
   try {
-    const res = await fetch("/health", { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+    const res = await fetch(`${state.base}/health`, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
     state.voice = res.ok ? (await res.json()).voice : null;
   } catch {
     state.voice = null;
+    // Połączenie z hostem działa (jest WebSocket), a zapytanie nie: przy hoście spoza tej strony to zwykle CORS.
+    if (state.base && location.origin !== state.base) {
+      notice(`Host nie przyjmuje zapytań z tej strony. Dodaj ${location.origin} do api.cors_origins w konfiguracji hosta.`);
+    }
   }
   if (state.voice === "disabled") notice("Na hoście nie jest włączone rozpoznawanie i synteza mowy ([brain.stt] i [brain.tts]).");
   else if (state.voice === "error") notice("Host nie wczytał modeli mowy. Szczegóły są w logu hosta.");
@@ -640,7 +660,7 @@ function renderFacts(facts) {
 async function loadFacts() {
   $("memory-status").textContent = "Pobieram listę z hosta.";
   try {
-    const res = await fetch("/facts", { headers: authHeaders() });
+    const res = await fetch(`${currentBase()}/facts`, { headers: authHeaders() });
     if (!res.ok) throw new Error(res.status === 401 ? "host odrzucił token" : `odpowiedź ${res.status}`);
     renderFacts((await res.json()).facts);
   } catch (e) {
@@ -651,7 +671,7 @@ async function loadFacts() {
 
 async function deleteFact(id, li) {
   try {
-    const res = await fetch(`/facts/${id}`, { method: "DELETE", headers: authHeaders() });
+    const res = await fetch(`${currentBase()}/facts/${id}`, { method: "DELETE", headers: authHeaders() });
     if (!res.ok && res.status !== 404) throw new Error(`odpowiedź ${res.status}`);
     li.remove();
     $("memory-status").textContent = $("facts").children.length ? "Usunięte." : "Usunięte. IRIS nic już o tobie nie wie.";
@@ -674,6 +694,7 @@ function init() {
   const saved = store.get("iris.device", null);
   $("device").value = saved ?? "";
   $("token").value = store.get("iris.token", "");
+  $("host").value = store.get("iris.host", "");
   $("open-settings").addEventListener("click", openSettings);
   $("open-memory").addEventListener("click", openMemory);
   $("close-memory").addEventListener("click", () => $("memory").close());

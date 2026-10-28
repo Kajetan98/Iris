@@ -21,6 +21,37 @@ export function validDeviceId(id) {
   return DEVICE_ID.test(id);
 }
 
+const LOCAL_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
+
+// Adres hosta z ustawień (spec, sekcja 1): pusty to ten sam adres co strona, inaczej https://host[:port]
+// (http tylko dla localhost i nie ze strony HTTPS). Zwraca {base, error}: base to adres bez końcowego
+// ukośnika albo "" dla tego samego adresu.
+export function parseHostAddress(input, pageProtocol = "https:") {
+  const text = String(input ?? "").trim();
+  if (!text) return { base: "", error: null };
+  let url;
+  try {
+    url = new URL(text);
+  } catch {
+    return { base: "", error: "To nie jest adres. Wpisz np. https://iris.przyklad.ts.net" };
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") {
+    return { base: "", error: "Adres musi zaczynać się od https://" };
+  }
+  if (url.username || url.password || url.search || url.hash || url.pathname !== "/") {
+    return { base: "", error: "Podaj sam adres hosta, bez ścieżki, zapytania i danych logowania." };
+  }
+  if (url.protocol === "http:") {
+    if (!LOCAL_HOSTS.includes(url.hostname)) {
+      return { base: "", error: "Adres musi zaczynać się od https:// (http działa tylko dla localhost)." };
+    }
+    if (pageProtocol === "https:") {
+      return { base: "", error: "Ta strona jest przez HTTPS, więc przeglądarka połączy się tylko z adresem https://." };
+    }
+  }
+  return { base: url.origin, error: null };
+}
+
 function isInt(x) {
   return typeof x === "number" && Number.isInteger(x);
 }

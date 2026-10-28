@@ -48,7 +48,9 @@ Progi i ustawienia: sekcja `[learning]` w `iris.toml` (lista w `host/core/config
 
 ## Telefon: instalacja jako aplikacja
 
-Przeglądarka daje mikrofon tylko przez HTTPS, a instalacja na ekranie początkowym wymaga certyfikatu, któremu telefon ufa. Najprościej dać hostowi adres HTTPS przez tunel. Host działa dalej na komputerze (albo Raspberry Pi) na `127.0.0.1:8000`. Strona statyczna, np. GitHub Pages, tu nie wystarczy, bo aplikacja rozmawia z hostem, który musi gdzieś działać.
+Aplikacja ma stały adres, niezależny od hosta: **https://iris-asystent.vercel.app/app/** (te same pliki co w `host/api/static`, wdrażane z tego repozytorium przez `vercel.json`). Host działa osobno, na Twoim komputerze lub Raspberry Pi, a aplikacja łączy się z nim pod adresem wpisanym w ustawieniach ("Adres hosta"). Dzięki temu instalujesz ją raz, a zmiana adresu tunelu (np. Cloudflare) wymaga tylko poprawienia adresu hosta w ustawieniach.
+
+Przeglądarka daje mikrofon tylko przez HTTPS, więc host też potrzebuje adresu HTTPS. Najprościej przez tunel: host działa na `127.0.0.1:8000`, a tunel wystawia go pod adresem https.
 
 Przy tunelu ustaw `IRIS_TOKEN`. Bez tokenu host odrzuca połączenia z nagłówkami dodawanymi przez proxy i tunele (spec, sekcja 1).
 
@@ -58,7 +60,7 @@ Przy tunelu ustaw `IRIS_TOKEN`. Bez tokenu host odrzuca połączenia z nagłówk
 2. W panelu Tailscale włącz HTTPS (certyfikaty dla adresów `ts.net`).
 3. Na komputerze: `tailscale serve --bg 8000` (składnię sprawdź w `tailscale serve --help`, zmieniała się między wersjami). Polecenie wypisze adres `https://<komputer>.<tailnet>.ts.net`. Wyłączenie: `tailscale serve off`.
 
-Adres się nie zmienia, więc zainstalowana aplikacja działa po każdym uruchomieniu hosta. Adres jest dostępny tylko z urządzeń zalogowanych do Twojej sieci Tailscale, nie z internetu.
+Adres się nie zmienia i jest dostępny tylko z urządzeń zalogowanych do Twojej sieci Tailscale, nie z internetu. `tailscale serve --bg` według dokumentacji Tailscale działa dalej po zamknięciu terminala; czy wraca po restarcie komputera, sprawdź poleceniem `tailscale serve status`.
 
 ### Cloudflare Quick Tunnel (szybka próba)
 
@@ -66,14 +68,24 @@ Adres się nie zmienia, więc zainstalowana aplikacja działa po każdym uruchom
 cloudflared tunnel --url http://localhost:8000
 ```
 
-Wypisze adres `https://<losowe-słowa>.trycloudflare.com`. Nie wymaga konta, ale adres jest publiczny i przy każdym uruchomieniu inny. Zainstalowana aplikacja jest związana z adresem, więc po zmianie trzeba ją zainstalować od nowa.
+Wypisze adres `https://<losowe-słowa>.trycloudflare.com`. Nie wymaga konta, ale adres jest publiczny i przy każdym uruchomieniu inny, więc po każdym uruchomieniu poprawiasz adres hosta w ustawieniach aplikacji.
 
-### Na telefonie
+### Konfiguracja hosta i telefonu
 
-1. Otwórz `https://<adres>/app/`.
-2. Wpisz nazwę urządzenia (np. `telefon`) i token z `IRIS_TOKEN`, potem "Połącz".
-3. Android (Chrome): menu, potem "Zainstaluj aplikację". iPhone (Safari): "Udostępnij", potem "Do ekranu początkowego".
+1. W `iris.toml` dopuść stronę aplikacji (bez tego przeglądarka zablokuje jej zapytania do hosta) i uruchom host ponownie:
+
+   ```toml
+   [api]
+   cors_origins = ["https://iris-asystent.vercel.app"]
+   ```
+
+2. Na telefonie otwórz `https://iris-asystent.vercel.app/app/`. W ustawieniach wpisz nazwę urządzenia (np. `telefon`), adres hosta (`https://<komputer>.<tailnet>.ts.net`) i token z `IRIS_TOKEN`, potem "Połącz".
+3. Zainstaluj aplikację. Android (Chrome): menu, potem "Zainstaluj aplikację". iPhone (Safari): "Udostępnij", potem "Do ekranu początkowego".
 4. Jeśli aktywne jest inne urządzenie, użyj przycisku "Używaj tego urządzenia" albo powiedz "przełącz na telefon".
+
+Hosta nie musisz wystawiać pod adresem aplikacji: `https://<host>/app/` też działa, bez pola "Adres hosta" i bez `cors_origins`.
+
+Własny adres aplikacji: w Vercel utwórz projekt z tego repozytorium (ustawienia budowania są w `vercel.json`), a jego adres wpisz w `cors_origins`.
 
 Bez tunelu, w sieci domowej, host może mieć własny certyfikat (`python -m host.api.serve`, opis w `CLAUDE.md`), ale samopodpisany certyfikat pozwala tylko na kartę przeglądarki, bez instalacji.
 

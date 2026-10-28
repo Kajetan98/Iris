@@ -1,0 +1,648 @@
+<!doctype html>
+<html lang="pl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#07060b">
+<meta name="description" content="IRIS: asystent głosowy po polsku, który zapamiętuje fakty o użytkowniku. Host w Pythonie, klient w przeglądarce, uczenie się z rozmów.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2307060b'/%3E%3Cpath d='M6 32c10 0 12-16 20-16s8 32 16 32 6-16 16-16' fill='none' stroke='%238fb3ff' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>IRIS</title>
+<style>
+/* Układ: jedna kolumna czytania pod falą na całą szerokość; przykładowa rozmowa z adnotacjami z boku. */
+:root {
+  --bg: #07060b;
+  --haze: #1a1224;
+  --surface: #100e17;
+  --ink: #eeedf3;
+  --ink-2: #a8a4b6;
+  --line: #2c2938;
+  --you: #8fb3ff;
+  --focus: #9db8ff;
+  --voice: linear-gradient(100deg, #2f62e6, #6a45dc 55%, #a8408a);
+  --speech: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  --ui: "Avenir Next", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { background: var(--bg); scroll-behavior: smooth; padding-block: env(safe-area-inset-top, 0px) env(safe-area-inset-bottom, 0px); }
+body {
+  margin: 0;
+  background: radial-gradient(ellipse 80% 40% at 50% 14%, var(--haze), transparent 70%) var(--bg);
+  color: var(--ink);
+  font: 1.0625rem / 1.6 var(--ui);
+}
+a { color: inherit; }
+:focus-visible { outline: 3px solid var(--focus); outline-offset: 3px; }
+.wrap {
+  width: 100%;
+  max-width: 62rem;
+  margin: 0 auto;
+  padding-left: var(--gutter-l);
+  padding-right: var(--gutter-r);
+}
+header.bar { display: flex; align-items: center; gap: 1rem; padding-block: 1rem 0.5rem; }
+.logo { flex: none; display: block; height: 1.15rem; width: auto; color: var(--ink); }
+.bar nav { margin-left: auto; display: flex; gap: 1.25rem; font-size: 0.95rem; color: var(--ink-2); }
+.bar nav a { text-decoration: none; }
+.bar nav a:hover { color: var(--ink); }
+
+/* --- hero --- */
+.hero { padding-block: 0.5rem 1rem; }
+.wave { display: block; width: 100%; height: clamp(11rem, 34vw, 19rem); }
+.state { margin: -0.5rem 0 0; min-height: 1.6em; text-align: center; color: var(--ink-2); }
+.hero-text { max-width: 46rem; margin-top: 1.5rem; text-align: center; }
+.hero-text h1 {
+  margin: 0;
+  font: 400 clamp(1.9rem, 1.2rem + 3.2vw, 3.2rem) / 1.15 var(--speech);
+  text-wrap: balance;
+}
+.hero-text p { margin: 1rem auto 0; max-width: 38rem; color: var(--ink-2); text-wrap: pretty; }
+.live { margin: 1.5rem auto 0; min-height: 5.2rem; max-width: 34rem; text-align: left; }
+.live .heard { margin: 0; color: var(--ink-2); font-size: 0.95rem; }
+.live .who { font-weight: 600; color: var(--you); }
+.live .reply { margin: 0.2rem 0 0; font: 1.35rem / 1.35 var(--speech); }
+.word { transition: opacity 180ms ease-out; }
+.word.pending { opacity: 0.2; }
+.actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 0.75rem; margin-top: 1.5rem; }
+.btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 3rem;
+  padding: 0.5rem 1.4rem;
+  border: 1.5px solid rgb(255 255 255 / 0.28);
+  border-radius: 999px;
+  text-decoration: none;
+  font-size: 1rem;
+}
+.btn.primary { background: var(--ink); border-color: var(--ink); color: var(--bg); }
+.btn:hover { border-color: rgb(255 255 255 / 0.6); }
+
+/* --- sekcje --- */
+section.block { padding-block: 4rem 0; }
+section.block h2 { margin: 0 0 1rem; font: 400 clamp(1.5rem, 1.1rem + 1.6vw, 2.1rem) / 1.2 var(--speech); text-wrap: balance; }
+.lead { max-width: 40rem; margin: 0 0 2rem; color: var(--ink-2); text-wrap: pretty; }
+
+.chat { display: grid; gap: 1.5rem; margin: 0; padding: 0; list-style: none; }
+.turn { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 1rem 2rem; align-items: start; }
+.turn .said { min-width: 0; }
+.turn .heard { margin: 0; color: var(--ink-2); }
+.turn .who { font-weight: 600; color: var(--you); }
+.turn .reply { margin: 0.15rem 0 0; font: 1.3rem / 1.35 var(--speech); }
+.turn .note { margin: 0; padding-left: 1rem; border-left: 1px solid var(--line); color: var(--ink-2); font-size: 0.92rem; min-width: 0; }
+.chat-foot { margin: 1.25rem 0 0; color: var(--ink-2); font-size: 0.92rem; }
+
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 2rem 2.5rem; margin: 0; padding: 0; list-style: none; }
+.grid h3 { margin: 0 0 0.4rem; font: 400 1.25rem / 1.3 var(--speech); }
+.grid p { margin: 0; color: var(--ink-2); }
+.cmd { font-family: var(--mono); font-size: 0.88em; color: var(--ink); overflow-wrap: anywhere; }
+
+.privacy { margin-top: 2.5rem; padding-block: 1.25rem 0; border-top: 1px solid var(--line); max-width: 44rem; }
+.privacy h3 { margin: 0 0 0.5rem; font: 400 1.25rem / 1.3 var(--speech); }
+.privacy ul { margin: 0; padding-left: 1.2rem; color: var(--ink-2); }
+.privacy li + li { margin-top: 0.4rem; }
+
+.code { position: relative; margin: 0 0 1.5rem; }
+.code h3 { margin: 0 0 0.5rem; min-height: 1.6rem; font: 600 0.95rem / 1.3 var(--ui); color: var(--ink-2); }
+.code pre {
+  margin: 0;
+  padding: 1rem 1rem 1rem 1.1rem;
+  overflow-x: auto;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 0.75rem;
+  font: 0.88rem / 1.6 var(--mono);
+  tab-size: 2;
+}
+.copy {
+  position: absolute;
+  top: -0.45rem;
+  right: 0;
+  min-height: 2.5rem;
+  padding: 0.25rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+.copy:hover { color: var(--ink); }
+.steps { max-width: 44rem; margin: 2rem 0 0; padding-left: 1.2rem; color: var(--ink-2); }
+.steps li + li { margin-top: 0.5rem; }
+
+.status dl { display: grid; grid-template-columns: minmax(0, 14rem) minmax(0, 1fr); gap: 0.75rem 2rem; margin: 0; max-width: 46rem; }
+.status dt { color: var(--ink); }
+.status dd { margin: 0; color: var(--ink-2); }
+footer { padding-block: 4rem 3rem; color: var(--ink-2); font-size: 0.92rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 0.75rem 2rem; align-items: center; justify-content: space-between; }
+
+@media (max-width: 40rem) {
+  .turn { grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+  .status dl { grid-template-columns: minmax(0, 1fr); gap: 0.15rem; }
+  .status dd { margin-bottom: 0.9rem; }
+  .bar nav { gap: 0.9rem; }
+  .live .reply { font-size: 1.2rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .word { transition: none; }
+}
+</style>
+</head>
+<body>
+<header class="bar wrap">
+  <svg class="logo" viewBox="204 423 616 177" role="img" aria-label="IRIS"><g fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><path d="M225 424V583A16 16 0 0 1 209 599H205V440A16 16 0 0 1 221 424Z"/><path d="M286 424H427.5A48.5 48.5 0 0 1 427.5 521H357A48 48 0 0 0 309 569V594H289V569A68 68 0 0 1 357 501H427.5A28.5 28.5 0 0 0 427.5 444H291Z"/><path d="M403 521H430L498 594H471Z"/><path d="M583 424V583A16 16 0 0 1 567 599H563V440A16 16 0 0 1 579 424Z"/><path d="M796 424A20 20 0 0 1 776 444H697.5A28.5 28.5 0 0 0 697.5 501H769.5A48.5 48.5 0 0 1 769.5 598H660A20 20 0 0 1 680 578H769.5A28.5 28.5 0 0 0 769.5 521H697.5A48.5 48.5 0 0 1 697.5 424Z"/></g></svg>
+  <nav aria-label="Sekcje">
+    <a href="#nauka">Nauka</a>
+    <a href="#urzadzenia">Urządzenia</a>
+    <a href="#instalacja">Instalacja</a>
+  </nav>
+</header>
+
+<main>
+  <div class="hero">
+    <canvas id="wave" class="wave" aria-hidden="true"></canvas>
+    <p id="state" class="state" role="status" aria-live="polite">Przytrzymaj przycisk i mów</p>
+    <div class="wrap hero-text">
+      <h1>Asystent głosowy po polsku, który zapamiętuje to, czego go uczysz</h1>
+      <p>IRIS to program: host w Pythonie, który rozmawia przez model językowy, prowadzi własny stan i zapisuje fakty o Tobie. Rozmawiasz z nim przez przeglądarkę na telefonie, program na komputerze albo urządzenie HERMES.</p>
+      <div class="live" aria-label="Przykład rozmowy" aria-live="polite">
+        <p class="heard" id="heard"></p>
+        <p class="reply" id="reply"></p>
+      </div>
+      <div class="actions">
+        <a class="btn primary" href="app/">Otwórz aplikację</a>
+        <a class="btn" href="#instalacja">Jak zainstalować</a>
+              </div>
+    </div>
+  </div>
+
+  <section class="block wrap" id="nauka">
+    <h2>Jak IRIS się uczy</h2>
+    <p class="lead">Model językowy się nie zmienia. Uczy się program: zapisuje fakty w bazie i według stałych reguł decyduje, czym są i kiedy ich użyć. Poniżej przykład z testów, w którym odpowiedzi modelu zastąpiła atrapa.</p>
+    <ol class="chat">
+      <li class="turn">
+        <div class="said"><p class="heard"><span class="who">Ty</span> Idę z Burkiem na spacer.</p><p class="reply">Miłego spaceru.</p></div>
+        <p class="note">W tle model proponuje fakt: "Masz psa o imieniu Burek". Pewność 45%, więc IRIS jeszcze go nie używa w rozmowie.</p>
+      </li>
+      <li class="turn">
+        <div class="said"><p class="heard"><span class="who">Ty</span> Jaka będzie jutro pogoda?</p><p class="reply">Jutro ma być słonecznie, około 18 stopni. Czy dobrze rozumiem: masz psa o imieniu Burek?</p></div>
+        <p class="note">Pytanie dopisuje host, nie model. Najwyżej jedno na 15 minut, żadnego w trybie ciszy.</p>
+      </li>
+      <li class="turn">
+        <div class="said"><p class="heard"><span class="who">Ty</span> Tak, zgadza się.</p><p class="reply">Dobrze, zapamiętane.</p></div>
+        <p class="note">Odpowiedź obsługuje host, bez modelu. Fakt jest teraz pewny.</p>
+      </li>
+      <li class="turn">
+        <div class="said"><p class="heard"><span class="who">Ty</span> Zapamiętaj, że w piątki gram w kosza.</p><p class="reply">Zapamiętane: "w piątki gram w kosza".</p></div>
+        <p class="note">Fakt podany wprost jest pewny od razu.</p>
+      </li>
+      <li class="turn">
+        <div class="said"><p class="heard"><span class="who">Ty</span> Co o mnie wiesz?</p><p class="reply">Wiem od ciebie: "w piątki gram w kosza"; "masz psa o imieniu Burek".</p></div>
+        <p class="note">Ta sama lista jest w aplikacji pod przyciskiem z książką, gdzie każdy fakt można usunąć.</p>
+      </li>
+    </ol>
+
+    <ul class="grid" style="margin-top: 3rem">
+      <li><h3>Mówisz wprost</h3><p><span class="cmd">zapamiętaj, że ...</span>, <span class="cmd">zapomnij ...</span>, <span class="cmd">co o mnie wiesz</span>, <span class="cmd">zapomnij wszystko</span> (po potwierdzeniu). Obsługuje je host, także bez modelu.</p></li>
+      <li><h3>Wyciąga przypuszczenia</h3><p>Po każdej odpowiedzi model w tle proponuje fakty z Twojej wypowiedzi. Nowe zaczyna od 45%, każde powtórzenie dodaje 20 punktów, do 90%. Od 50% trafia do rozmowy.</p></li>
+      <li><h3>Pyta</h3><p>"Czy dobrze rozumiem: ...?" Odpowiedź "tak" robi z przypuszczenia pewny fakt, "nie" je usuwa, a "nie, mam kota" zapisuje poprawkę.</p></li>
+      <li><h3>Zapomina</h3><p>Przypuszczenie, które przez 30 dni się nie powtórzy, traci 10 punktów, a poniżej 20% znika. Fakty podane wprost nie zanikają.</p></li>
+    </ul>
+
+    <div class="privacy">
+      <h3>Czego IRIS nie robi sama</h3>
+      <ul>
+        <li>O zdrowiu, lekach, adresie, pieniądzach, wyznaniu, poglądach i orientacji nie wyciąga wniosków. Zapisze to tylko po poleceniu "zapamiętaj".</li>
+        <li>Przypuszczenia wyciąga domyślnie tylko lokalny model (Ollama). Do modelu trafia sama Twoja wypowiedź, bez historii i znanych faktów.</li>
+        <li>Treść faktów jest tylko w bazie. Nie ma jej w zapisie zdarzeń ani w logach.</li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="block wrap" id="urzadzenia">
+    <h2>Jedno aktywne urządzenie</h2>
+    <p class="lead">Do hosta może być podłączonych kilka urządzeń, ale rozmawia jedno. Przełączasz je przyciskiem albo głosem: "przełącz na laptop".</p>
+    <ul class="grid">
+      <li><h3>Przeglądarka</h3><p>Telefon lub komputer. Klient działa pod adresem hosta i można go zainstalować jako aplikację. Wymaga HTTPS, a na komputerze z hostem wystarcza localhost.</p></li>
+      <li><h3>Komputer i Raspberry Pi</h3><p>Program używający mikrofonu i głośnika systemu. Może słuchać bez rąk, po głośności.</p></li>
+      <li><h3>HERMES</h3><p>Urządzenie z mikrofonem, głośnikiem i czujnikami (STM32L476). Prosty stan trzyma lokalnie, resztę host.</p></li>
+    </ul>
+  </section>
+
+  <section class="block wrap" id="instalacja">
+    <h2>Instalacja</h2>
+    <p class="lead">Host działa na Twoim komputerze lub Raspberry Pi. Na telefonie otwierasz jego adres HTTPS i instalujesz stronę jako aplikację.</p>
+    <div class="code">
+      <h3>Linux i macOS</h3>
+      <pre id="code-unix">git clone -b main https://github.com/Kajetan98/Iris.git iris &amp;&amp; cd iris
+python3 -m venv .venv &amp;&amp; . .venv/bin/activate
+pip install -e ".[voice]"
+cp iris.example.toml iris.toml
+IRIS_CONFIG=iris.toml uvicorn host.api.main:app</pre>
+      <button class="copy" type="button" data-target="code-unix">Kopiuj</button>
+    </div>
+    <div class="code">
+      <h3>Windows (cmd)</h3>
+      <pre id="code-win">git clone -b main https://github.com/Kajetan98/Iris.git iris
+cd iris
+python -m venv .venv
+.venv\Scripts\activate.bat
+pip install -e ".[voice]"
+copy iris.example.toml iris.toml
+set IRIS_CONFIG=iris.toml
+uvicorn host.api.main:app</pre>
+      <button class="copy" type="button" data-target="code-win">Kopiuj</button>
+    </div>
+    <ol class="steps">
+      <li>Pobierz model w Ollamie (np. <span class="cmd">ollama pull llama3.1</span>) i polski głos Pipera (pliki <span class="cmd">.onnx</span> i <span class="cmd">.onnx.json</span>) do katalogu <span class="cmd">voices/</span>. Ścieżki ustawia <span class="cmd">iris.toml</span>.</li>
+      <li>Na komputerze otwórz <span class="cmd">http://localhost:8000/app/</span> w Chrome lub Edge.</li>
+      <li>Na telefon wystaw hosta przez HTTPS, np. Tailscale Serve (<span class="cmd">tailscale serve --bg 8000</span>) albo tunel Cloudflare. Przez tunel ustaw <span class="cmd">IRIS_TOKEN</span>, bez niego host odrzuca takie połączenia.</li>
+      <li>W <span class="cmd">iris.toml</span> dodaj adres tej strony: <span class="cmd">[api]</span> i <span class="cmd">cors_origins = ["https://iris-asystent.vercel.app"]</span>, a potem uruchom host ponownie.</li>
+      <li>Na telefonie otwórz <a href="app/">aplikację IRIS</a>, w ustawieniach wpisz nazwę urządzenia, adres hosta (https) i token, a potem zainstaluj ją z menu przeglądarki ("Zainstaluj aplikację" albo "Do ekranu początkowego"). Adres aplikacji jest stały, zmienia się tylko adres hosta w ustawieniach.</li>
+    </ol>
+  </section>
+
+  <section class="block wrap status" id="stan">
+    <h2>Stan projektu</h2>
+    <dl>
+      <dt>Testy</dt><dd>880 testów hosta przechodzi, w tym klient w Chromium. Rdzeń firmware przechodzi własne testy z ASan, UBSan i valgrindem.</dd>
+      <dt>Czego nie sprawdzono</dt><dd>Jakości przypuszczeń z prawdziwego modelu (w testach była atrapa), pracy na prawdziwym telefonie i w Safari oraz firmware na sprzęcie STM32.</dd>
+      <dt>Do pobrania osobno</dt><dd>Model w Ollamie i głos Pipera. Licencja <span class="cmd">piper-tts</span> to GPL-3.0 lub nowsza, więc sprawdź ją przed udostępnianiem hosta innym.</dd>
+    </dl>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>IRIS jest programem. Opisy jej stanu pochodzą z danych, nie z odczuwania.</span>
+  </div>
+</footer>
+
+<script>
+// Głos IRIS jako świecąca fala na canvas. Amplituda z poziomu dźwięku: głos IRIS, gdy mówi,
+// mikrofon, gdy słucha. Kilka pasm o różnych fazach, zwężonych na końcach; kolory się sumują.
+
+const TAU = Math.PI * 2;
+const SAMPLES = 120;
+const SPAN = 0.88; // część szerokości zajęta przez falę
+const MAX_DPR = 1.5; // miękkie, świecące linie nie potrzebują pełnej rozdzielczości ekranu
+const SLOW_FRAME_MS = 32; // bez dźwięku wystarczy ok. 30 klatek na sekundę
+
+// Cel dla stanu: amp (wysokość bez dźwięku, 0-1), gain (wpływ poziomu dźwięku), speed (tempo
+// ruchu), spread (rozejście pasm; 0 to jedna linia), warm (0: chłodne kolory słuchania, 1: pełna
+// paleta mowy IRIS), light (jasność).
+const STATES = {
+  offline: { amp: 0, gain: 0, speed: 0, spread: 0.05, warm: 0.3, light: 0.3 },
+  connecting: { amp: 0.04, gain: 0, speed: 0.5, spread: 0.3, warm: 0.3, light: 0.45 },
+  inactive: { amp: 0.03, gain: 0, speed: 0.25, spread: 0.25, warm: 0.4, light: 0.4 },
+  idle: { amp: 0.09, gain: 0, speed: 0.35, spread: 0.55, warm: 0.65, light: 0.8 },
+  listening: { amp: 0.1, gain: 0.8, speed: 0.8, spread: 0.6, warm: 0, light: 1 },
+  thinking: { amp: 0.16, gain: 0, speed: 1.7, spread: 0.85, warm: 0.6, light: 0.9 },
+  speaking: { amp: 0.26, gain: 0.8, speed: 1.15, spread: 1, warm: 1, light: 1 },
+};
+// Bez ruchu: stała wysokość dla stanu, bez śledzenia dźwięku.
+const STILL_AMP = { listening: 0.45, thinking: 0.3, speaking: 0.7 };
+
+// Pasma: w (grubość w px CSS), a (jasność), k (dwie częstotliwości wzdłuż fali), p (fazy),
+// s (prędkości), amp (udział w wysokości), warm/cool (kolory od lewej do prawej), dots (kropki).
+const STRANDS = [
+  { w: 7, a: 0.28, k: [1.7, 3.2], p: [0.4, 2.0], s: [0.7, 0.5], amp: 0.75,
+    warm: ["#ff8a5c", "#c45cff", "#5b6cff", "#8b5cf6", "#ff7a9a"], cool: ["#4f7dff", "#3d6bff", "#5b8cff", "#4f7dff", "#7aa8ff"] },
+  { w: 3.4, a: 0.95, k: [1.9, 3.6], p: [0.2, 1.4], s: [1.0, 0.6], amp: 1,
+    warm: ["#ff9466", "#7c5cff", "#3d7bff", "#5b7cff", "#ff7a8a"], cool: ["#6aa8ff", "#4f7dff", "#3d7bff", "#5b8cff", "#8fbaff"] },
+  { w: 2.4, a: 0.85, k: [2.2, 3.1], p: [1.1, 0.3], s: [0.8, 0.9], amp: 0.6,
+    warm: ["#ff7ab0", "#a855f7", "#6d5dfc", "#3b82f6", "#c084fc"], cool: ["#7f9cff", "#6d8bff", "#4f7dff", "#3b82f6", "#9db8ff"] },
+  { w: 2.2, a: 0.85, k: [1.6, 4.1], p: [2.3, 0.9], s: [0.9, 0.7], amp: 1.1,
+    warm: ["#c05cff", "#8b5cf6", "#ffd84a", "#ffb347", "#ff6fa0"], cool: ["#9db8ff", "#6d8bff", "#bcd2ff", "#8fb3ff", "#7aa8ff"] },
+  { w: 1.5, a: 0.9, k: [2.0, 2.8], p: [0.8, 2.6], s: [1.1, 0.8], amp: 0.5,
+    warm: ["#ffd6c2", "#ffffff", "#f3e8ff", "#ffffff", "#ffd1dc"], cool: ["#dbe7ff", "#ffffff", "#eef3ff", "#ffffff", "#dbe7ff"] },
+  { w: 1.6, a: 0.95, k: [2.4, 3.4], p: [1.7, 1.2], s: [0.7, 1.0], amp: 1.15, dots: true,
+    warm: ["#ffe4d6", "#ffffff", "#ffffff", "#ffffff", "#ffd1dc"], cool: ["#e3edff", "#ffffff", "#ffffff", "#ffffff", "#e3edff"] },
+  { w: 2.8, a: 0.7, k: [1.8, 3.8], p: [2.9, 0.1], s: [0.6, 1.1], amp: 0.85,
+    warm: ["#fb7185", "#ff8a5c", "#f472b6", "#ff8a5c", "#fb923c"], cool: ["#5b8cff", "#7aa8ff", "#6d8bff", "#7aa8ff", "#5b8cff"] },
+];
+
+const STOPS = [0.08, 0.3, 0.52, 0.72, 0.92];
+
+function clamp(x, lo, hi) {
+  return Math.min(hi, Math.max(lo, x));
+}
+
+function rgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+for (const s of STRANDS) {
+  s.warmRgb = s.warm.map(rgb);
+  s.coolRgb = s.cool.map(rgb);
+}
+
+// Obwiednia: zero na końcach, największa wysokość trochę na prawo od środka (jak w nagraniu mowy).
+function envelope(u) {
+  const taper = Math.pow(Math.sin(Math.PI * u), 2.4);
+  const focus = Math.exp(-(((u - 0.56) / 0.21) ** 2));
+  return taper * (0.28 + 0.72 * focus);
+}
+
+class Wave {
+  constructor(canvas, { level = () => 0, reducedMotion = false } = {}) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.level = level;
+    this.reducedMotion = reducedMotion;
+    this.state = "offline";
+    this.now = { ...STATES.offline };
+    this.smoothLevel = 0;
+    this.phase = 1.3; // czas fali (rośnie z tempem stanu)
+    this.time = 0;
+    this.frame = null;
+    this.running = false;
+    this.settled = false;
+    this.last = 0;
+    this.gradients = new Map(); // pasmo -> {key, gradient}
+    this.u = Float64Array.from({ length: SAMPLES }, (_, i) => i / (SAMPLES - 1));
+    this.env = this.u.map(envelope);
+    this.thin = this.u.map((u) => Math.pow(Math.sin(Math.PI * u), 0.9)); // zwężenie grubości
+    this.ys = new Float64Array(SAMPLES);
+    // Iskry wokół lewego końca, jak rozproszone światło w paśmie.
+    let seed = 7;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    this.sparks = Array.from({ length: 46 }, () => ({ u: 0.06 + 0.42 * rand() ** 1.6, dy: rand() * 2 - 1, f: 0.6 + rand() * 2.2, ph: rand() * TAU }));
+    new ResizeObserver(() => this.resize()).observe(canvas);
+    this.resize();
+  }
+
+  resize() {
+    const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
+    const w = Math.round(this.canvas.clientWidth * dpr);
+    const h = Math.round(this.canvas.clientHeight * dpr);
+    if (w > 0 && h > 0 && (this.canvas.width !== w || this.canvas.height !== h)) {
+      this.canvas.width = w;
+      this.canvas.height = h;
+    }
+    this.dpr = dpr;
+    this.request();
+  }
+
+  setState(state) {
+    this.state = STATES[state] ? state : "idle";
+    this.request();
+  }
+
+  target() {
+    const t = STATES[this.state];
+    if (this.reducedMotion) return { ...t, amp: STILL_AMP[this.state] ?? t.amp, gain: 0, speed: 0 };
+    return t;
+  }
+
+  // Pętla działa tylko, gdy coś się rusza (oszczędza baterię telefonu).
+  request() {
+    if (this.frame !== null) return;
+    if (!this.running) {
+      this.running = true;
+      this.last = performance.now();
+    }
+    this.frame = requestAnimationFrame((t) => this.step(t));
+  }
+
+  step(now) {
+    this.frame = null;
+    const t = this.target();
+    // Bez śledzenia dźwięku i po zakończonym przejściu między stanami: co druga klatka.
+    if (t.gain === 0 && this.settled && now - this.last < SLOW_FRAME_MS) {
+      this.frame = requestAnimationFrame((n) => this.step(n));
+      return;
+    }
+    const dt = Math.min(0.1, (now - this.last) / 1000);
+    this.last = now;
+    this.time += dt;
+    const raw = t.gain > 0 ? clamp(this.level(), 0, 1) : 0;
+    // Szybkie narastanie, wolniejsze opadanie: fala nadąża za sylabami, ale nie migocze.
+    this.smoothLevel += (raw - this.smoothLevel) * (1 - Math.exp(-dt * (raw > this.smoothLevel ? 26 : 7)));
+    const k = this.reducedMotion ? 1 : 1 - Math.exp(-dt * 5);
+    let settled = true;
+    for (const key of ["amp", "spread", "warm", "light", "speed"]) {
+      this.now[key] += (t[key] - this.now[key]) * k;
+      if (Math.abs(t[key] - this.now[key]) > 0.002) settled = false;
+    }
+    this.settled = settled;
+    this.phase += dt * this.now.speed;
+    this.draw();
+    const moving = !this.reducedMotion && (t.speed > 0 || this.smoothLevel > 0.002);
+    if (moving || !settled) this.request();
+    else this.running = false;
+  }
+
+  // Gradient pasma od lewej do prawej; liczony od nowa tylko przy zmianie kolorów lub szerokości.
+  gradient(n, strand, x0, span) {
+    const key = `${Math.round(this.now.warm * 100)}:${x0}:${span}`;
+    const cached = this.gradients.get(n);
+    if (cached && cached.key === key) return cached.gradient;
+    const warm = Math.round(this.now.warm * 100) / 100;
+    const g = this.ctx.createLinearGradient(x0, 0, x0 + span, 0);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    STOPS.forEach((at, i) => {
+      const w = strand.warmRgb[i];
+      const c = strand.coolRgb[i];
+      const mix = (j) => Math.round(c[j] + (w[j] - c[j]) * warm);
+      g.addColorStop(at, `rgb(${mix(0)},${mix(1)},${mix(2)})`);
+    });
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    this.gradients.set(n, { key, gradient: g });
+    return g;
+  }
+
+  draw() {
+    const { ctx, canvas, dpr } = this;
+    const W = canvas.width;
+    const H = canvas.height;
+    if (!W || !H) return;
+    const s = this.now;
+    const height = clamp(s.amp + this.target().gain * this.smoothLevel, 0, 1);
+    const x0 = (W * (1 - SPAN)) / 2;
+    const span = W * SPAN;
+    const cy = H / 2;
+    const A = H * 0.46 * height;
+    ctx.clearRect(0, 0, W, H);
+    ctx.globalCompositeOperation = "lighter";
+    // poświata tła jest w CSS (.presence), żeby nie malować całego canvas w każdej klatce
+
+    const base = STRANDS[1];
+    STRANDS.forEach((strand, n) => {
+      const color = this.gradient(n, strand, x0, span);
+      for (let i = 0; i < SAMPLES; i++) {
+        const u = this.u[i];
+        const own = 0.62 * Math.sin(TAU * strand.k[0] * u + strand.p[0] + strand.s[0] * this.phase) +
+          0.38 * Math.sin(TAU * strand.k[1] * u + strand.p[1] - strand.s[1] * this.phase);
+        const common = 0.62 * Math.sin(TAU * base.k[0] * u + base.p[0] + base.s[0] * this.phase) +
+          0.38 * Math.sin(TAU * base.k[1] * u + base.p[1] - base.s[1] * this.phase);
+        const scale = 1 + (strand.amp - 1) * s.spread;
+        this.ys[i] = cy + A * this.env[i] * scale * (common + (own - common) * s.spread);
+      }
+      const alpha = strand.a * s.light; // przez globalAlpha, gradient zostaje w pamięci
+      const line = () => {
+        ctx.beginPath();
+        for (let i = 0; i < SAMPLES; i++) {
+          const x = x0 + this.u[i] * span;
+          if (i) ctx.lineTo(x, this.ys[i]);
+          else ctx.moveTo(x, this.ys[i]);
+        }
+      };
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      if (strand.dots) {
+        line();
+        ctx.setLineDash([0.001, 4.2 * dpr]);
+        ctx.lineWidth = strand.w * dpr;
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = alpha;
+        ctx.stroke();
+        ctx.setLineDash([]);
+        return;
+      }
+      // poświata: jedno szerokie, słabe pociągnięcie pod rdzeniem
+      line();
+      ctx.lineWidth = Math.min(strand.w * 3.4, 14) * dpr;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = alpha * 0.16;
+      ctx.stroke();
+      // rdzeń: wstęga zwężona na końcach
+      ctx.beginPath();
+      for (let i = 0; i < SAMPLES; i++) {
+        const x = x0 + this.u[i] * span;
+        const half = (strand.w * dpr * this.thin[i]) / 2;
+        if (i) ctx.lineTo(x, this.ys[i] - half);
+        else ctx.moveTo(x, this.ys[i] - half);
+      }
+      for (let i = SAMPLES - 1; i >= 0; i--) {
+        ctx.lineTo(x0 + this.u[i] * span, this.ys[i] + (strand.w * dpr * this.thin[i]) / 2);
+      }
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+    });
+    ctx.globalAlpha = 1;
+
+    // iskry przy lewym końcu, migoczą tylko w ruchu
+    for (const p of this.sparks) {
+      const i = Math.round(p.u * (SAMPLES - 1));
+      const flicker = this.reducedMotion ? 0.6 : 0.5 + 0.5 * Math.sin(this.time * TAU * p.f * 0.5 + p.ph);
+      const a = 0.55 * s.light * flicker * (0.3 + 0.7 * s.spread);
+      if (a < 0.02) continue;
+      const x = x0 + p.u * span;
+      const y = this.ys[i] + p.dy * (2 + 6 * this.thin[i]) * dpr * (0.4 + s.spread);
+      ctx.fillStyle = `rgba(255,${190 + Math.round(50 * (1 - s.warm))},${220},${a})`;
+      ctx.fillRect(x, y, 1.4 * dpr, 1.4 * dpr);
+    }
+    ctx.globalCompositeOperation = "source-over";
+  }
+}
+
+
+const $ = (id) => document.getElementById(id);
+const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const STATE_TEXT = { idle: "Przytrzymaj przycisk i mów", listening: "Słucham", thinking: "Przygotowuję odpowiedź", speaking: "Mówię" };
+const SCENES = [
+  { heard: "Idę z Burkiem na spacer.", reply: "Miłego spaceru." },
+  { heard: "Zapamiętaj, że w piątki gram w kosza.", reply: "Zapamiętane: \"w piątki gram w kosza\"." },
+  { heard: "Co o mnie wiesz?", reply: "Wiem od ciebie: \"w piątki gram w kosza\"; \"masz psa o imieniu Burek\"." },
+];
+let ui = "idle";
+let level = 0;
+let started = performance.now();
+const wave = new Wave($("wave"), { level: () => level, reducedMotion });
+
+function setUi(next) {
+  ui = next;
+  started = performance.now();
+  $("state").textContent = STATE_TEXT[next];
+  wave.setState(next);
+}
+
+// Poziom dźwięku dla fali: przy słuchaniu oddech mowy, przy mówieniu impulsy sylab.
+(function tick(t) {
+  const s = (t - started) / 1000;
+  if (ui === "listening") level = 0.25 + 0.35 * Math.abs(Math.sin(s * 7.5)) * (0.6 + 0.4 * Math.sin(s * 1.7));
+  else if (ui === "speaking") level = Math.min(1, 0.22 + 0.2 * Math.abs(Math.sin(s * 9.5)) + 0.18 * Math.abs(Math.sin(s * 3.1)));
+  else level = 0;
+  requestAnimationFrame(tick);
+})(performance.now());
+
+function words(el, text) {
+  el.replaceChildren();
+  const spans = [];
+  for (const part of text.split(/(\s+)/)) {
+    const span = document.createElement("span");
+    span.textContent = part;
+    if (part.trim()) { span.className = reducedMotion ? "word" : "word pending"; spans.push(span); }
+    el.append(span);
+  }
+  return spans;
+}
+
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function loop() {
+  for (let n = 0; ; n = (n + 1) % SCENES.length) {
+    const scene = SCENES[n];
+    setUi("idle");
+    $("heard").textContent = "";
+    $("reply").textContent = "";
+    await wait(1800);
+    setUi("listening");
+    await wait(2200);
+    const heard = $("heard");
+    heard.replaceChildren();
+    const who = document.createElement("span");
+    who.className = "who";
+    who.textContent = "Ty";
+    heard.append(who, ` ${scene.heard}`);
+    setUi("thinking");
+    await wait(1300);
+    setUi("speaking");
+    const spans = words($("reply"), scene.reply);
+    const step = Math.max(160, 3600 / spans.length);
+    for (const span of spans) { span.classList.remove("pending"); await wait(step); }
+    await wait(1200);
+  }
+}
+
+if (reducedMotion) {
+  const scene = SCENES[0];
+  const who = document.createElement("span");
+  who.className = "who";
+  who.textContent = "Ty";
+  $("heard").append(who, ` ${scene.heard}`);
+  words($("reply"), scene.reply);
+  setUi("speaking");
+} else {
+  loop();
+}
+
+for (const button of document.querySelectorAll(".copy")) {
+  button.addEventListener("click", async () => {
+    const pre = $(button.dataset.target);
+    try {
+      await navigator.clipboard.writeText(pre.textContent);
+      button.textContent = "Skopiowano";
+    } catch {
+      const range = document.createRange();
+      range.selectNodeContents(pre);
+      const sel = window.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      button.textContent = "Zaznaczono";
+    }
+    setTimeout(() => (button.textContent = "Kopiuj"), 2000);
+  });
+}
+</script>
+</body>
+</html>
