@@ -2,12 +2,9 @@
   <img src="docs/brand/iris-icon.png" width="128" alt="">
 </p>
 
-<h1 align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/iris-wordmark-white.png">
-    <img src="docs/brand/iris-wordmark.png" height="44" alt="IRIS">
-  </picture>
-</h1>
+<p align="center">
+  <img src="docs/brand/iris-header.png" height="72" alt="IRIS">
+</p>
 
 Asystent głosowy po polsku. Host w Pythonie trzyma stan, rozmawia przez LLM i obsługuje mowę (rozpoznawanie i synteza). Urządzeniem, przez które się z nim rozmawia, może być ciało HERMES (STM32L476), przeglądarka na telefonie lub komputerze albo program na komputer i Raspberry Pi. Aktywne jest jedno urządzenie naraz, przełączane przyciskiem lub głosem ("przełącz na laptop").
 
@@ -107,5 +104,5 @@ Testy przeglądarki (`host/tests/test_browser.py`) wymagają Node i Playwright z
 
 ## Logo
 
-Pliki w `docs/brand/`: `iris-icon.png` (ikona aplikacji, 1024×1024, przezroczyste rogi), `iris-wordmark` i `iris-wordmark-white` w wersji SVG i PNG (napis IRIS na jasne i ciemne tło; README używa PNG, bo GitHub pokazuje je zawsze). Ikony klienta w przeglądarce (`host/api/static/icon-*.png`, `apple-touch-icon.png`) powstały z tej samej ikony.
+Pliki w `docs/brand/`: `iris-icon.png` (ikona aplikacji, 1024×1024, przezroczyste rogi), `iris-wordmark` i `iris-wordmark-white` w wersji SVG i PNG (napis IRIS na jasne i ciemne tło). `iris-header.png` to napis na ciemnej pastylce, czytelny w obu motywach GitHuba; README używa go w nagłówku, bez przełączania motywu. Ikony klienta w przeglądarce (`host/api/static/icon-*.png`, `apple-touch-icon.png`) powstały z tej samej ikony.
 
