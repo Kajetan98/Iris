@@ -2,8 +2,10 @@
 // mikrofon, gdy słucha. Kilka pasm o różnych fazach, zwężonych na końcach; kolory się sumują.
 
 const TAU = Math.PI * 2;
-const SAMPLES = 160;
+const SAMPLES = 120;
 const SPAN = 0.88; // część szerokości zajęta przez falę
+const MAX_DPR = 1.5; // miękkie, świecące linie nie potrzebują pełnej rozdzielczości ekranu
+const SLOW_FRAME_MS = 32; // bez dźwięku wystarczy ok. 30 klatek na sekundę
 
 // Cel dla stanu: amp (wysokość bez dźwięku, 0-1), gain (wpływ poziomu dźwięku), speed (tempo
 // ruchu), spread (rozejście pasm; 0 to jedna linia), warm (0: chłodne kolory słuchania, 1: pełna
@@ -74,7 +76,10 @@ export class Wave {
     this.phase = 1.3; // czas fali (rośnie z tempem stanu)
     this.time = 0;
     this.frame = null;
+    this.running = false;
+    this.settled = false;
     this.last = 0;
+    this.gradients = new Map(); // pasmo -> {key, gradient}
     this.u = Float64Array.from({ length: SAMPLES }, (_, i) => i / (SAMPLES - 1));
     this.env = this.u.map(envelope);
     this.thin = this.u.map((u) => Math.pow(Math.sin(Math.PI * u), 0.9)); // zwężenie grubości
@@ -88,7 +93,7 @@ export class Wave {
   }
 
   resize() {
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const dpr = Math.min(MAX_DPR, window.devicePixelRatio || 1);
     const w = Math.round(this.canvas.clientWidth * dpr);
     const h = Math.round(this.canvas.clientHeight * dpr);
     if (w > 0 && h > 0 && (this.canvas.width !== w || this.canvas.height !== h)) {
@@ -112,18 +117,25 @@ export class Wave {
 
   // Pętla działa tylko, gdy coś się rusza (oszczędza baterię telefonu).
   request() {
-    if (this.frame === null) {
+    if (this.frame !== null) return;
+    if (!this.running) {
+      this.running = true;
       this.last = performance.now();
-      this.frame = requestAnimationFrame((t) => this.step(t));
     }
+    this.frame = requestAnimationFrame((t) => this.step(t));
   }
 
   step(now) {
     this.frame = null;
+    const t = this.target();
+    // Bez śledzenia dźwięku i po zakończonym przejściu między stanami: co druga klatka.
+    if (t.gain === 0 && this.settled && now - this.last < SLOW_FRAME_MS) {
+      this.frame = requestAnimationFrame((n) => this.step(n));
+      return;
+    }
     const dt = Math.min(0.1, (now - this.last) / 1000);
     this.last = now;
     this.time += dt;
-    const t = this.target();
     const raw = t.gain > 0 ? clamp(this.level(), 0, 1) : 0;
     // Szybkie narastanie, wolniejsze opadanie: fala nadąża za sylabami, ale nie migocze.
     this.smoothLevel += (raw - this.smoothLevel) * (1 - Math.exp(-dt * (raw > this.smoothLevel ? 26 : 7)));
@@ -133,10 +145,31 @@ export class Wave {
       this.now[key] += (t[key] - this.now[key]) * k;
       if (Math.abs(t[key] - this.now[key]) > 0.002) settled = false;
     }
+    this.settled = settled;
     this.phase += dt * this.now.speed;
     this.draw();
     const moving = !this.reducedMotion && (t.speed > 0 || this.smoothLevel > 0.002);
     if (moving || !settled) this.request();
+    else this.running = false;
+  }
+
+  // Gradient pasma od lewej do prawej; liczony od nowa tylko przy zmianie kolorów lub szerokości.
+  gradient(n, strand, x0, span) {
+    const key = `${Math.round(this.now.warm * 100)}:${x0}:${span}`;
+    const cached = this.gradients.get(n);
+    if (cached && cached.key === key) return cached.gradient;
+    const warm = Math.round(this.now.warm * 100) / 100;
+    const g = this.ctx.createLinearGradient(x0, 0, x0 + span, 0);
+    g.addColorStop(0, "rgba(0,0,0,0)");
+    STOPS.forEach((at, i) => {
+      const w = strand.warmRgb[i];
+      const c = strand.coolRgb[i];
+      const mix = (j) => Math.round(c[j] + (w[j] - c[j]) * warm);
+      g.addColorStop(at, `rgb(${mix(0)},${mix(1)},${mix(2)})`);
+    });
+    g.addColorStop(1, "rgba(0,0,0,0)");
+    this.gradients.set(n, { key, gradient: g });
+    return g;
   }
 
   draw() {
@@ -152,33 +185,11 @@ export class Wave {
     const A = H * 0.46 * height;
     ctx.clearRect(0, 0, W, H);
     ctx.globalCompositeOperation = "lighter";
-
-    // poświata za falą, mocniejsza przy głośniejszym dźwięku; elipsa mieści się w canvas,
-    // więc nie widać jego krawędzi
-    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, H / 2);
-    glow.addColorStop(0, `rgba(110,60,170,${0.1 * s.light + 0.16 * height})`);
-    glow.addColorStop(1, "rgba(110,60,170,0)");
-    ctx.save();
-    ctx.translate(W * 0.53, cy);
-    ctx.scale((W * 0.4) / (H / 2), 1);
-    ctx.fillStyle = glow;
-    ctx.fillRect(-H / 2, -H / 2, H, H);
-    ctx.restore();
+    // poświata tła jest w CSS (.presence), żeby nie malować całego canvas w każdej klatce
 
     const base = STRANDS[1];
     STRANDS.forEach((strand, n) => {
-      const color = (alpha) => {
-        const g = ctx.createLinearGradient(x0, 0, x0 + span, 0);
-        g.addColorStop(0, "rgba(0,0,0,0)");
-        STOPS.forEach((at, i) => {
-          const w = strand.warmRgb[i];
-          const c = strand.coolRgb[i];
-          const mix = (j) => Math.round(c[j] + (w[j] - c[j]) * s.warm);
-          g.addColorStop(at, `rgba(${mix(0)},${mix(1)},${mix(2)},${alpha})`);
-        });
-        g.addColorStop(1, "rgba(0,0,0,0)");
-        return g;
-      };
+      const color = this.gradient(n, strand, x0, span);
       for (let i = 0; i < SAMPLES; i++) {
         const u = this.u[i];
         const own = 0.62 * Math.sin(TAU * strand.k[0] * u + strand.p[0] + strand.s[0] * this.phase) +
@@ -188,7 +199,7 @@ export class Wave {
         const scale = 1 + (strand.amp - 1) * s.spread;
         this.ys[i] = cy + A * this.env[i] * scale * (common + (own - common) * s.spread);
       }
-      const alpha = strand.a * s.light;
+      const alpha = strand.a * s.light; // przez globalAlpha, gradient zostaje w pamięci
       const line = () => {
         ctx.beginPath();
         for (let i = 0; i < SAMPLES; i++) {
@@ -203,18 +214,17 @@ export class Wave {
         line();
         ctx.setLineDash([0.001, 4.2 * dpr]);
         ctx.lineWidth = strand.w * dpr;
-        ctx.strokeStyle = color(alpha);
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = alpha;
         ctx.stroke();
         ctx.setLineDash([]);
         return;
       }
-      // poświata: szerokie, słabe pociągnięcia pod rdzeniem
+      // poświata: jedno szerokie, słabe pociągnięcie pod rdzeniem
       line();
-      ctx.lineWidth = strand.w * dpr * 7;
-      ctx.strokeStyle = color(alpha * 0.06);
-      ctx.stroke();
-      ctx.lineWidth = strand.w * dpr * 2.6;
-      ctx.strokeStyle = color(alpha * 0.16);
+      ctx.lineWidth = Math.min(strand.w * 3.4, 14) * dpr;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = alpha * 0.16;
       ctx.stroke();
       // rdzeń: wstęga zwężona na końcach
       ctx.beginPath();
@@ -228,9 +238,11 @@ export class Wave {
         ctx.lineTo(x0 + this.u[i] * span, this.ys[i] + (strand.w * dpr * this.thin[i]) / 2);
       }
       ctx.closePath();
-      ctx.fillStyle = color(alpha);
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
       ctx.fill();
     });
+    ctx.globalAlpha = 1;
 
     // iskry przy lewym końcu, migoczą tylko w ruchu
     for (const p of this.sparks) {

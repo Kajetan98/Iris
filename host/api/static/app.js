@@ -333,7 +333,8 @@ function open(device, token) {
     state.ws = null;
     const reason = CLOSE_REASONS[ev.code];
     if (state.wanted) {
-      notice(`${reason ?? "Połączenie przerwane."} Ponawiam za ${state.backoff / 1000} s.`);
+      const delay = (state.backoff / 1000).toLocaleString("pl-PL");
+      notice(`${reason ?? "Połączenie przerwane."} Ponawiam za ${delay} s.`);
       state.retry = setTimeout(() => open(device, token), state.backoff);
       state.backoff = Math.min(BACKOFF_MAX_MS, state.backoff * 2);
       setUi("connecting");

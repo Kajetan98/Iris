@@ -130,9 +130,31 @@ input {
 }
 
 .presence {
+  position: relative;
   display: grid;
   justify-items: center;
   padding: 0.25rem 0 0.75rem;
+}
+
+/* poświata za falą (statyczna, żeby canvas nie malował jej w każdej klatce); jaśniejsza przy mowie */
+.presence::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 1.5rem;
+  background: radial-gradient(ellipse 42% 38% at 53% 50%, rgb(110 60 170 / 0.22), transparent 70%);
+  opacity: 0.6;
+  transition: opacity 600ms ease-out;
+  pointer-events: none;
+}
+
+[data-state="listening"] .presence::before,
+[data-state="speaking"] .presence::before {
+  opacity: 1;
+}
+
+[data-state="offline"] .presence::before,
+[data-state="inactive"] .presence::before {
+  opacity: 0.25;
 }
 
 /* fala na całą szerokość ekranu, bez marginesów */
@@ -385,7 +407,53 @@ button.secondary,
   }
 }
 
+/* telefon w poziomie: fala po lewej, rozmowa i przycisk po prawej */
+@media (orientation: landscape) and (max-height: 520px) {
+  body {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .bar {
+    grid-column: 1 / -1;
+  }
+
+  .stage {
+    display: contents;
+  }
+
+  .presence {
+    grid-column: 1;
+    grid-row: 2 / 4;
+    align-content: center;
+  }
+
+  .wave {
+    height: min(50dvh, 14rem);
+  }
+
+  .talk-log {
+    grid-column: 2;
+    grid-row: 2;
+    padding-top: 0.25rem;
+  }
+
+  .dock {
+    grid-column: 2;
+    grid-row: 3;
+    padding-top: 0.25rem;
+  }
+
+  .talk {
+    min-height: 3.25rem;
+  }
+
+  .reply {
+    font-size: var(--step-1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .presence::before,
   .word,
   .talk {
     transition: none;
