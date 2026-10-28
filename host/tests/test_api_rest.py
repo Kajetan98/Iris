@@ -139,7 +139,9 @@ def test_facts_list_patch_delete(client, service):
 
     facts = client.get("/facts").json()["facts"]
     assert [f["text"] for f in facts] == ["Mieszkam w Gdańsku", "Lubi kawę"]
-    assert set(facts[0]) == {"id", "text", "source", "confidence", "reinforced", "asked_at", "created_at", "updated_at"}
+    assert set(facts[0]) == {"id", "text", "source", "confidence", "reinforced", "asked_at", "in_context",
+                             "created_at", "updated_at"}
+    assert facts[0]["in_context"] is False  # bez LLM nic nie trafia do kontekstu
     assert (facts[0]["reinforced"], facts[0]["asked_at"]) == (0, None)
     assert [f["id"] for f in client.get("/facts", params={"source": "inferred"}).json()["facts"]] == [b.id]
     assert client.get("/facts", params={"source": "guessed"}).status_code == 422

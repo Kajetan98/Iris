@@ -598,6 +598,73 @@ async function watchBattery() {
 
 // --- start ---
 
+// --- pamięć: co IRIS wie o użytkowniku (spec, sekcja 1 i 9) ---
+
+function authHeaders() {
+  const token = $("token").value.trim();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function factMeta(fact) {
+  if (fact.source === "stated") return "od ciebie";
+  const pct = `${Math.round(fact.confidence * 100)}%`;
+  return fact.in_context ? `przypuszczenie, pewność ${pct}` : `przypuszczenie, pewność ${pct}, jeszcze nieużywane w rozmowie`;
+}
+
+function renderFacts(facts) {
+  const list = $("facts");
+  list.replaceChildren();
+  $("memory-status").textContent = facts.length ? "" : "IRIS jeszcze nic o tobie nie wie.";
+  // Najpierw pewne, potem przypuszczenia od najpewniejszych.
+  facts.sort((a, b) => (a.source === b.source ? b.confidence - a.confidence : a.source === "stated" ? -1 : 1));
+  for (const fact of facts) {
+    const li = document.createElement("li");
+    li.className = fact.source === "stated" ? "fact" : "fact guess";
+    const text = document.createElement("p");
+    text.className = "fact-text";
+    text.textContent = fact.text;
+    const meta = document.createElement("p");
+    meta.className = "fact-meta";
+    meta.textContent = factMeta(fact);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "secondary";
+    remove.textContent = "Usuń";
+    remove.setAttribute("aria-label", `Usuń: ${fact.text}`);
+    remove.addEventListener("click", () => deleteFact(fact.id, li));
+    li.append(text, meta, remove);
+    list.append(li);
+  }
+}
+
+async function loadFacts() {
+  $("memory-status").textContent = "Pobieram listę z hosta.";
+  try {
+    const res = await fetch("/facts", { headers: authHeaders() });
+    if (!res.ok) throw new Error(res.status === 401 ? "host odrzucił token" : `odpowiedź ${res.status}`);
+    renderFacts((await res.json()).facts);
+  } catch (e) {
+    $("facts").replaceChildren();
+    $("memory-status").textContent = `Nie udało się pobrać listy (${e.message}). Sprawdź połączenie i token w ustawieniach.`;
+  }
+}
+
+async function deleteFact(id, li) {
+  try {
+    const res = await fetch(`/facts/${id}`, { method: "DELETE", headers: authHeaders() });
+    if (!res.ok && res.status !== 404) throw new Error(`odpowiedź ${res.status}`);
+    li.remove();
+    $("memory-status").textContent = $("facts").children.length ? "Usunięte." : "Usunięte. IRIS nic już o tobie nie wie.";
+  } catch (e) {
+    $("memory-status").textContent = `Nie udało się usunąć (${e.message}).`;
+  }
+}
+
+function openMemory() {
+  $("memory").showModal();
+  loadFacts();
+}
+
 function openSettings() {
   $("settings").showModal();
   $("device").focus();
@@ -608,6 +675,8 @@ function init() {
   $("device").value = saved ?? "";
   $("token").value = store.get("iris.token", "");
   $("open-settings").addEventListener("click", openSettings);
+  $("open-memory").addEventListener("click", openMemory);
+  $("close-memory").addEventListener("click", () => $("memory").close());
   $("close-settings").addEventListener("click", () => $("settings").close());
   $("settings-form").addEventListener("submit", (e) => {
     e.preventDefault();

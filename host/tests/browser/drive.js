@@ -178,6 +178,26 @@ const scenarios = {
     return { shortKept, longKept, state: await page.textContent("#state"), notice: await page.textContent("#notice") };
   },
 
+  // Okno "Co IRIS o mnie wie": lista faktów z hosta i usuwanie pierwszego z nich.
+  async memory(page) {
+    await connect(page, opts.device, opts.token);
+    await waitState(page, "idle");
+    await page.click("#open-memory");
+    await page.waitForSelector("#facts li");
+    const read = () =>
+      page.evaluate(() =>
+        Array.from(document.querySelectorAll("#facts li"), (li) => ({
+          text: li.querySelector(".fact-text").textContent,
+          meta: li.querySelector(".fact-meta").textContent,
+          label: li.querySelector("button").getAttribute("aria-label"),
+        })),
+      );
+    const before = await read();
+    await page.click("#facts li:first-child button");
+    await page.waitForFunction((n) => document.querySelectorAll("#facts li").length === n - 1, before.length);
+    return { before, after: await read(), status: await page.textContent("#memory-status") };
+  },
+
   // Zły token: kod 4003 i komunikat, bez połączenia.
   async badToken(page) {
     await connect(page, opts.device, opts.token);

@@ -16,6 +16,12 @@
   <header class="bar">
     <svg class="wordmark" viewBox="204 423 616 177" role="img" aria-label="IRIS"><g fill="currentColor" stroke="currentColor" stroke-width="1" stroke-linejoin="round"><path d="M225 424V583A16 16 0 0 1 209 599H205V440A16 16 0 0 1 221 424Z"/><path d="M286 424H427.5A48.5 48.5 0 0 1 427.5 521H357A48 48 0 0 0 309 569V594H289V569A68 68 0 0 1 357 501H427.5A28.5 28.5 0 0 0 427.5 444H291Z"/><path d="M403 521H430L498 594H471Z"/><path d="M583 424V583A16 16 0 0 1 567 599H563V440A16 16 0 0 1 579 424Z"/><path d="M796 424A20 20 0 0 1 776 444H697.5A28.5 28.5 0 0 0 697.5 501H769.5A48.5 48.5 0 0 1 769.5 598H660A20 20 0 0 1 680 578H769.5A28.5 28.5 0 0 0 769.5 521H697.5A48.5 48.5 0 0 1 697.5 424Z"/></g></svg>
     <span class="link" id="status" title="Połączenie z hostem">nie połączono</span>
+    <button class="icon-button" id="open-memory" type="button" aria-label="Co IRIS o mnie wie">
+      <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <path d="M12 6.5C10.3 5 7.8 4.5 4.5 4.8v12.7c3.3-.3 5.8.2 7.5 1.7 1.7-1.5 4.2-2 7.5-1.7V4.8C16.2 4.5 13.7 5 12 6.5Z"/>
+        <path d="M12 6.5v12.7"/>
+      </svg>
+    </button>
     <button class="icon-button" id="open-settings" type="button" aria-label="Ustawienia połączenia">
       <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
         <path d="M4 7h9M17 7h3M4 17h3M11 17h9"/>
@@ -71,6 +77,16 @@
         <button id="close-settings" class="secondary" type="button">Zamknij</button>
       </div>
     </form>
+  </dialog>
+
+  <dialog id="memory" class="sheet" aria-labelledby="memory-title">
+    <h2 id="memory-title">Co IRIS o mnie wie</h2>
+    <p class="help">Fakty podane wprost są pewne. Przypuszczenia z rozmów zyskują pewność, gdy się powtarzają, i IRIS pyta o nie. Naucz ją czegoś, mówiąc: zapamiętaj, że ...</p>
+    <p id="memory-status" class="help" role="status" aria-live="polite"></p>
+    <ul id="facts" class="facts"></ul>
+    <div class="actions">
+      <button id="close-memory" class="secondary" type="button">Zamknij</button>
+    </div>
   </dialog>
 
   <script type="module" src="app.js"></script>

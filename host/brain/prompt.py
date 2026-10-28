@@ -103,13 +103,16 @@ def render_context(state: dict[str, Any], facts: Sequence[Fact], now: datetime |
     return "\n".join(lines)
 
 
+def fact_allowed(f: Fact, cfg: LLMConfig, *, remote: bool) -> bool:
+    """Czy fakt może trafić do kontekstu: send_facts i próg pewności dla `inferred` (bez limitu)."""
+    if cfg.send_facts == "never" or (cfg.send_facts == "local_only" and remote):
+        return False
+    return f.source == "stated" or f.confidence >= cfg.min_inferred_confidence
+
+
 def select_facts(facts: Iterable[Fact], cfg: LLMConfig, *, remote: bool) -> list[Fact]:
     """Polityka faktów: send_facts, próg pewności dla `inferred`, limit i kolejność."""
-    if cfg.send_facts == "never" or (cfg.send_facts == "local_only" and remote):
-        return []
-    kept = [
-        f for f in facts if f.source == "stated" or f.confidence >= cfg.min_inferred_confidence
-    ]
+    kept = [f for f in facts if fact_allowed(f, cfg, remote=remote)]
     kept.sort(key=lambda f: (f.source != "stated", -f.confidence, -f.updated_at.timestamp()))
     return kept[: cfg.max_facts]
 

@@ -141,6 +141,8 @@ def test_recall_text():
     assert "Przypuszczam, że lubisz kawę (65%)." in text
     assert "psa" not in text  # poniżej progu użycia
     assert text.endswith("Oprócz tego 3 informacje, pełna lista jest w aplikacji.")
+    confirmed = [fact(1, "Masz psa o imieniu Burek", "stated"), fact(2, "USA to twój ulubiony kraj", "stated")]
+    assert recall_text(confirmed, 0.5) == 'Wiem od ciebie: "masz psa o imieniu Burek"; "USA to twój ulubiony kraj".'
     only_weak = [fact(11, "Masz psa.", "inferred", 0.3)]
     assert recall_text(only_weak, 0.5) == "Mam tylko 1 niepewne przypuszczenie, pełna lista jest w aplikacji."
 

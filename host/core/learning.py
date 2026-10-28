@@ -126,11 +126,13 @@ def is_sensitive(text: str, stems_: Sequence[str]) -> bool:
     return any(w.startswith(s) for w in words for s in stems_)
 
 
+def _lower_first(text: str) -> str:
+    """Mała pierwsza litera zdania, ale nie skrótu ("USA")."""
+    return text[0].lower() + text[1:] if text[:1].isupper() and not text[1:2].isupper() else text
+
+
 def question_for(fact: Fact) -> str:
-    t = fact_text(fact.text)
-    if t[:1].isupper() and not t[1:2].isupper():
-        t = t[0].lower() + t[1:]
-    return f"Czy dobrze rozumiem: {t}?"
+    return f"Czy dobrze rozumiem: {_lower_first(fact_text(fact.text))}?"
 
 
 def pick_question(facts: Iterable[Fact], now: datetime, cfg: LearningConfig) -> Fact | None:
@@ -166,14 +168,12 @@ def recall_text(facts: Sequence[Fact], min_inferred: float) -> str:
     parts = []
     shown = stated[:5]
     if shown:
-        parts.append("Wiem od ciebie: " + "; ".join(f'"{fact_text(f.text)}"' for f in shown) + ".")
+        parts.append("Wiem od ciebie: " + "; ".join(f'"{_lower_first(fact_text(f.text))}"' for f in shown) + ".")
     shown_guesses = guesses[:3]
     if shown_guesses:
         items = []
         for f in shown_guesses:
-            t = fact_text(f.text)
-            t = t[0].lower() + t[1:] if t[:1].isupper() and not t[1:2].isupper() else t
-            items.append(f"{t} ({round(f.confidence * 100)}%)")
+            items.append(f"{_lower_first(fact_text(f.text))} ({round(f.confidence * 100)}%)")
         parts.append("Przypuszczam, że " + "; ".join(items) + ".")
     rest = len(facts) - len(shown) - len(shown_guesses)
     if not parts:

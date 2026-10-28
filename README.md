@@ -37,6 +37,18 @@ Na komputerze z hostem klient otwiera się pod `http://localhost:8000/app/`.
 
 Żeby aplikacja na telefonie działała po każdym włączeniu komputera lub Raspberry Pi, host może działać jako usługa użytkownika: `deploy/iris.service` (instrukcja w komentarzu na początku pliku). Token trzyma wtedy plik `~/.config/iris/env` z prawami tylko dla właściciela. `tailscale serve --bg` według dokumentacji Tailscale działa dalej po zamknięciu terminala; czy wraca po restarcie komputera, sprawdź poleceniem `tailscale serve status`.
 
+## Jak IRIS się uczy
+
+Model językowy się nie zmienia. IRIS uczy się faktów o Tobie, które host zapisuje w bazie i dodaje do kontekstu rozmowy (zasady: [docs/spec.md](docs/spec.md), sekcja 9, "Uczenie się"):
+
+- Mówisz wprost: "zapamiętaj, że w piątki gram w kosza". Fakt jest pewny od razu. "Zapomnij, że ..." go usuwa, "co o mnie wiesz?" wymienia, co IRIS wie, a "zapomnij wszystko" usuwa wszystko po potwierdzeniu. Te polecenia obsługuje host, także bez LLM.
+- IRIS wyciąga przypuszczenia z rozmów: po każdej odpowiedzi model w tle proponuje fakty z Twojej wypowiedzi ("Masz psa o imieniu Burek."). Nowe przypuszczenie jest słabe (45%) i nie trafia jeszcze do rozmowy. Gdy się powtórzy, zyskuje pewność. Przypuszczenie, które przez 30 dni się nie powtórzy, słabnie, a bardzo słabe znika.
+- IRIS pyta o przypuszczenia: dopisuje do odpowiedzi "Czy dobrze rozumiem: masz psa o imieniu Burek?". "Tak" zmienia je w pewny fakt, "nie" je usuwa, a "nie, mam kota" zapisuje poprawkę. Najwyżej jedno pytanie na 15 minut, żadnych w trybie ciszy.
+- O zdrowiu, lekach, adresie, pieniądzach, wyznaniu, poglądach i orientacji IRIS sama się nie uczy; zapisze je tylko po "zapamiętaj". Przypuszczenia wyciąga domyślnie tylko lokalny model (Ollama), nie model w chmurze.
+- W aplikacji przycisk z książką otwiera listę "Co IRIS o mnie wie", gdzie każdy fakt możesz usunąć.
+
+Progi i ustawienia: sekcja `[learning]` w `iris.toml` (lista w `host/core/config.py`), np. `infer = "never"` wyłącza przypuszczenia, `enabled = false` całą naukę.
+
 ## Telefon: instalacja jako aplikacja
 
 Przeglądarka daje mikrofon tylko przez HTTPS, a instalacja na ekranie początkowym wymaga certyfikatu, któremu telefon ufa. Najprościej dać hostowi adres HTTPS przez tunel. Host działa dalej na komputerze (albo Raspberry Pi) na `127.0.0.1:8000`. Strona statyczna, np. GitHub Pages, tu nie wystarczy, bo aplikacja rozmawia z hostem, który musi gdzieś działać.

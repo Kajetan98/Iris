@@ -268,3 +268,21 @@ def test_fact_text_never_reaches_events_or_logs(caplog):
     everything = json.dumps([e.data for e in store.events()], ensure_ascii=False)
     for secret in ("Burek", "Filemon", "wiolonczel", "spacer"):
         assert secret not in everything and secret not in caplog.text, secret
+
+
+def test_rest_facts_say_which_reach_the_llm():
+    for remote, send_facts, expected in [(False, "local_only", [True, True, False]),
+                                         (True, "local_only", [False, False, False]),
+                                         (True, "always", [True, True, False])]:
+        clock = ManualClock()
+        store = Store(clock=clock)
+        engine = ScriptedEngine(["Ok."], remote=remote)
+        cfg = LLMConfig.model_validate({"engine": "ollama", "model": "m", "send_facts": send_facts})
+        app = create_app(Config(), clock=clock, store=store, run_tick_loop=False, token=None,
+                         assistant=Assistant(engine, cfg))
+        with TestClient(app) as client:
+            store.add_fact("mam psa", "stated")
+            store.add_fact("Lubisz jazz", "inferred", 0.6)
+            store.add_fact("Grasz w szachy", "inferred", 0.45)
+            got = [f["in_context"] for f in client.get("/facts").json()["facts"]]
+        assert got == expected, (remote, send_facts)

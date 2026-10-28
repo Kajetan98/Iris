@@ -219,6 +219,32 @@ def test_browser_reconnects_after_a_long_time_in_the_background():
         stop(*server)
 
 
+def test_memory_panel_lists_and_deletes_facts():
+    app = create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=TOKEN)
+    port = free_port()
+    server = start(app, port)
+    base = f"http://127.0.0.1:{port}"
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+    try:
+        with httpx.Client(base_url=base, headers=headers) as http:
+            assert http.post("/chat", json={"text": "Zapamiętaj, że mam psa Burka"}).json()["text"] == (
+                'Zapamiętane: "mam psa Burka".')
+            app.state.service.store.add_fact("Lubisz jazz", "inferred", 0.45)
+            out = browser("memory", base, device="telefon", token=TOKEN)
+            # bez LLM nic nie trafia do kontekstu, więc przypuszczenie jest "jeszcze nieużywane"
+            assert out["before"] == [
+                {"text": "mam psa Burka", "meta": "od ciebie", "label": "Usuń: mam psa Burka"},
+                {"text": "Lubisz jazz", "meta": "przypuszczenie, pewność 45%, jeszcze nieużywane w rozmowie",
+                 "label": "Usuń: Lubisz jazz"},
+            ]
+            assert [f["text"] for f in out["after"]] == ["Lubisz jazz"] and out["status"] == "Usunięte."
+            assert [f["text"] for f in http.get("/facts").json()["facts"]] == ["Lubisz jazz"]
+            forgets = http.get("/events", params={"type": "fact.forget"}).json()["events"]
+            assert [e["data"]["why"] for e in forgets] == ["user"]
+    finally:
+        stop(*server)
+
+
 def test_token_in_the_browser():
     port = free_port()
     server = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=TOKEN), port)

@@ -86,7 +86,7 @@ def _snapshot(s: Snapshot) -> dict[str, Any]:
     return {"id": s.id, "session_id": s.session_id, "at": s.at, "self": s.self_state, "body": s.body}
 
 
-def _fact(f: Fact) -> dict[str, Any]:
+def _fact(f: Fact, in_context: bool | None = None) -> dict[str, Any]:
     return {
         "id": f.id,
         "text": f.text,
@@ -94,6 +94,7 @@ def _fact(f: Fact) -> dict[str, Any]:
         "confidence": f.confidence,
         "reinforced": f.reinforced,
         "asked_at": f.asked_at,
+        **({} if in_context is None else {"in_context": in_context}),
         "created_at": f.created_at,
         "updated_at": f.updated_at,
     }
@@ -230,7 +231,14 @@ async def list_facts(
     source: Literal["stated", "inferred"] | None = None,
     service: HostService = Depends(get_service),
 ) -> dict[str, Any]:
-    return {"facts": [_fact(f) for f in service.store.facts(source=source)]}
+    assistant = service.assistant
+
+    def used(f: Fact) -> bool:  # spec, sekcja 10: in_context
+        from host.brain.prompt import fact_allowed
+
+        return assistant is not None and fact_allowed(f, assistant.cfg, remote=assistant.engine.remote)
+
+    return {"facts": [_fact(f, used(f)) for f in service.store.facts(source=source)]}
 
 
 @router.patch("/facts/{fact_id}")
