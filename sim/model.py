@@ -503,7 +503,7 @@ def _is_int(x: Any) -> bool:
 
 
 def _num(x: float) -> float | int:
-    x = round(x, 1)
+    x = round(float(x), 1)  # float(): int.is_integer() istnieje dopiero od Pythona 3.12
     return int(x) if x.is_integer() else x
 
 

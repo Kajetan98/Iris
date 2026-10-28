@@ -140,7 +140,9 @@ def test_simulator_and_c_body_connect_only_with_the_token(tmp_path, monkeypatch)
                 await until(ok)
                 await asyncio.sleep(1.0)  # zły token: kolejne próby kończą się 4003
                 ids = [d["id"] for d in (await http.get("/devices")).json()["devices"]]
-            assert ids == ["hermes"] and bad.connections == 0
+            # Host przyjmuje połączenie i zamyka je kodem 4003, więc licznik symulatora może się zwiększyć
+            # przed zamknięciem (wyścig na wolnych maszynach). Liczy się to, że host nie zarejestrował urządzenia.
+            assert ids == ["hermes"]
             good.stop()
             bad.stop()
             await asyncio.gather(*tasks)
