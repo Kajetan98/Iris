@@ -1,0 +1,5111 @@
+{
+ "version": 1,
+ "start": "2026-03-01T12:00:00.000+00:00",
+ "defaults": {
+  "learning": {
+   "enabled": true,
+   "infer": "local_only",
+   "max_per_turn": 3,
+   "similar": 0.6,
+   "forget_match": 0.5,
+   "start_max": 0.45,
+   "reinforce_step": 0.2,
+   "max_inferred": 0.9,
+   "ask": true,
+   "ask_min": 0.4,
+   "ask_interval_s": 900.0,
+   "ask_again_days": 7.0,
+   "answer_window_s": 120.0,
+   "decay_after_days": 30.0,
+   "decay_step": 0.1,
+   "forget_below": 0.2,
+   "sensitive_words": [
+    "zdrow",
+    "chorob",
+    "chory",
+    "chora",
+    "chorzy",
+    "leki",
+    "lekarstw",
+    "lekarz",
+    "leczen",
+    "tętn",
+    "puls",
+    "ciśnien",
+    "cukrzyc",
+    "depres",
+    "terapi",
+    "diagnoz",
+    "ciąż",
+    "szpital",
+    "alergi",
+    "nowotw",
+    "onkolog",
+    "psychiat",
+    "adres",
+    "mieszka",
+    "ulic",
+    "lokalizacj",
+    "gps",
+    "położeni",
+    "pieniąd",
+    "pieniędz",
+    "zarab",
+    "pensj",
+    "wypłat",
+    "konto",
+    "konta",
+    "bank",
+    "zadłuż",
+    "kredyt",
+    "pesel",
+    "hasł",
+    "dowód",
+    "wyzna",
+    "religi",
+    "wierząc",
+    "ateist",
+    "katolik",
+    "polityk",
+    "partii",
+    "partia",
+    "głosuj",
+    "orientacj",
+    "seksual"
+   ]
+  },
+  "llm": {
+   "max_tokens": 300,
+   "timeout_s": 30.0,
+   "retries": 1,
+   "history_turns": 10,
+   "max_facts": 30,
+   "min_inferred_confidence": 0.5,
+   "effort": "low",
+   "thinking_headroom_tokens": 2000,
+   "fallbacks": true
+  },
+  "quiet": false
+ },
+ "extract_prompt": "Z wypowiedzi użytkownika wypisujesz trwałe fakty o nim samym, które przydadzą się asystentowi głosowemu w kolejnych rozmowach: zainteresowania, zwyczaje, plany, praca, bliskie osoby i zwierzęta, upodobania, jak chce, żeby się do niego zwracać.\n\nZasady:\n- Tylko to, co wynika z wypowiedzi. Nie dopowiadasz niczego ponad nią.\n- Pomijasz pytania, polecenia i rzeczy chwilowe (pogoda, samopoczucie w tej chwili).\n- Pomijasz zdrowie, leki, położenie i adres, pieniądze, wyznanie, poglądy polityczne i orientację.\n- Każdy fakt to jedno krótkie zdanie w drugiej osobie liczby pojedynczej, np. \"Masz psa o imieniu Burek.\"\n- Pewność od 0 do 1 mówi, jak wyraźnie wypowiedź potwierdza fakt.\n- Odpowiadasz wyłącznie listą JSON, bez innego tekstu: [{\"fakt\": \"...\", \"pewnosc\": 0.7}]. Gdy nie ma faktów: [].\n",
+ "rules": {
+  "parse_memory": [
+   {
+    "in": "Zapamiętaj, że mam psa Burka.",
+    "out": {
+     "kind": "remember",
+     "text": "mam psa Burka"
+    }
+   },
+   {
+    "in": "zapamiętaj mam psa Burka",
+    "out": {
+     "kind": "remember",
+     "text": "mam psa Burka"
+    }
+   },
+   {
+    "in": "IRIS, zapisz sobie: pracuję w szpitalu",
+    "out": {
+     "kind": "remember",
+     "text": "pracuję w szpitalu"
+    }
+   },
+   {
+    "in": "Pamiętaj, że w piątki gram w kosza",
+    "out": {
+     "kind": "remember",
+     "text": "w piątki gram w kosza"
+    }
+   },
+   {
+    "in": "Zapamiętaj o tym, że \"lubię kawę\"",
+    "out": {
+     "kind": "remember",
+     "text": "lubię kawę"
+    }
+   },
+   {
+    "in": "Zapomnij, że mam psa",
+    "out": {
+     "kind": "forget",
+     "text": "mam psa"
+    }
+   },
+   {
+    "in": "zapomnij o kawie",
+    "out": {
+     "kind": "forget",
+     "text": "kawie"
+    }
+   },
+   {
+    "in": "Zapomnij wszystko.",
+    "out": {
+     "kind": "forget_all",
+     "text": ""
+    }
+   },
+   {
+    "in": "zapomnij o mnie wszystko",
+    "out": {
+     "kind": "forget_all",
+     "text": ""
+    }
+   },
+   {
+    "in": "zapomnij wszystko o mnie",
+    "out": {
+     "kind": "forget_all",
+     "text": ""
+    }
+   },
+   {
+    "in": "Co o mnie wiesz?",
+    "out": {
+     "kind": "recall",
+     "text": ""
+    }
+   },
+   {
+    "in": "IRIS, co wiesz o mnie",
+    "out": {
+     "kind": "recall",
+     "text": ""
+    }
+   },
+   {
+    "in": "Czego się o mnie nauczyłaś?",
+    "out": {
+     "kind": "recall",
+     "text": ""
+    }
+   },
+   {
+    "in": "czego się o mnie nauczyłeś",
+    "out": {
+     "kind": "recall",
+     "text": ""
+    }
+   },
+   {
+    "in": "Pamiętaj o zakupach",
+    "out": null
+   },
+   {
+    "in": "Co wiesz o pogodzie?",
+    "out": null
+   },
+   {
+    "in": "zapamiętaj to",
+    "out": null
+   },
+   {
+    "in": "Czy zapamiętasz, że mam psa?",
+    "out": null
+   },
+   {
+    "in": "Jak się masz",
+    "out": null
+   },
+   {
+    "in": "przełącz na laptop",
+    "out": null
+   },
+   {
+    "in": "  ZAPAMIĘTAJ,   że  lubię   jazz!!! ",
+    "out": {
+     "kind": "remember",
+     "text": "lubię jazz"
+    }
+   },
+   {
+    "in": "iris zapamiętaj: ŁÓDŹ to moje miasto",
+    "out": {
+     "kind": "remember",
+     "text": "ŁÓDŹ to moje miasto"
+    }
+   },
+   {
+    "in": "Zapamiętaj, że „mam kota”",
+    "out": {
+     "kind": "remember",
+     "text": "mam kota"
+    }
+   },
+   {
+    "in": "zapomnij, że ",
+    "out": null
+   },
+   {
+    "in": "zapomnij",
+    "out": null
+   },
+   {
+    "in": "pamiętaj że mam rower…",
+    "out": {
+     "kind": "remember",
+     "text": "mam rower"
+    }
+   },
+   {
+    "in": "zapisz: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "out": {
+     "kind": "remember",
+     "text": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+    }
+   },
+   {
+    "in": "Zapamiętaj,\nże mam\npsa",
+    "out": {
+     "kind": "remember",
+     "text": "mam psa"
+    }
+   },
+   {
+    "in": "iris, zapomnij o tym, że mam psa",
+    "out": {
+     "kind": "forget",
+     "text": "mam psa"
+    }
+   },
+   {
+    "in": "zapomnij że lubię kawę?",
+    "out": {
+     "kind": "forget",
+     "text": "lubię kawę"
+    }
+   }
+  ],
+  "parse_answer": [
+   {
+    "in": "Tak",
+    "yes": true,
+    "correction": ""
+   },
+   {
+    "in": "tak, zgadza się",
+    "yes": true,
+    "correction": ""
+   },
+   {
+    "in": "Zgadza się.",
+    "yes": true,
+    "correction": ""
+   },
+   {
+    "in": "Dokładnie!",
+    "yes": true,
+    "correction": ""
+   },
+   {
+    "in": "owszem",
+    "yes": true,
+    "correction": ""
+   },
+   {
+    "in": "Nie",
+    "yes": false,
+    "correction": ""
+   },
+   {
+    "in": "Nieprawda.",
+    "yes": false,
+    "correction": ""
+   },
+   {
+    "in": "nie zgadza się",
+    "yes": false,
+    "correction": ""
+   },
+   {
+    "in": "Nie, mam kota.",
+    "yes": false,
+    "correction": "mam kota"
+   },
+   {
+    "in": "nie - pracuję zdalnie",
+    "yes": false,
+    "correction": "pracuję zdalnie"
+   },
+   {
+    "in": "nie: ab",
+    "yes": false,
+    "correction": ""
+   },
+   {
+    "in": "nie, ok",
+    "yes": false,
+    "correction": ""
+   },
+   {
+    "in": "Niedziela jest wolna",
+    "yes": null,
+    "correction": ""
+   },
+   {
+    "in": "Taksówka przyjedzie",
+    "yes": null,
+    "correction": ""
+   },
+   {
+    "in": "Jaka jest pogoda?",
+    "yes": null,
+    "correction": ""
+   },
+   {
+    "in": "",
+    "yes": null,
+    "correction": ""
+   },
+   {
+    "in": "  tak  ",
+    "yes": true,
+    "correction": ""
+   },
+   {
+    "in": "NIE, pracuję w Łodzi.",
+    "yes": false,
+    "correction": "pracuję w Łodzi"
+   },
+   {
+    "in": "nie\nmam kota",
+    "yes": false,
+    "correction": "mam kota"
+   },
+   {
+    "in": "tak.",
+    "yes": true,
+    "correction": ""
+   }
+  ],
+  "fact_text": [
+   {
+    "in": "  mam   psa. ",
+    "out": "mam psa"
+   },
+   {
+    "in": "\"lubię kawę\"",
+    "out": "lubię kawę"
+   },
+   {
+    "in": "„lubię herbatę”.",
+    "out": "lubię herbatę"
+   },
+   {
+    "in": "Lubię jazz!?",
+    "out": "Lubię jazz"
+   },
+   {
+    "in": "…",
+    "out": ""
+   },
+   {
+    "in": "„a”",
+    "out": "a"
+   },
+   {
+    "in": "To jest zdanie…",
+    "out": "To jest zdanie"
+   }
+  ],
+  "stems": [
+   {
+    "in": "Pracujesz w Krakowie.",
+    "out": [
+     "krak",
+     "prac"
+    ]
+   },
+   {
+    "in": "pracuję w krakowie",
+    "out": [
+     "krak",
+     "prac"
+    ]
+   },
+   {
+    "in": "Lubisz kawę z mlekiem.",
+    "out": [
+     "kaw",
+     "lubi",
+     "mlek"
+    ]
+   },
+   {
+    "in": "Lubisz kawa z mlekiem",
+    "out": [
+     "kaw",
+     "lubi",
+     "mlek"
+    ]
+   },
+   {
+    "in": "Masz psa o imieniu Burek.",
+    "out": [
+     "bure",
+     "imie",
+     "psa"
+    ]
+   },
+   {
+    "in": "Masz kota.",
+    "out": [
+     "kot"
+    ]
+   },
+   {
+    "in": "o 18:00 trening",
+    "out": [
+     "00",
+     "18",
+     "tren"
+    ]
+   },
+   {
+    "in": "trening o 18:00",
+    "out": [
+     "00",
+     "18",
+     "tren"
+    ]
+   },
+   {
+    "in": "",
+    "out": []
+   },
+   {
+    "in": "coś",
+    "out": [
+     "coś"
+    ]
+   },
+   {
+    "in": "ŁÓDŹ to moje miasto",
+    "out": [
+     "mias",
+     "łód"
+    ]
+   },
+   {
+    "in": "łódź to miasto",
+    "out": [
+     "mias",
+     "łód"
+    ]
+   },
+   {
+    "in": "mam psa",
+    "out": [
+     "psa"
+    ]
+   },
+   {
+    "in": "masz psa",
+    "out": [
+     "psa"
+    ]
+   },
+   {
+    "in": "gram w kosza w piątki",
+    "out": [
+     "gra",
+     "kosz",
+     "piąt"
+    ]
+   },
+   {
+    "in": "w piątki gram w kosza",
+    "out": [
+     "gra",
+     "kosz",
+     "piąt"
+    ]
+   },
+   {
+    "in": "lubię_jazz 2024",
+    "out": [
+     "2024",
+     "lubi"
+    ]
+   },
+   {
+    "in": "lubię jazz 2024",
+    "out": [
+     "2024",
+     "jaz",
+     "lubi"
+    ]
+   },
+   {
+    "in": "abc abcd abcde abcdef",
+    "out": [
+     "abc",
+     "abcd"
+    ]
+   },
+   {
+    "in": "abcd abcde abcdef abcdefg",
+    "out": [
+     "abc",
+     "abcd"
+    ]
+   },
+   {
+    "in": "Pracuję zdalnie",
+    "out": [
+     "prac",
+     "zdal"
+    ]
+   },
+   {
+    "in": "Pracujesz zdalnie",
+    "out": [
+     "prac",
+     "zdal"
+    ]
+   },
+   {
+    "in": "kot",
+    "out": [
+     "kot"
+    ]
+   },
+   {
+    "in": "kota",
+    "out": [
+     "kot"
+    ]
+   },
+   {
+    "in": "są 3 koty",
+    "out": [
+     "3",
+     "kot"
+    ]
+   },
+   {
+    "in": "mam 3 koty",
+    "out": [
+     "3",
+     "kot"
+    ]
+   },
+   {
+    "in": "to jest",
+    "out": []
+   },
+   {
+    "in": "mam masz jest",
+    "out": []
+   },
+   {
+    "in": "Mieszkam w Gdyni 😀",
+    "out": [
+     "gdyn",
+     "mies"
+    ]
+   },
+   {
+    "in": "mieszkam w gdyni",
+    "out": [
+     "gdyn",
+     "mies"
+    ]
+   }
+  ],
+  "similarity": [
+   {
+    "a": "Pracujesz w Krakowie.",
+    "b": "pracuję w krakowie",
+    "out": 1.0
+   },
+   {
+    "a": "Lubisz kawę z mlekiem.",
+    "b": "Lubisz kawa z mlekiem",
+    "out": 1.0
+   },
+   {
+    "a": "Masz psa o imieniu Burek.",
+    "b": "Masz kota.",
+    "out": 0.0
+   },
+   {
+    "a": "o 18:00 trening",
+    "b": "trening o 18:00",
+    "out": 1.0
+   },
+   {
+    "a": "",
+    "b": "coś",
+    "out": 0.0
+   },
+   {
+    "a": "ŁÓDŹ to moje miasto",
+    "b": "łódź to miasto",
+    "out": 1.0
+   },
+   {
+    "a": "mam psa",
+    "b": "masz psa",
+    "out": 1.0
+   },
+   {
+    "a": "gram w kosza w piątki",
+    "b": "w piątki gram w kosza",
+    "out": 1.0
+   },
+   {
+    "a": "lubię_jazz 2024",
+    "b": "lubię jazz 2024",
+    "out": 0.6666666666666666
+   },
+   {
+    "a": "abc abcd abcde abcdef",
+    "b": "abcd abcde abcdef abcdefg",
+    "out": 1.0
+   },
+   {
+    "a": "Pracuję zdalnie",
+    "b": "Pracujesz zdalnie",
+    "out": 1.0
+   },
+   {
+    "a": "kot",
+    "b": "kota",
+    "out": 1.0
+   },
+   {
+    "a": "są 3 koty",
+    "b": "mam 3 koty",
+    "out": 1.0
+   },
+   {
+    "a": "to jest",
+    "b": "mam masz jest",
+    "out": 0.0
+   },
+   {
+    "a": "Mieszkam w Gdyni 😀",
+    "b": "mieszkam w gdyni",
+    "out": 1.0
+   }
+  ],
+  "is_sensitive": [
+   {
+    "in": "Bierzesz leki na ciśnienie.",
+    "out": true
+   },
+   {
+    "in": "Mieszkasz przy ulicy Długiej.",
+    "out": true
+   },
+   {
+    "in": "Zarabiasz dobrze.",
+    "out": true
+   },
+   {
+    "in": "Chodzisz do lekarza we wtorki.",
+    "out": true
+   },
+   {
+    "in": "Jesteś katolikiem.",
+    "out": true
+   },
+   {
+    "in": "Lubisz długo spać.",
+    "out": false
+   },
+   {
+    "in": "Masz lekki rower.",
+    "out": false
+   },
+   {
+    "in": "Pracujesz zdalnie.",
+    "out": false
+   },
+   {
+    "in": "Grasz w szachy.",
+    "out": false
+   },
+   {
+    "in": "Masz konto w banku",
+    "out": true
+   },
+   {
+    "in": "Twój PESEL",
+    "out": true
+   },
+   {
+    "in": "Głosujesz na partię",
+    "out": true
+   },
+   {
+    "in": "Masz depresję",
+    "out": true
+   },
+   {
+    "in": "Lubisz GPS",
+    "out": true
+   },
+   {
+    "in": "mieszkasz w Gdyni",
+    "out": true
+   }
+  ],
+  "clean_for_speech": [
+   {
+    "in": "Dobrze.",
+    "out": "Dobrze."
+   },
+   {
+    "in": "**Hej** _tam_",
+    "out": "Hej tam"
+   },
+   {
+    "in": "# Nagłówek\nTreść",
+    "out": "Nagłówek Treść"
+   },
+   {
+    "in": "- jeden\n- dwa",
+    "out": "jeden dwa"
+   },
+   {
+    "in": "Kod: ```print(1)``` koniec",
+    "out": "Kod: koniec"
+   },
+   {
+    "in": "Linia 1\n\nLinia 2",
+    "out": "Linia 1 Linia 2"
+   },
+   {
+    "in": "  wiele   spacji ",
+    "out": "wiele spacji"
+   },
+   {
+    "in": "> cytat",
+    "out": "cytat"
+   },
+   {
+    "in": "1. punkt",
+    "out": "1. punkt"
+   },
+   {
+    "in": "* gwiazdka",
+    "out": "gwiazdka"
+   },
+   {
+    "in": "`kod` w tekście",
+    "out": "kod w tekście"
+   },
+   {
+    "in": "",
+    "out": ""
+   },
+   {
+    "in": "   ",
+    "out": ""
+   },
+   {
+    "in": "Tekst z # w środku",
+    "out": "Tekst z w środku"
+   },
+   {
+    "in": "+ plus\n+ dwa",
+    "out": "plus dwa"
+   },
+   {
+    "in": "```\nblok\n```",
+    "out": ""
+   },
+   {
+    "in": "a_b_c",
+    "out": "abc"
+   },
+   {
+    "in": "Zażółć gęślą jaźń",
+    "out": "Zażółć gęślą jaźń"
+   }
+  ],
+  "parse_guesses": [
+   {
+    "raw": "[{\"fakt\": \"Masz psa o imieniu Burek.\", \"pewnosc\": 0.9}]",
+    "limit": 3,
+    "out": [
+     {
+      "text": "Masz psa o imieniu Burek",
+      "confidence": 0.9
+     }
+    ]
+   },
+   {
+    "raw": "[{\"fakt\": \"Masz psa o imieniu Burek.\", \"pewnosc\": 0.9}]",
+    "limit": 1,
+    "out": [
+     {
+      "text": "Masz psa o imieniu Burek",
+      "confidence": 0.9
+     }
+    ]
+   },
+   {
+    "raw": "```json\n[{\"fakt\": \"Lubisz kawę.\", \"pewnosc\": 0.7}]\n```",
+    "limit": 3,
+    "out": [
+     {
+      "text": "Lubisz kawę",
+      "confidence": 0.7
+     }
+    ]
+   },
+   {
+    "raw": "```json\n[{\"fakt\": \"Lubisz kawę.\", \"pewnosc\": 0.7}]\n```",
+    "limit": 1,
+    "out": [
+     {
+      "text": "Lubisz kawę",
+      "confidence": 0.7
+     }
+    ]
+   },
+   {
+    "raw": "Oto lista: [{\"fakt\": \"Masz kota.\", \"pewnosc\": 1.5}, {\"fakt\": \"Lubisz jazz.\", \"pewnosc\": -2}] koniec",
+    "limit": 3,
+    "out": [
+     {
+      "text": "Masz kota",
+      "confidence": 1.0
+     },
+     {
+      "text": "Lubisz jazz",
+      "confidence": 0.0
+     }
+    ]
+   },
+   {
+    "raw": "Oto lista: [{\"fakt\": \"Masz kota.\", \"pewnosc\": 1.5}, {\"fakt\": \"Lubisz jazz.\", \"pewnosc\": -2}] koniec",
+    "limit": 1,
+    "out": [
+     {
+      "text": "Masz kota",
+      "confidence": 1.0
+     }
+    ]
+   },
+   {
+    "raw": "[{\"text\": \"Masz rower.\", \"confidence\": 0.5}, {\"fakt\": \"Masz hulajnogę.\", \"pewność\": 0.6}]",
+    "limit": 3,
+    "out": [
+     {
+      "text": "Masz rower",
+      "confidence": 0.5
+     },
+     {
+      "text": "Masz hulajnogę",
+      "confidence": 0.6
+     }
+    ]
+   },
+   {
+    "raw": "[{\"text\": \"Masz rower.\", \"confidence\": 0.5}, {\"fakt\": \"Masz hulajnogę.\", \"pewność\": 0.6}]",
+    "limit": 1,
+    "out": [
+     {
+      "text": "Masz rower",
+      "confidence": 0.5
+     }
+    ]
+   },
+   {
+    "raw": "[]",
+    "limit": 3,
+    "out": []
+   },
+   {
+    "raw": "[]",
+    "limit": 1,
+    "out": []
+   },
+   {
+    "raw": "brak faktów",
+    "limit": 3,
+    "out": {
+     "error": true
+    }
+   },
+   {
+    "raw": "brak faktów",
+    "limit": 1,
+    "out": {
+     "error": true
+    }
+   },
+   {
+    "raw": "[{",
+    "limit": 3,
+    "out": {
+     "error": true
+    }
+   },
+   {
+    "raw": "[{",
+    "limit": 1,
+    "out": {
+     "error": true
+    }
+   },
+   {
+    "raw": "{\"fakt\": \"x\"}",
+    "limit": 3,
+    "out": {
+     "error": true
+    }
+   },
+   {
+    "raw": "{\"fakt\": \"x\"}",
+    "limit": 1,
+    "out": {
+     "error": true
+    }
+   },
+   {
+    "raw": "[{\"fakt\": \"ab\", \"pewnosc\": 0.5}]",
+    "limit": 3,
+    "out": []
+   },
+   {
+    "raw": "[{\"fakt\": \"ab\", \"pewnosc\": 0.5}]",
+    "limit": 1,
+    "out": []
+   },
+   {
+    "raw": "[{\"fakt\": \"Masz psa.\", \"pewnosc\": true}]",
+    "limit": 3,
+    "out": []
+   },
+   {
+    "raw": "[{\"fakt\": \"Masz psa.\", \"pewnosc\": true}]",
+    "limit": 1,
+    "out": []
+   },
+   {
+    "raw": "[{\"fakt\": \"Masz psa.\", \"pewnosc\": \"0.5\"}]",
+    "limit": 3,
+    "out": []
+   },
+   {
+    "raw": "[{\"fakt\": \"Masz psa.\", \"pewnosc\": \"0.5\"}]",
+    "limit": 1,
+    "out": []
+   },
+   {
+    "raw": "[1, \"a\", null, {\"fakt\": \"Masz rybki.\", \"pewnosc\": 1}]",
+    "limit": 3,
+    "out": [
+     {
+      "text": "Masz rybki",
+      "confidence": 1.0
+     }
+    ]
+   },
+   {
+    "raw": "[1, \"a\", null, {\"fakt\": \"Masz rybki.\", \"pewnosc\": 1}]",
+    "limit": 1,
+    "out": [
+     {
+      "text": "Masz rybki",
+      "confidence": 1.0
+     }
+    ]
+   },
+   {
+    "raw": "[{\"fakt\": \"Pierwszy fakt.\", \"pewnosc\": 0.5}, {\"fakt\": \"Drugi fakt.\", \"pewnosc\": 0.5}, {\"fakt\": \"Trzeci fakt.\", \"pewnosc\": 0.5}, {\"fakt\": \"Czwarty fakt.\", \"pewnosc\": 0.5}]",
+    "limit": 3,
+    "out": [
+     {
+      "text": "Pierwszy fakt",
+      "confidence": 0.5
+     },
+     {
+      "text": "Drugi fakt",
+      "confidence": 0.5
+     },
+     {
+      "text": "Trzeci fakt",
+      "confidence": 0.5
+     }
+    ]
+   },
+   {
+    "raw": "[{\"fakt\": \"Pierwszy fakt.\", \"pewnosc\": 0.5}, {\"fakt\": \"Drugi fakt.\", \"pewnosc\": 0.5}, {\"fakt\": \"Trzeci fakt.\", \"pewnosc\": 0.5}, {\"fakt\": \"Czwarty fakt.\", \"pewnosc\": 0.5}]",
+    "limit": 1,
+    "out": [
+     {
+      "text": "Pierwszy fakt",
+      "confidence": 0.5
+     }
+    ]
+   },
+   {
+    "raw": "[{\"fakt\": \"  Masz   psa.  \", \"pewnosc\": 0.5}]",
+    "limit": 3,
+    "out": [
+     {
+      "text": "Masz psa",
+      "confidence": 0.5
+     }
+    ]
+   },
+   {
+    "raw": "[{\"fakt\": \"  Masz   psa.  \", \"pewnosc\": 0.5}]",
+    "limit": 1,
+    "out": [
+     {
+      "text": "Masz psa",
+      "confidence": 0.5
+     }
+    ]
+   },
+   {
+    "raw": "[{\"fakt\": \"\\\"Masz psa\\\"\", \"pewnosc\": 0.5}]",
+    "limit": 3,
+    "out": [
+     {
+      "text": "Masz psa",
+      "confidence": 0.5
+     }
+    ]
+   },
+   {
+    "raw": "[{\"fakt\": \"\\\"Masz psa\\\"\", \"pewnosc\": 0.5}]",
+    "limit": 1,
+    "out": [
+     {
+      "text": "Masz psa",
+      "confidence": 0.5
+     }
+    ]
+   },
+   {
+    "raw": "[[{\"fakt\": \"Zagnieżdżony.\", \"pewnosc\": 0.5}]]",
+    "limit": 3,
+    "out": []
+   },
+   {
+    "raw": "[[{\"fakt\": \"Zagnieżdżony.\", \"pewnosc\": 0.5}]]",
+    "limit": 1,
+    "out": []
+   },
+   {
+    "raw": "[{\"fakt\": \"Masz psa.\", \"pewnosc\": 0.5}] i jeszcze [coś]",
+    "limit": 3,
+    "out": {
+     "error": true
+    }
+   },
+   {
+    "raw": "[{\"fakt\": \"Masz psa.\", \"pewnosc\": 0.5}] i jeszcze [coś]",
+    "limit": 1,
+    "out": {
+     "error": true
+    }
+   },
+   {
+    "raw": "[{\"fakt\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"pewnosc\": 0.5}]",
+    "limit": 3,
+    "out": []
+   },
+   {
+    "raw": "[{\"fakt\": \"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\", \"pewnosc\": 0.5}]",
+    "limit": 1,
+    "out": []
+   }
+  ]
+ },
+ "facts": {
+  "best_match": [
+   {
+    "in": "mam psa",
+    "min": 0.5,
+    "facts": [
+     {
+      "id": 1,
+      "text": "Masz psa o imieniu Burek",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Masz kota Filemona",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Masz psa Azora",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "out": 3
+   },
+   {
+    "in": "kot Filemon",
+    "min": 0.5,
+    "facts": [
+     {
+      "id": 1,
+      "text": "Masz psa o imieniu Burek",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Masz kota Filemona",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Masz psa Azora",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "out": 2
+   },
+   {
+    "in": "lubię rower",
+    "min": 0.5,
+    "facts": [
+     {
+      "id": 1,
+      "text": "Masz psa o imieniu Burek",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Masz kota Filemona",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Masz psa Azora",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "out": null
+   },
+   {
+    "in": "masz psa",
+    "min": 0.6,
+    "facts": [
+     {
+      "id": 1,
+      "text": "Masz psa o imieniu Burek",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Masz kota Filemona",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Masz psa Azora",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "out": null
+   },
+   {
+    "in": "psa",
+    "min": 0.3,
+    "facts": [
+     {
+      "id": 1,
+      "text": "Masz psa o imieniu Burek",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Masz kota Filemona",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Masz psa Azora",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "out": 3
+   }
+  ],
+  "question_for": [
+   {
+    "fact": {
+     "id": 1,
+     "text": "Masz psa o imieniu Burek.",
+     "source": "inferred",
+     "confidence": 0.6,
+     "created_at": "2026-03-01T12:00:00.000+00:00",
+     "updated_at": "2026-03-01T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    },
+    "out": "Czy dobrze rozumiem: masz psa o imieniu Burek?"
+   },
+   {
+    "fact": {
+     "id": 2,
+     "text": "USA to twój ulubiony kraj",
+     "source": "inferred",
+     "confidence": 0.6,
+     "created_at": "2026-03-01T12:00:00.000+00:00",
+     "updated_at": "2026-03-01T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    },
+    "out": "Czy dobrze rozumiem: USA to twój ulubiony kraj?"
+   },
+   {
+    "fact": {
+     "id": 3,
+     "text": "Lubisz kawę…",
+     "source": "inferred",
+     "confidence": 0.6,
+     "created_at": "2026-03-01T12:00:00.000+00:00",
+     "updated_at": "2026-03-01T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    },
+    "out": "Czy dobrze rozumiem: lubisz kawę?"
+   },
+   {
+    "fact": {
+     "id": 4,
+     "text": "  Ala   ma kota ",
+     "source": "inferred",
+     "confidence": 0.5,
+     "created_at": "2026-03-01T12:00:00.000+00:00",
+     "updated_at": "2026-03-01T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    },
+    "out": "Czy dobrze rozumiem: ala ma kota?"
+   }
+  ],
+  "pick_question": [
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Lubisz kawę",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Masz psa",
+      "source": "inferred",
+      "confidence": 0.65,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Grasz w szachy",
+      "source": "inferred",
+      "confidence": 0.85,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": "2026-02-27T12:00:00.000+00:00"
+     },
+     {
+      "id": 4,
+      "text": "Pracujesz zdalnie",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździsz rowerem",
+      "source": "inferred",
+      "confidence": 0.3,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "now": "2026-03-01T12:00:00.000+00:00",
+    "out": 2
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Lubisz kawę",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Masz psa",
+      "source": "inferred",
+      "confidence": 0.65,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Grasz w szachy",
+      "source": "inferred",
+      "confidence": 0.85,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": "2026-02-21T12:00:00.000+00:00"
+     }
+    ],
+    "now": "2026-03-01T12:00:00.000+00:00",
+    "out": 3
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Pracujesz zdalnie",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Jeździsz rowerem",
+      "source": "inferred",
+      "confidence": 0.3,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "now": "2026-03-01T12:00:00.000+00:00",
+    "out": null
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "A fakt",
+      "source": "inferred",
+      "confidence": 0.6,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "B fakt",
+      "source": "inferred",
+      "confidence": 0.6,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "C fakt",
+      "source": "inferred",
+      "confidence": 0.6,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "now": "2026-03-01T12:00:00.000+00:00",
+    "out": 3
+   },
+   {
+    "facts": [],
+    "now": "2026-03-01T12:00:00.000+00:00",
+    "out": null
+   }
+  ],
+  "recall_text": [
+   {
+    "facts": [],
+    "min": 0.5,
+    "out": "Jeszcze nic o tobie nie wiem. Możesz powiedzieć: zapamiętaj, że ..."
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "fakt numer 1",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "fakt numer 2",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "fakt numer 3",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "fakt numer 4",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "fakt numer 5",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "fakt numer 6",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 7,
+      "text": "fakt numer 7",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 10,
+      "text": "Lubisz kawę.",
+      "source": "inferred",
+      "confidence": 0.65,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 11,
+      "text": "Masz psa.",
+      "source": "inferred",
+      "confidence": 0.3,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "min": 0.5,
+    "out": "Wiem od ciebie: \"fakt numer 1\"; \"fakt numer 2\"; \"fakt numer 3\"; \"fakt numer 4\"; \"fakt numer 5\". Przypuszczam, że lubisz kawę (65%). Oprócz tego 3 informacje, pełna lista jest w aplikacji."
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Masz psa o imieniu Burek",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "USA to twój ulubiony kraj",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "min": 0.5,
+    "out": "Wiem od ciebie: \"masz psa o imieniu Burek\"; \"USA to twój ulubiony kraj\"."
+   },
+   {
+    "facts": [
+     {
+      "id": 11,
+      "text": "Masz psa.",
+      "source": "inferred",
+      "confidence": 0.3,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "min": 0.5,
+    "out": "Mam tylko 1 niepewne przypuszczenie, pełna lista jest w aplikacji."
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Przypuszczenie 1",
+      "source": "inferred",
+      "confidence": 0.55,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Przypuszczenie 2",
+      "source": "inferred",
+      "confidence": 0.6,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Przypuszczenie 3",
+      "source": "inferred",
+      "confidence": 0.65,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Przypuszczenie 4",
+      "source": "inferred",
+      "confidence": 0.7,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Przypuszczenie 5",
+      "source": "inferred",
+      "confidence": 0.75,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "min": 0.5,
+    "out": "Przypuszczam, że przypuszczenie 5 (75%); przypuszczenie 4 (70%); przypuszczenie 3 (65%). Oprócz tego 2 informacje, pełna lista jest w aplikacji."
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Ala",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Basia",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Celina",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "min": 0.5,
+    "out": "Wiem od ciebie: \"basia\"; \"ala\"; \"celina\"."
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "fakt 1",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "fakt 2",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "fakt 3",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "fakt 4",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "fakt 5",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "fakt 6",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 7,
+      "text": "fakt 7",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 8,
+      "text": "fakt 8",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 9,
+      "text": "fakt 9",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 10,
+      "text": "fakt 10",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 11,
+      "text": "fakt 11",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 12,
+      "text": "fakt 12",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "min": 0.5,
+    "out": "Wiem od ciebie: \"fakt 1\"; \"fakt 2\"; \"fakt 3\"; \"fakt 4\"; \"fakt 5\". Oprócz tego 7 informacji, pełna lista jest w aplikacji."
+   }
+  ],
+  "select_facts": [
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "always",
+    "remote": true,
+    "max_facts": 30,
+    "min_inferred_confidence": 0.5,
+    "out": [
+     4,
+     1,
+     2,
+     6,
+     5
+    ]
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "always",
+    "remote": true,
+    "max_facts": 2,
+    "min_inferred_confidence": 0.5,
+    "out": [
+     4,
+     1
+    ]
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "always",
+    "remote": false,
+    "max_facts": 30,
+    "min_inferred_confidence": 0.5,
+    "out": [
+     4,
+     1,
+     2,
+     6,
+     5
+    ]
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "always",
+    "remote": false,
+    "max_facts": 2,
+    "min_inferred_confidence": 0.5,
+    "out": [
+     4,
+     1
+    ]
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "local_only",
+    "remote": true,
+    "max_facts": 30,
+    "min_inferred_confidence": 0.5,
+    "out": []
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "local_only",
+    "remote": true,
+    "max_facts": 2,
+    "min_inferred_confidence": 0.5,
+    "out": []
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "local_only",
+    "remote": false,
+    "max_facts": 30,
+    "min_inferred_confidence": 0.5,
+    "out": [
+     4,
+     1,
+     2,
+     6,
+     5
+    ]
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "local_only",
+    "remote": false,
+    "max_facts": 2,
+    "min_inferred_confidence": 0.5,
+    "out": [
+     4,
+     1
+    ]
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "never",
+    "remote": true,
+    "max_facts": 30,
+    "min_inferred_confidence": 0.5,
+    "out": []
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "never",
+    "remote": true,
+    "max_facts": 2,
+    "min_inferred_confidence": 0.5,
+    "out": []
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "never",
+    "remote": false,
+    "max_facts": 30,
+    "min_inferred_confidence": 0.5,
+    "out": []
+   },
+   {
+    "facts": [
+     {
+      "id": 1,
+      "text": "Mówi po polsku",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-24T12:00:00.000+00:00",
+      "updated_at": "2026-02-24T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 2,
+      "text": "Lubi kawę",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 3,
+      "text": "Ma psa",
+      "source": "inferred",
+      "confidence": 0.45,
+      "created_at": "2026-03-01T12:00:00.000+00:00",
+      "updated_at": "2026-03-01T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 4,
+      "text": "Gra w szachy",
+      "source": "stated",
+      "confidence": 1.0,
+      "created_at": "2026-02-28T12:00:00.000+00:00",
+      "updated_at": "2026-02-28T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 5,
+      "text": "Jeździ rowerem",
+      "source": "inferred",
+      "confidence": 0.5,
+      "created_at": "2026-02-27T12:00:00.000+00:00",
+      "updated_at": "2026-02-27T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     },
+     {
+      "id": 6,
+      "text": "Lubi jazz",
+      "source": "inferred",
+      "confidence": 0.8,
+      "created_at": "2026-02-26T12:00:00.000+00:00",
+      "updated_at": "2026-02-26T12:00:00.000+00:00",
+      "reinforced": 0,
+      "asked_at": null
+     }
+    ],
+    "send_facts": "never",
+    "remote": false,
+    "max_facts": 2,
+    "min_inferred_confidence": 0.5,
+    "out": []
+   }
+  ],
+  "context": {
+   "now": "2026-10-28T14:05:00",
+   "facts": [
+    {
+     "id": 1,
+     "text": "Mówi po polsku",
+     "source": "stated",
+     "confidence": 1.0,
+     "created_at": "2026-02-24T12:00:00.000+00:00",
+     "updated_at": "2026-02-24T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    },
+    {
+     "id": 2,
+     "text": "Lubi kawę",
+     "source": "inferred",
+     "confidence": 0.8,
+     "created_at": "2026-02-28T12:00:00.000+00:00",
+     "updated_at": "2026-02-28T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    },
+    {
+     "id": 3,
+     "text": "Ma psa",
+     "source": "inferred",
+     "confidence": 0.45,
+     "created_at": "2026-03-01T12:00:00.000+00:00",
+     "updated_at": "2026-03-01T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    },
+    {
+     "id": 4,
+     "text": "Gra w szachy",
+     "source": "stated",
+     "confidence": 1.0,
+     "created_at": "2026-02-28T12:00:00.000+00:00",
+     "updated_at": "2026-02-28T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    },
+    {
+     "id": 5,
+     "text": "Jeździ rowerem",
+     "source": "inferred",
+     "confidence": 0.5,
+     "created_at": "2026-02-27T12:00:00.000+00:00",
+     "updated_at": "2026-02-27T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    },
+    {
+     "id": 6,
+     "text": "Lubi jazz",
+     "source": "inferred",
+     "confidence": 0.8,
+     "created_at": "2026-02-26T12:00:00.000+00:00",
+     "updated_at": "2026-02-26T12:00:00.000+00:00",
+     "reinforced": 0,
+     "asked_at": null
+    }
+   ],
+   "time_line": "Czas: środa, 28 października 2026, 14:05",
+   "fact_lines": [
+    "- Gra w szachy",
+    "- Mówi po polsku",
+    "- Lubi kawę (przypuszczenie, pewność 0.8)",
+    "- Lubi jazz (przypuszczenie, pewność 0.8)",
+    "- Jeździ rowerem (przypuszczenie, pewność 0.5)"
+   ],
+   "times": [
+    {
+     "now": "2026-01-05T00:00:00",
+     "out": "poniedziałek, 5 stycznia 2026, 00:00"
+    },
+    {
+     "now": "2026-02-28T23:59:00",
+     "out": "sobota, 28 lutego 2026, 23:59"
+    },
+    {
+     "now": "2026-12-31T09:07:00",
+     "out": "czwartek, 31 grudnia 2026, 09:07"
+    },
+    {
+     "now": "2027-03-14T12:30:00",
+     "out": "niedziela, 14 marca 2027, 12:30"
+    },
+    {
+     "now": "2026-08-09T18:45:00",
+     "out": "niedziela, 9 sierpnia 2026, 18:45"
+    }
+   ]
+  }
+ },
+ "scenarios": [
+  {
+   "name": "polecenia pamięci bez modelu",
+   "config": {},
+   "steps": [
+    {
+     "op": "say",
+     "text": "Zapamiętaj, że mam psa Burka."
+    },
+    {
+     "op": "say",
+     "text": "IRIS, zapisz: pracuję w Gdyni"
+    },
+    {
+     "op": "say",
+     "text": "Co o mnie wiesz?"
+    },
+    {
+     "op": "say",
+     "text": "Zapomnij, że mam psa"
+    },
+    {
+     "op": "say",
+     "text": "zapomnij o rowerze"
+    },
+    {
+     "op": "say",
+     "text": "Jaka jest pogoda?"
+    }
+   ],
+   "expected": [
+    {
+     "reply": "Zapamiętane: \"mam psa Burka\".",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapamiętane: \"pracuję w Gdyni\".",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "pracuję w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Wiem od ciebie: \"mam psa Burka\"; \"pracuję w Gdyni\".",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "pracuję w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapomniane: \"mam psa Burka\".",
+     "facts": [
+      [
+       2,
+       "pracuję w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Nie znam takiej informacji.",
+     "facts": [
+      [
+       2,
+       "pracuję w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       2,
+       "pracuję w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "podobny fakt zastępuje poprzedni",
+   "config": {},
+   "steps": [
+    {
+     "op": "say",
+     "text": "Zapamiętaj, że pracuję w Gdyni"
+    },
+    {
+     "op": "say",
+     "text": "Zapamiętaj, że pracuję w Gdańsku od marca"
+    },
+    {
+     "op": "say",
+     "text": "zapamiętaj: pracuję w Gdańsku od kwietnia"
+    },
+    {
+     "op": "say",
+     "text": "zapamiętaj: od marca pracuję w Gdańsku zdalnie"
+    }
+   ],
+   "expected": [
+    {
+     "reply": "Zapamiętane: \"pracuję w Gdyni\".",
+     "facts": [
+      [
+       1,
+       "pracuję w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapamiętane: \"pracuję w Gdańsku od marca\".",
+     "facts": [
+      [
+       1,
+       "pracuję w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "pracuję w Gdańsku od marca",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapamiętane: \"pracuję w Gdańsku od kwietnia\".",
+     "facts": [
+      [
+       1,
+       "pracuję w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "pracuję w Gdańsku od marca",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       3,
+       "pracuję w Gdańsku od kwietnia",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapamiętane: \"od marca pracuję w Gdańsku zdalnie\".",
+     "facts": [
+      [
+       1,
+       "pracuję w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "od marca pracuję w Gdańsku zdalnie",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       3,
+       "pracuję w Gdańsku od kwietnia",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "zapomnij wszystko wymaga tak",
+   "config": {},
+   "steps": [
+    {
+     "op": "say",
+     "text": "zapomnij wszystko"
+    },
+    {
+     "op": "say",
+     "text": "zapamiętaj, że mam psa Burka"
+    },
+    {
+     "op": "say",
+     "text": "zapamiętaj, że gram w szachy"
+    },
+    {
+     "op": "say",
+     "text": "zapamiętaj, że lubię jazz"
+    },
+    {
+     "op": "say",
+     "text": "Zapomnij wszystko"
+    },
+    {
+     "op": "say",
+     "text": "nie"
+    },
+    {
+     "op": "say",
+     "text": "Zapomnij wszystko"
+    },
+    {
+     "op": "say",
+     "text": "Tak."
+    },
+    {
+     "op": "say",
+     "text": "zapomnij wszystko"
+    }
+   ],
+   "expected": [
+    {
+     "reply": "Nic o tobie nie wiem, nie ma czego usuwać.",
+     "facts": []
+    },
+    {
+     "reply": "Zapamiętane: \"mam psa Burka\".",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapamiętane: \"gram w szachy\".",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "gram w szachy",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapamiętane: \"lubię jazz\".",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "gram w szachy",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       3,
+       "lubię jazz",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Na pewno usunąć wszystko, co o tobie wiem (3 informacje)? Powiedz tak albo nie.",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "gram w szachy",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       3,
+       "lubię jazz",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, niczego nie usuwam.",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "gram w szachy",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       3,
+       "lubię jazz",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Na pewno usunąć wszystko, co o tobie wiem (3 informacje)? Powiedz tak albo nie.",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "gram w szachy",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       3,
+       "lubię jazz",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, usuwam wszystko, co o tobie wiem.",
+     "facts": []
+    },
+    {
+     "reply": "Nic o tobie nie wiem, nie ma czego usuwać.",
+     "facts": []
+    }
+   ]
+  },
+  {
+   "name": "przypuszczenie rośnie, pytanie, potwierdzenie",
+   "config": {},
+   "steps": [
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Masz psa o imieniu Burek",
+       0.9
+      ]
+     ]
+    },
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Masz psa o imieniu Burek.",
+       0.9
+      ]
+     ]
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Masz psa o imieniu Burek",
+       0.9
+      ],
+      [
+       "Lubisz kawę",
+       0.3
+      ]
+     ]
+    },
+    {
+     "op": "advance",
+     "seconds": 10
+    },
+    {
+     "op": "say",
+     "text": "Tak, zgadza się"
+    },
+    {
+     "op": "say",
+     "text": "Co o mnie wiesz?"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.45,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       1,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Czy dobrze rozumiem: masz psa o imieniu Burek?",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       1,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.85,
+       2,
+       true
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.3,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.85,
+       2,
+       true
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.3,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, zapamiętane.",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "stated",
+       1.0,
+       2,
+       true
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.3,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Wiem od ciebie: \"masz psa o imieniu Burek\". Oprócz tego 1 informacja, pełna lista jest w aplikacji.",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "stated",
+       1.0,
+       2,
+       true
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.3,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "wzmacnianie do limitu",
+   "config": {},
+   "steps": [
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Grasz w szachy",
+       0.8
+      ]
+     ]
+    },
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Grasz w szachy",
+       0.8
+      ]
+     ]
+    },
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Grasz w szachy",
+       0.8
+      ]
+     ]
+    },
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Grasz w szachy",
+       0.8
+      ]
+     ]
+    },
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Grasz w szachy",
+       0.8
+      ]
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Grasz w szachy",
+       "inferred",
+       0.45,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Grasz w szachy",
+       "inferred",
+       0.65,
+       1,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Grasz w szachy",
+       "inferred",
+       0.85,
+       2,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Grasz w szachy",
+       "inferred",
+       0.9,
+       3,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Grasz w szachy",
+       "inferred",
+       0.9,
+       4,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "zaprzeczenie z poprawką",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Masz psa o imieniu Burek",
+     "source": "inferred",
+     "confidence": 0.6
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "say",
+     "text": "Nie, mam kota Filemona."
+    },
+    {
+     "op": "say",
+     "text": "Co o mnie wiesz?"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.6,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Czy dobrze rozumiem: masz psa o imieniu Burek?",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.6,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, poprawione: \"mam kota Filemona\".",
+     "facts": [
+      [
+       2,
+       "mam kota Filemona",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Wiem od ciebie: \"mam kota Filemona\".",
+     "facts": [
+      [
+       2,
+       "mam kota Filemona",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "samo nie usuwa przypuszczenie",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.7
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "say",
+     "text": "nie"
+    },
+    {
+     "op": "say",
+     "text": "Co o mnie wiesz?"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Czy dobrze rozumiem: lubisz kawę?",
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, usuwam to przypuszczenie.",
+     "facts": []
+    },
+    {
+     "reply": "Jeszcze nic o tobie nie wiem. Możesz powiedzieć: zapamiętaj, że ...",
+     "facts": []
+    }
+   ]
+  },
+  {
+   "name": "pytanie wygasa po oknie odpowiedzi",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.7
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "advance",
+     "seconds": 121
+    },
+    {
+     "op": "say",
+     "text": "tak"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Czy dobrze rozumiem: lubisz kawę?",
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "inna wypowiedź zamyka pytanie",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.7
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "say",
+     "text": "Jaka jest pogoda?"
+    },
+    {
+     "op": "say",
+     "text": "tak"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Czy dobrze rozumiem: lubisz kawę?",
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "odstęp między pytaniami i ponawianie",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.7
+    },
+    {
+     "op": "seed",
+     "text": "Masz psa",
+     "source": "inferred",
+     "confidence": 0.6
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "say",
+     "text": "Jaka jest pogoda?"
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "advance",
+     "seconds": 901
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "say",
+     "text": "x"
+    },
+    {
+     "op": "advance",
+     "seconds": 901
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "advance",
+     "seconds": 604800
+    },
+    {
+     "op": "question"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Czy dobrze rozumiem: lubisz kawę?",
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Czy dobrze rozumiem: masz psa?",
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": "Czy dobrze rozumiem: lubisz kawę?",
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       true
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.6,
+       0,
+       true
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "wnioski wrażliwe, słabe i podobne do stated",
+   "config": {},
+   "steps": [
+    {
+     "op": "say",
+     "text": "zapamiętaj, że mam psa Burka"
+    },
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Bierzesz leki na ciśnienie",
+       0.9
+      ],
+      [
+       "Lubisz kawę",
+       0.1
+      ],
+      [
+       "Masz psa Burka",
+       0.9
+      ],
+      [
+       "Lubisz jazz",
+       0.5
+      ]
+     ]
+    }
+   ],
+   "expected": [
+    {
+     "reply": "Zapamiętane: \"mam psa Burka\".",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz jazz",
+       "inferred",
+       0.45,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "zanikanie",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.45
+    },
+    {
+     "op": "seed",
+     "text": "Masz psa",
+     "source": "inferred",
+     "confidence": 0.25
+    },
+    {
+     "op": "seed",
+     "text": "Mieszkasz w Gdyni",
+     "source": "stated",
+     "confidence": 1.0
+    },
+    {
+     "op": "decay"
+    },
+    {
+     "op": "advance",
+     "seconds": 2678400
+    },
+    {
+     "op": "decay"
+    },
+    {
+     "op": "decay"
+    },
+    {
+     "op": "advance",
+     "seconds": 86401
+    },
+    {
+     "op": "decay"
+    },
+    {
+     "op": "advance",
+     "seconds": 2678400
+    },
+    {
+     "op": "decay"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.45,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.45,
+       0,
+       false
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.25,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.45,
+       0,
+       false
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.25,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.45,
+       0,
+       false
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.25,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.45,
+       0,
+       false
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.25,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.35,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.35,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.35,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.35,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.35,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.25,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "nauka wyłączona",
+   "config": {
+    "learning": {
+     "enabled": false
+    }
+   },
+   "steps": [
+    {
+     "op": "say",
+     "text": "Zapamiętaj, że mam psa Burka."
+    },
+    {
+     "op": "say",
+     "text": "Co o mnie wiesz?"
+    },
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.7
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "merge",
+     "guesses": [
+      [
+       "Masz psa",
+       0.9
+      ]
+     ]
+    },
+    {
+     "op": "advance",
+     "seconds": 3456000
+    },
+    {
+     "op": "decay"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": []
+    },
+    {
+     "reply": null,
+     "facts": []
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.45,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.45,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ],
+      [
+       2,
+       "Masz psa",
+       "inferred",
+       0.45,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "pytania wyłączone",
+   "config": {
+    "learning": {
+     "ask": false
+    }
+   },
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.7
+    },
+    {
+     "op": "question"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "tryb ciszy",
+   "config": {
+    "initiative": {
+     "quiet": true
+    }
+   },
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.7
+    },
+    {
+     "op": "question"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Lubisz kawę",
+       "inferred",
+       0.7,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "co o mnie wiesz z przypuszczeniami",
+   "config": {},
+   "steps": [
+    {
+     "op": "say",
+     "text": "zapamiętaj, że mam psa Burka"
+    },
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.65
+    },
+    {
+     "op": "seed",
+     "text": "Masz rower",
+     "source": "inferred",
+     "confidence": 0.3
+    },
+    {
+     "op": "seed",
+     "text": "Grasz w szachy",
+     "source": "inferred",
+     "confidence": 0.9
+    },
+    {
+     "op": "say",
+     "text": "co o mnie wiesz"
+    }
+   ],
+   "expected": [
+    {
+     "reply": "Zapamiętane: \"mam psa Burka\".",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       3,
+       "Masz rower",
+       "inferred",
+       0.3,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       3,
+       "Masz rower",
+       "inferred",
+       0.3,
+       0,
+       false
+      ],
+      [
+       4,
+       "Grasz w szachy",
+       "inferred",
+       0.9,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Wiem od ciebie: \"mam psa Burka\". Przypuszczam, że grasz w szachy (90%); lubisz kawę (65%). Oprócz tego 1 informacja, pełna lista jest w aplikacji.",
+     "facts": [
+      [
+       1,
+       "mam psa Burka",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       3,
+       "Masz rower",
+       "inferred",
+       0.3,
+       0,
+       false
+      ],
+      [
+       4,
+       "Grasz w szachy",
+       "inferred",
+       0.9,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "zapomnij podobne, próg dopasowania",
+   "config": {},
+   "steps": [
+    {
+     "op": "say",
+     "text": "zapamiętaj, że pracuję w Gdyni jako programista"
+    },
+    {
+     "op": "say",
+     "text": "zapomnij o programiście"
+    },
+    {
+     "op": "say",
+     "text": "zapomnij, że pracuję w Gdyni"
+    },
+    {
+     "op": "say",
+     "text": "zapomnij, że pracuję w Gdyni"
+    }
+   ],
+   "expected": [
+    {
+     "reply": "Zapamiętane: \"pracuję w Gdyni jako programista\".",
+     "facts": [
+      [
+       1,
+       "pracuję w Gdyni jako programista",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Nie znam takiej informacji.",
+     "facts": [
+      [
+       1,
+       "pracuję w Gdyni jako programista",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapomniane: \"pracuję w Gdyni jako programista\".",
+     "facts": []
+    },
+    {
+     "reply": "Nie znam takiej informacji.",
+     "facts": []
+    }
+   ]
+  },
+  {
+   "name": "tekst z liczbami i wielkimi literami",
+   "config": {},
+   "steps": [
+    {
+     "op": "say",
+     "text": "Zapamiętaj, że trening mam o 18:00"
+    },
+    {
+     "op": "say",
+     "text": "zapamiętaj: o 18:00 mam trening"
+    },
+    {
+     "op": "say",
+     "text": "zapamiętaj, że ŁÓDŹ to moje miasto"
+    },
+    {
+     "op": "say",
+     "text": "zapomnij o łódź"
+    },
+    {
+     "op": "say",
+     "text": "co o mnie wiesz"
+    }
+   ],
+   "expected": [
+    {
+     "reply": "Zapamiętane: \"trening mam o 18:00\".",
+     "facts": [
+      [
+       1,
+       "trening mam o 18:00",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapamiętane: \"o 18:00 mam trening\".",
+     "facts": [
+      [
+       1,
+       "o 18:00 mam trening",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapamiętane: \"ŁÓDŹ to moje miasto\".",
+     "facts": [
+      [
+       1,
+       "o 18:00 mam trening",
+       "stated",
+       1.0,
+       0,
+       false
+      ],
+      [
+       2,
+       "ŁÓDŹ to moje miasto",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Zapomniane: \"ŁÓDŹ to moje miasto\".",
+     "facts": [
+      [
+       1,
+       "o 18:00 mam trening",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Wiem od ciebie: \"o 18:00 mam trening\".",
+     "facts": [
+      [
+       1,
+       "o 18:00 mam trening",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}
