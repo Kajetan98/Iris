@@ -26,6 +26,13 @@ class ScriptedEngine:
             return item
         return LLMReply(item, "stop", "scripted", Usage(10, 5))
 
+    @property
+    def chat_calls(self):
+        """Tylko zapytania rozmowy, bez zapytań o wnioski z rozmowy (host/brain/learn.py)."""
+        from host.brain.learn import EXTRACT_PROMPT
+
+        return [c for c in self.calls if c[0] != EXTRACT_PROMPT]
+
     async def aclose(self):
         self.closed = True
 

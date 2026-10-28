@@ -5,6 +5,7 @@ import asyncio
 import httpx
 import pytest
 from host.api.main import create_app
+from host.brain.learn import EXTRACT_PROMPT
 from host.core.config import Config
 from host.tests.servers import free_port, ollama_stub_app, start, stop, until
 from sim.body import SimRunner
@@ -48,6 +49,11 @@ def host(ollama_stub):
     stop(server, thread)
 
 
+def chat_requests(ollama):
+    """Zapytania rozmowy; zapytania o wnioski (spec, sekcja 9) idą w tle i mogą przyjść później."""
+    return [r for r in ollama["requests"] if r["messages"][0]["content"] != EXTRACT_PROMPT]
+
+
 def context_of(request_body):
     return request_body["messages"][-1]["content"].split("[WYPOWIEDŹ UŻYTKOWNIKA]")[0]
 
@@ -82,7 +88,7 @@ def test_chat_through_the_whole_stack(host, ollama_stub):
             assert r.status_code == 200
             assert r.json()["text"] == "Bateria jest niska."  # markdown usunięty
             assert r.json()["usage"] == {"input_tokens": 120, "output_tokens": 6}
-            first = ollama["requests"][-1]
+            first = chat_requests(ollama)[-1]
             assert first["stream"] is False and first["model"] == "bielik"
             assert first["messages"][0]["role"] == "system" and "jesteś programem" in first["messages"][0]["content"].lower()
             ctx = context_of(first)
@@ -96,13 +102,13 @@ def test_chat_through_the_whole_stack(host, ollama_stub):
             ollama["fail"] = True
             r = await http.post("/chat", json={"text": "A teraz?"})
             assert r.status_code == 503
-            failed = ollama["requests"][-1]
+            failed = chat_requests(ollama)[-1]
             ollama["fail"] = False
 
             # 3. ponowienie dostaje te same zmiany stanu (cofnięcie wycinka)
             r = await http.post("/chat", json={"text": "A teraz?"})
             assert r.status_code == 200
-            retry = ollama["requests"][-1]
+            retry = chat_requests(ollama)[-1]
             assert "bateria: 10% → 50%" in context_of(retry)
             assert without_time(context_of(failed)) == without_time(context_of(retry))
 

@@ -11,6 +11,7 @@ import pytest
 
 from host.api.main import create_app
 from host.brain.audio import STT_RATE, OpusDecoder, resample
+from host.brain.learn import EXTRACT_PROMPT
 from host.core.config import Config
 from host.tests.audio_helpers import dominant_hz, sine, write_wav
 from host.tests.servers import free_port, ollama_stub_app, start, stop, until
@@ -58,6 +59,11 @@ def decode_playback(packets):
     return resample(np.concatenate([dec.decode(p) for p in packets]), 48000, STT_RATE)
 
 
+def chat_requests(stack):
+    """Zapytania rozmowy do atrapy Ollamy, bez zapytań o wnioski z rozmowy (spec, sekcja 9)."""
+    return [r for r in stack.ollama["requests"] if r["messages"][0]["content"] != EXTRACT_PROMPT]
+
+
 def test_voice_conversation_through_the_whole_stack(stack, tmp_path):
     async def scenario():
         sim = SimRunner(
@@ -80,7 +86,7 @@ def test_voice_conversation_through_the_whole_stack(stack, tmp_path):
             pcm, rate = stack.stt.calls[0]
             assert rate == STT_RATE and abs(len(pcm) / 2 / rate - 1.5) < 0.06
             assert abs(dominant_hz(pcm) - 440) < 5  # STT dostał to, co wysłało ciało
-            llm_turn = stack.ollama["requests"][-1]["messages"][-1]["content"]
+            llm_turn = chat_requests(stack)[-1]["messages"][-1]["content"]
             assert llm_turn.endswith("[WYPOWIEDŹ UŻYTKOWNIKA]\nJak się masz") and "Tryb pracy:" in llm_turn
             audio_id, packets = sim.model.played_audio[0]
             played = decode_playback(packets)
@@ -96,7 +102,7 @@ def test_voice_conversation_through_the_whole_stack(stack, tmp_path):
             pcm, _ = stack.stt.calls[1]
             assert abs(dominant_hz(pcm) - 300) < 5 and abs(len(pcm) / 2 / STT_RATE - 1.0) < 0.06
             assert sim.model.played_audio[1][0] == 2
-            assert [m["role"] for m in stack.ollama["requests"][-1]["messages"]] == [
+            assert [m["role"] for m in chat_requests(stack)[-1]["messages"]] == [
                 "system", "user", "assistant", "user",
             ]  # historia rozmowy obejmuje pierwszą turę
 

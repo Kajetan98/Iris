@@ -251,9 +251,8 @@ async def patch_fact(
 
 @router.delete("/facts/{fact_id}", status_code=204)
 async def delete_fact(fact_id: int, service: HostService = Depends(get_service)) -> Response:
-    if not service.store.delete_fact(fact_id):
+    if not service.learner.forget(fact_id):  # zdarzenie fact.forget (spec, sekcja 10)
         raise HTTPException(404, "nie ma takiego faktu")
-    service.refresh_known_facts()
     return Response(status_code=204)
 
 

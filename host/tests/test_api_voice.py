@@ -131,7 +131,7 @@ def test_two_turns_get_increasing_audio_ids_and_keep_history():
             await answer_speak(ws, n=n)
             await finish_turns(service)
         assert [a["body"]["audio_id"] for a in speak_actions(ws)] == [1, 2]
-        history = engine.calls[1][1]
+        history = engine.chat_calls[1][1]
         assert [m.role for m in history] == ["user", "assistant", "user"]
         ws.disconnect()
         await task

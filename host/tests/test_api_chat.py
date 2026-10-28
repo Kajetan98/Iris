@@ -37,7 +37,7 @@ def run(coro):
 
 
 def user_turn(engine, call=-1):
-    return engine.calls[call][1][-1].content
+    return engine.chat_calls[call][1][-1].content
 
 
 # --- tura rozmowy ---
@@ -251,7 +251,7 @@ def test_post_chat_ok_and_history(chat_client):
     }
     r2 = chat_client.post("/chat", json={"text": "A teraz?"})
     assert r2.json()["text"] == "Druga."
-    history = chat_client.engine.calls[1][1]
+    history = chat_client.engine.chat_calls[1][1]
     assert [(m.role, m.content[:6]) for m in history[:2]] == [("user", "Cześć"), ("assistant", "Pierws")]
 
 

@@ -17,6 +17,7 @@ from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any, Protocol
 
 from host.core.clock import Clock
+from host.api.learner import Learner
 from host.core.commands import parse_switch, resolve_device
 from host.core.config import Config
 from host.core.core import HostCore
@@ -94,6 +95,11 @@ class WebSocketLike(Protocol):
     async def close(self, code: int = 1000, reason: str | None = None) -> None: ...
 
 
+def _local_reply(text: str) -> dict[str, Any]:
+    """Odpowiedź polecenia obsłużonego przez host, bez LLM (spec, sekcja 10, POST /chat)."""
+    return {"text": text, "truncated": False, "model": None, "usage": {"input_tokens": 0, "output_tokens": 0}}
+
+
 class HostService:
     def __init__(
         self,
@@ -126,6 +132,7 @@ class HostService:
         self._started = clock.monotonic()
         self._last_touch = self._started
         self._last_snapshot = self._started
+        self.learner = Learner(config, clock, store, self._persist, self._store, self.refresh_known_facts)
 
     # --- cykl życia ---
 
@@ -136,6 +143,7 @@ class HostService:
         self._started = self._last_touch = self.clock.monotonic()
         self._persist(self.core.start())
         self._snapshot()
+        self.learner.maybe_decay()  # przy starcie, potem raz na dobę (spec, sekcja 9)
         self._init_voice()
 
     def stop(self) -> None:
@@ -162,6 +170,7 @@ class HostService:
             self._store(self.store.touch_devices, list(self._conns))
         if now - self._last_snapshot >= self.config.api.snapshot_every_s:
             self._snapshot()
+        self.learner.maybe_decay()
 
     # --- połączenia z urządzeniami ---
 
@@ -567,9 +576,16 @@ class HostService:
         text = text.strip()
         if not text:
             raise ValueError("pusta wypowiedź")
-        command = await self._switch_command(text)  # przed LLM i bez niego (spec, sekcja 1)
+        # Przed LLM i bez niego: odpowiedź na pytanie IRIS, przełączenie, pamięć (spec, sekcje 1 i 9).
+        reply = await self._local_command(self.learner.answer, text)
+        if reply is not None:
+            return reply
+        command = await self._switch_command(text)
         if command is not None:
             return command
+        reply = await self._local_command(self.learner.command, text)
+        if reply is not None:
+            return reply
         assistant = self.assistant
         if assistant is None:
             raise ChatDisabled()
@@ -592,13 +608,19 @@ class HostService:
                 if isinstance(e, LLMError):
                     raise ChatError("failed", str(e)) from None
                 raise
+            reply_text = answer.text
+            question = self.learner.question()  # pytanie o przypuszczenie (spec, sekcja 9)
+            if question is not None:
+                reply_text = f"{reply_text} {question}"
+        if self.learner.infers_with(assistant.engine):
+            self._spawn(self.learner.learn_from(assistant.engine, text))  # w tle, tura nie czeka
         log.info(
             "chat: model=%s tokens=%s/%s truncated=%s %.0f ms",
             answer.model, answer.usage.input_tokens, answer.usage.output_tokens,
             answer.truncated, (time.monotonic() - started) * 1000,
         )
         return {
-            "text": answer.text,
+            "text": reply_text,
             "truncated": answer.truncated,
             "model": answer.model,
             "usage": {
@@ -606,6 +628,15 @@ class HostService:
                 "output_tokens": answer.usage.output_tokens,
             },
         }
+
+    async def _local_command(self, handler: Callable[[str], str | None], text: str) -> dict[str, Any] | None:
+        """Polecenie obsługiwane przez host bez LLM; kolejność z turami rozmowy."""
+        async with self._chat_lock:
+            reply = handler(text)
+            if reply is None:
+                return None
+            self._persist(self._require_core().note_interaction())
+        return _local_reply(reply)
 
     async def _switch_command(self, text: str) -> dict[str, Any] | None:
         """Komenda "przełącz na X". None, gdy tekst nią nie jest. Treść nie trafia do logów."""
@@ -633,7 +664,7 @@ class HostService:
                 listed = ", ".join(sorted(matches or known)) or "brak"
                 reply = f"Nie wiem, które urządzenie. Znane: {listed}."
                 log.info("komenda przełączenia: %s", "niejednoznaczna" if matches else "nieznane urządzenie")
-        return {"text": reply, "truncated": False, "model": None, "usage": {"input_tokens": 0, "output_tokens": 0}}
+        return _local_reply(reply)
 
     # --- stan ---
 
