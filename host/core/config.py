@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 import platform
+import re
 import tomllib
 from datetime import time
 from pathlib import Path
@@ -145,12 +146,26 @@ class StoreConfig(_Model):
     path: str = "iris.db"
 
 
+_ORIGIN = re.compile(r"https://[a-z0-9]([a-z0-9.-]*[a-z0-9])?(:[0-9]{1,5})?|http://(localhost|127\.0\.0\.1|\[::1\])(:[0-9]{1,5})?")
+
+
 class ApiConfig(_Model):
     tick_interval_s: float = Field(1.0, gt=0)
     touch_every_s: float = Field(10.0, gt=0)
     snapshot_every_s: float = Field(300.0, gt=0)
     store_heartbeats: bool = False
     ack_timeout_s: float = Field(2.0, gt=0)
+    cors_origins: list[str] = []  # strony, które mogą wołać REST hosta z przeglądarki (spec, sekcja 10)
+
+    @model_validator(mode="after")
+    def _origins(self) -> "ApiConfig":
+        for origin in self.cors_origins:
+            if not _ORIGIN.fullmatch(origin):
+                raise ValueError(
+                    f"cors_origins: {origin!r} to nie adres strony; podaj https://host[:port] "
+                    "(małymi literami, bez ścieżki i bez *) albo http://localhost[:port]"
+                )
+        return self
 
 
 DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"

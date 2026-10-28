@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -68,12 +69,13 @@ def create_app(
     """token: None wyłącza uwierzytelnianie; domyślnie IRIS_TOKEN (spec, sekcja 1)."""
     if token is _FROM_ENV:
         token = token_from_env()
+    config = config or load_config()  # CORS potrzebuje konfiguracji już przy budowie aplikacji
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if token is None:
             log.warning("brak IRIS_TOKEN: API i /ws bez uwierzytelniania, nasłuchuj tylko na 127.0.0.1")
-        cfg = config or load_config()
+        cfg = config
         clk = clock or SystemClock()
         owned_store = store is None
         st = store or Store(cfg.store.path, clk)
@@ -120,6 +122,15 @@ def create_app(
 
     app = FastAPI(title="IRIS host", lifespan=lifespan)
     app.state.token = token
+    if config.api.cors_origins:
+        # Klient z innego adresu (np. Vercel); token nadal obowiązuje, ciasteczek nie ma (spec, sekcja 10).
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=config.api.cors_origins,
+            allow_methods=["GET", "POST", "PATCH", "DELETE"],
+            allow_headers=["Authorization", "Content-Type"],
+            allow_credentials=False,
+        )
     app.include_router(router)
     app.include_router(ws_router)
     # Klient w przeglądarce jest publiczny: nie zawiera danych, token podaje użytkownik.
