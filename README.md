@@ -4,8 +4,8 @@
 
 <h1 align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/iris-wordmark-white.svg">
-    <img src="docs/brand/iris-wordmark.svg" height="44" alt="IRIS">
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/iris-wordmark-white.png">
+    <img src="docs/brand/iris-wordmark.png" height="44" alt="IRIS">
   </picture>
 </h1>
 
@@ -107,5 +107,5 @@ Testy przeglądarki (`host/tests/test_browser.py`) wymagają Node i Playwright z
 
 ## Logo
 
-Pliki w `docs/brand/`: `iris-icon.png` (ikona aplikacji, 1024×1024, przezroczyste rogi), `iris-wordmark.svg` i `iris-wordmark-white.svg` (napis IRIS na jasne i ciemne tło). Ikony klienta w przeglądarce (`host/api/static/icon-*.png`, `apple-touch-icon.png`) powstały z tej samej ikony.
+Pliki w `docs/brand/`: `iris-icon.png` (ikona aplikacji, 1024×1024, przezroczyste rogi), `iris-wordmark` i `iris-wordmark-white` w wersji SVG i PNG (napis IRIS na jasne i ciemne tło; README używa PNG, bo GitHub pokazuje je zawsze). Ikony klienta w przeglądarce (`host/api/static/icon-*.png`, `apple-touch-icon.png`) powstały z tej samej ikony.
 
