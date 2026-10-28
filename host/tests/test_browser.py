@@ -204,6 +204,21 @@ def test_inactive_browser_can_take_over(voice_host):
         other.close()
 
 
+def test_browser_reconnects_after_a_long_time_in_the_background():
+    port = free_port()
+    server = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=None), port)
+    base = f"http://127.0.0.1:{port}"
+    try:
+        out = browser("resume", base, device="telefon", token="")
+        assert out == {"shortKept": True, "longKept": False, "state": "Przytrzymaj przycisk i mów", "notice": ""}
+        with httpx.Client(base_url=base) as http:
+            assert [d["id"] for d in http.get("/devices").json()["devices"]] == ["telefon"]
+            caps = http.get("/events", params={"type": "device.caps"}).json()["events"]
+            assert len(caps) == 2  # po pierwszym i po ponownym połączeniu, nie po krótkiej nieobecności
+    finally:
+        stop(*server)
+
+
 def test_token_in_the_browser():
     port = free_port()
     server = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=TOKEN), port)

@@ -156,6 +156,28 @@ const scenarios = {
     };
   },
 
+  // Powrót strony z tła: po krótkiej nieobecności to samo połączenie, po długiej nowe.
+  async resume(page) {
+    await connect(page, opts.device, opts.token);
+    await waitState(page, "idle");
+    const away = (ms) =>
+      page.evaluate((ms) => {
+        const visibility = (v) => Object.defineProperty(document, "visibilityState", { configurable: true, get: () => v });
+        window.__oldWs = window.iris.state.ws;
+        visibility("hidden");
+        document.dispatchEvent(new Event("visibilitychange"));
+        window.iris.state.hiddenAt -= ms; // tyle czasu strona była w tle
+        visibility("visible");
+        document.dispatchEvent(new Event("visibilitychange"));
+        return window.iris.state.ws === window.__oldWs;
+      }, ms);
+    const shortKept = await away(5000);
+    const longKept = await away(60000);
+    await page.waitForFunction(() => window.iris.state.ws && window.iris.state.ws.readyState === WebSocket.OPEN);
+    await waitState(page, "idle");
+    return { shortKept, longKept, state: await page.textContent("#state"), notice: await page.textContent("#notice") };
+  },
+
   // Zły token: kod 4003 i komunikat, bez połączenia.
   async badToken(page) {
     await connect(page, opts.device, opts.token);

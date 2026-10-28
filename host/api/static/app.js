@@ -10,6 +10,7 @@ const MAX_UTTERANCE_S = 60;
 const BACKOFF_MIN_MS = 500;
 const BACKOFF_MAX_MS = 5000;
 const THINKING_TIMEOUT_MS = 30000;
+const RESUME_AFTER_MS = 20000; // po tylu ms w tle połączenie jest odnawiane (spec, sekcja 1)
 const MAX_TURNS = 20;
 const CLOSE_REASONS = {
   4000: "To urządzenie połączyło się z hostem w innej karcie lub oknie.",
@@ -69,6 +70,7 @@ const state = {
   replyTurn: null, // tura, której odpowiedź zaraz zabrzmi
   played: [], // {audioId, packets, duration, sampleRate} (testy)
   lastSamples: null,
+  hiddenAt: null, // performance.now() przejścia strony w tło
 };
 
 const supported = window.isSecureContext && "AudioEncoder" in window && "AudioDecoder" in window;
@@ -358,6 +360,18 @@ async function checkVoice(token) {
   render();
 }
 
+// Telefon potrafi w tle zerwać WebSocket bez zdarzenia close, a przeglądarka nie wysyła pingów.
+// Po dłuższej nieobecności strona łączy się od nowa; nowe połączenie zastępuje stare (4000).
+function visibilityChanged() {
+  if (document.visibilityState === "hidden") {
+    state.hiddenAt = performance.now();
+    return;
+  }
+  const away = state.hiddenAt === null ? 0 : performance.now() - state.hiddenAt;
+  state.hiddenAt = null;
+  if (state.wanted && !state.talk && away >= RESUME_AFTER_MS) open(state.device, $("token").value.trim());
+}
+
 function disconnect() {
   state.wanted = false;
   clearTimeout(state.retry);
@@ -626,6 +640,7 @@ function init() {
     navigator.serviceWorker.register("sw.js").catch(() => null); // bez instalacji, klient działa dalej
   }
   watchBattery();
+  document.addEventListener("visibilitychange", visibilityChanged);
   render();
   if (saved && validDeviceId(saved)) connect(); // ponowne otwarcie aplikacji łączy od razu
   else openSettings();
