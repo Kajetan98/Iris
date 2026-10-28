@@ -1,4 +1,13 @@
-# IRIS
+<p align="center">
+  <img src="docs/brand/iris-icon.png" width="128" alt="">
+</p>
+
+<h1 align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/iris-wordmark-white.svg">
+    <img src="docs/brand/iris-wordmark.svg" height="44" alt="IRIS">
+  </picture>
+</h1>
 
 Asystent głosowy po polsku. Host w Pythonie trzyma stan, rozmawia przez LLM i obsługuje mowę (rozpoznawanie i synteza). Urządzeniem, przez które się z nim rozmawia, może być ciało HERMES (STM32L476), przeglądarka na telefonie lub komputerze albo program na komputer i Raspberry Pi. Aktywne jest jedno urządzenie naraz, przełączane przyciskiem lub głosem ("przełącz na laptop").
 
@@ -83,3 +92,8 @@ Testy przeglądarki (`host/tests/test_browser.py`) wymagają Node i Playwright z
 - Token i klucz API pochodzą tylko ze zmiennych środowiskowych i nie trafiają do logów ani do bazy.
 - Do LLM w chmurze trafia tylko wycinek stanu potrzebny do zapytania.
 - `piper-tts` ma licencję GPL-3.0-or-later; sprawdź zgodność, zanim zaczniesz rozpowszechniać hosta.
+
+## Logo
+
+Pliki w `docs/brand/`: `iris-icon.png` (ikona aplikacji, 1024×1024, przezroczyste rogi), `iris-wordmark.svg` i `iris-wordmark-white.svg` (napis IRIS na jasne i ciemne tło). Ikony klienta w przeglądarce (`host/api/static/icon-*.png`, `apple-touch-icon.png`) powstały z tej samej ikony.
+
