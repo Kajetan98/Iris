@@ -15,7 +15,8 @@ Asystent głosowy po polsku, zbudowany z ciała (HERMES, STM32L476) i hosta (Pyt
 - Firmware: C (HAL/LL), FreeRTOS do rozważenia po pierwszym działającym prototypie.
 - LLM: adapter z wymiennym silnikiem (Ollama lokalnie, Claude API opcjonalnie).
 - STT: faster-whisper. TTS: Piper (polskie głosy), do zweryfikowania jakości. `piper-tts` ma licencję GPL-3.0-or-later: sprawdź zgodność przed dystrybucją hosta.
-- Pełny model `self` istnieje tylko na hoście.
+- Pełny model `self` istnieje tylko na hoście. Wyjątek: aplikacja Android bez hosta ma tylko pamięć faktów (spec, sekcja 14).
+- Android: Kotlin, Gradle (`android/`), moduł `core` (czysty Kotlin/JVM, testowany tutaj) i `app` (Android, budowany w CI). Mowa z systemu, model przez Claude API z telefonu, klucz wpisywany w aplikacji.
 
 ## Ograniczenia
 
@@ -44,6 +45,7 @@ host/tests/
 firmware/        STM32L476
 sim/             symulator ciała
 client/          program na komputer i Raspberry Pi
+android/         aplikacja Android bez hosta (Kotlin: core, app)
 ```
 
 ## Komendy
@@ -63,6 +65,7 @@ client/          program na komputer i Raspberry Pi
 - urządzenia: kilka może być połączonych (`/ws?device=<id>`, bez parametru `hermes`), aktywne jest jedno; `curl -s localhost:8000/devices`, przełączenie `curl -s -X POST localhost:8000/devices/laptop/activate` (z tokenem dodaj `-H "Authorization: Bearer $IRIS_TOKEN"`) albo komenda `activate` w symulatorze i porcie POSIX
 - przełączanie głosem albo przez `/chat`: "przełącz na laptop" (host rozpoznaje bez LLM; odmiany nazw w `[devices.aliases]`, np. `pi-kuchnia = ["kuchnię"]`)
 - program na komputer i Raspberry Pi: `python -m client.desktop --url ws://<host>:8000/ws --device laptop` (Enter zaczyna i kończy wypowiedź; `--vad` bez rąk, po głośności i bez słowa wybudzającego; `--list-devices`, `--input-device`, `--output-device`; token z `IRIS_TOKEN`)
+- aplikacja Android: testy rdzenia `cd android && ./gradlew :core:test` (JDK 17+, Maven Central; Android SDK nie jest potrzebny do `core`). Reguły uczenia w Kotlinie muszą dawać te same wyniki co `host/core/learning.py`: wspólne przypadki są w `android/core/src/test/resources/learning_vectors.json`, generuje je `python -m host.tests.make_android_vectors`, a `host/tests/test_android_vectors.py` wykrywa nieaktualny plik. Po zmianie reguły w Pythonie: regeneracja pliku i poprawka Kotlina w `android/core`
 - symulator ciała: `python -m sim.body --url ws://localhost:8000/ws [--device laptop]` (komendy na stdin, `help` je wypisuje; `say [ms]` wysyła ton 440 Hz, `sayfile plik.wav` nagranie, obie jako Opus (wymagają `av` i `numpy`); scenariusze: `--script sim/scenarios/low_battery.txt`)
 
 ## Kolejność prac
