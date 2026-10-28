@@ -213,7 +213,7 @@ def test_token_in_the_browser():
             assert http.get("/app/").status_code == 200  # pliki klienta bez tokenu
             assert http.get("/devices").status_code == 401
             out = browser("badToken", base, device="laptop", token="zly-token-1234567890")
-            assert out["notice"].startswith("Host odrzucił token.") and out["state"] == "Łączę się z hostem"
+            assert out["notice"].startswith("Host odrzucił połączenie: brak lub zły token.") and out["state"] == "Łączę się z hostem"
             # Po sekundzie klient pyta /health z tokenem: host bez głosu, więc przycisk mówienia jest wyłączony.
             out = browser("connectOnly", base, device="laptop", token=TOKEN, stayMs=1500)
             assert out["status"] == "laptop: połączono" and out["state"] == "Przytrzymaj przycisk i mów"

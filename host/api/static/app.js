@@ -15,7 +15,7 @@ const CLOSE_REASONS = {
   4000: "To urządzenie połączyło się z hostem w innej karcie lub oknie.",
   4001: "Host ma już połączone maksimum urządzeń.",
   4002: "Niepoprawna nazwa urządzenia. Popraw ją w ustawieniach.",
-  4003: "Host odrzucił token. Popraw go w ustawieniach.",
+  4003: "Host odrzucił połączenie: brak lub zły token. Wpisz w ustawieniach token z IRIS_TOKEN (przez tunel host musi go mieć).",
 };
 const STATE_TEXT = {
   offline: "Brak połączenia z hostem",

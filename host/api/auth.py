@@ -10,7 +10,7 @@ from __future__ import annotations
 import hmac
 import os
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 
 TOKEN_ENV = "IRIS_TOKEN"
 WS_PROTOCOL = "iris"
@@ -18,6 +18,9 @@ TOKEN_PREFIX = "token."
 UNAUTHORIZED_CLOSE_CODE = 4003
 
 _TOKEN = re.compile(r"[A-Za-z0-9_-]{16,128}")
+# Nagłówki dodawane przez proxy i tunele (Cloudflare, nginx, Tailscale i inne). Tunel łączy się
+# z hostem przez 127.0.0.1, więc bez tokenu tylko po nich widać, że żądanie przyszło z zewnątrz.
+PROXY_HEADERS = ("forwarded", "x-forwarded-for", "x-real-ip", "cf-connecting-ip", "true-client-ip")
 
 
 class AuthConfigError(ValueError):
@@ -48,3 +51,8 @@ def bearer_ok(header: str | None, token: str) -> bool:
 
 def ws_token_ok(subprotocols: Iterable[str], token: str) -> bool:
     return any(p.startswith(TOKEN_PREFIX) and _same(p[len(TOKEN_PREFIX):], token) for p in subprotocols)
+
+
+def via_proxy(headers: Mapping[str, str]) -> bool:
+    """True, gdy żądanie przeszło przez proxy lub tunel (spec, sekcja 1)."""
+    return any(name in headers for name in PROXY_HEADERS)

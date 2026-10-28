@@ -11,7 +11,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import Response
 
-from host.api.auth import UNAUTHORIZED_CLOSE_CODE, WS_PROTOCOL, bearer_ok, ws_token_ok
+from host.api.auth import UNAUTHORIZED_CLOSE_CODE, WS_PROTOCOL, bearer_ok, via_proxy, ws_token_ok
 from host.api.service import (
     AckTimeout,
     ChatDisabled,
@@ -27,9 +27,14 @@ log = logging.getLogger(__name__)
 
 
 def require_token(request: Request) -> None:
-    """401 bez poprawnego `Authorization: Bearer`, gdy host ma token (spec, sekcja 10)."""
+    """401 bez poprawnego `Authorization: Bearer`, gdy host ma token, i dla żądań przez proxy,
+    gdy go nie ma (spec, sekcja 10)."""
     token = getattr(request.app.state, "token", None)
-    if token is not None and not bearer_ok(request.headers.get("authorization"), token):
+    if token is None:
+        if via_proxy(request.headers):
+            raise HTTPException(401, "przez proxy lub tunel host wymaga IRIS_TOKEN")
+        return
+    if not bearer_ok(request.headers.get("authorization"), token):
         raise HTTPException(401, "wymagany token", headers={"WWW-Authenticate": "Bearer"})
 
 
@@ -258,8 +263,14 @@ async def body_socket(websocket: WebSocket) -> None:
     offered = websocket.scope.get("subprotocols") or []
     subprotocol = WS_PROTOCOL if WS_PROTOCOL in offered else None
     token = getattr(websocket.app.state, "token", None)
-    if token is not None and not ws_token_ok(offered, token):
-        log.warning("połączenie odrzucone: brak lub zły token")
+    if token is None and via_proxy(websocket.headers):
+        refused = "przez proxy lub tunel, a host nie ma IRIS_TOKEN"
+    elif token is not None and not ws_token_ok(offered, token):
+        refused = "brak lub zły token"
+    else:
+        refused = None
+    if refused:
+        log.warning("połączenie odrzucone: %s", refused)
         await websocket.accept(subprotocol=subprotocol)
         await websocket.close(code=UNAUTHORIZED_CLOSE_CODE, reason="unauthorized")
         return

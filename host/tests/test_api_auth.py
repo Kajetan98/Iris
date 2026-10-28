@@ -96,6 +96,31 @@ def test_without_a_token_the_iris_subprotocol_is_still_selected():
             assert ws.accepted_subprotocol is None
 
 
+def test_without_a_token_requests_through_a_proxy_are_refused(caplog):
+    clock = ManualClock()
+    app = create_app(Config(), clock=clock, store=Store(clock=clock), run_tick_loop=False, token=None)
+    with TestClient(app) as c, caplog.at_level(logging.WARNING):
+        for header in ("Forwarded", "X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP", "True-Client-IP"):
+            proxied = {header: "203.0.113.7"}
+            assert c.get("/health", headers=proxied).status_code == 401, header
+            with c.websocket_connect("/ws?device=telefon", subprotocols=["iris"], headers=proxied) as ws:
+                with pytest.raises(WebSocketDisconnect) as e:
+                    ws.receive_text()
+                assert e.value.code == 4003, header
+            assert c.get("/app/", headers=proxied).status_code == 200  # pliki klienta zostają publiczne
+        assert c.get("/health").status_code == 200  # bezpośrednio, bez nagłówków proxy
+        assert c.get("/devices").json()["devices"] == []  # żadne połączenie przez proxy nie zostało przyjęte
+    assert "przez proxy lub tunel" in caplog.text
+
+
+def test_with_a_token_proxied_requests_need_only_the_token(client):
+    proxied = {"X-Forwarded-For": "203.0.113.7", "Authorization": f"Bearer {TOKEN}"}
+    assert client.get("/health", headers=proxied).status_code == 200
+    with client.websocket_connect("/ws?device=telefon", subprotocols=["iris", f"token.{TOKEN}"],
+                                  headers={"CF-Connecting-IP": "203.0.113.7"}) as ws:
+        assert ws.accepted_subprotocol == "iris"
+
+
 def test_simulator_and_c_body_connect_only_with_the_token(tmp_path, monkeypatch):
     port = free_port()
     cfg = Config.model_validate({"store": {"path": ":memory:"}, "api": {"tick_interval_s": 0.1}})

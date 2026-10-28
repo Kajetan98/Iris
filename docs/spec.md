@@ -11,7 +11,7 @@
 - Utrzymanie łącza po stronie ciała: ping WebSocket po 5 s bez danych od hosta, zerwanie połączenia po 10 s bez danych (wartości początkowe). Ciało odpowiada pong na ping hosta (uvicorn wysyła go domyślnie co 20 s).
 - Wiadomość od hosta większa niż bufor łącza ciała (tekst do 512 B, sekcja 5; binarna do 5 B nagłówka i 1275 B pakietu Opus) ciało odrzuca jak uszkodzoną ramkę i liczy w `frame_errors`. Połączenie zostaje.
 - Odrzucona ramka nie zamyka połączenia (sekcja 11).
-- Uwierzytelnianie: gdy host ma token (zmienna środowiskowa `IRIS_TOKEN`, 16-128 znaków `A-Z`, `a-z`, `0-9`, `_`, `-`; inna wartość zatrzymuje start hosta), urządzenie oferuje w handshake podprotokoły `iris` i `token.<token>` (nagłówek `Sec-WebSocket-Protocol`; przeglądarka nie może ustawić innych nagłówków, a adres z tokenem trafiłby do logów). Host wybiera `iris`, także bez tokenu. Brak lub zły token: host przyjmuje połączenie i od razu zamyka je z kodem 4003. Token nie trafia do logów ani do bazy.
+- Uwierzytelnianie: gdy host ma token (zmienna środowiskowa `IRIS_TOKEN`, 16-128 znaków `A-Z`, `a-z`, `0-9`, `_`, `-`; inna wartość zatrzymuje start hosta), urządzenie oferuje w handshake podprotokoły `iris` i `token.<token>` (nagłówek `Sec-WebSocket-Protocol`; przeglądarka nie może ustawić innych nagłówków, a adres z tokenem trafiłby do logów). Host wybiera `iris`, także bez tokenu. Brak lub zły token: host przyjmuje połączenie i od razu zamyka je z kodem 4003. Token nie trafia do logów ani do bazy. Bez tokenu host przyjmuje tylko połączenia bezpośrednie: połączenie z nagłówkiem dodawanym przez proxy lub tunel (`Forwarded`, `X-Forwarded-For`, `X-Real-IP`, `CF-Connecting-IP`, `True-Client-IP`) zamyka kodem 4003, bo tunel łączy się z hostem przez 127.0.0.1 i ominąłby zasadę nasłuchiwania tylko na tym adresie.
 - Akcje host wysyła jako ramki tekstowe. `id` ma postać `h<licznik>` (jeden licznik dla wszystkich urządzeń), `ts` to milisekundy od startu hosta (zegar monotoniczny).
 
 ### Urządzenia
@@ -255,7 +255,7 @@ Co host zapisuje (wartości początkowe w konfiguracji `api`):
 
 Odpowiedzi w JSON, czas w UTC (ISO 8601). Parametr `since` wymaga strefy (`Z` lub przesunięcie, w URL `+` jako `%2B`), czas bez strefy daje 422.
 
-Gdy host ma token (sekcja 1), każde żądanie wymaga nagłówka `Authorization: Bearer <token>`, inaczej 401. Wyjątkiem są pliki klienta przeglądarkowego (`/app/`): są publiczne i nie zawierają danych. Bez tokenu host powinien nasłuchiwać tylko na 127.0.0.1.
+Gdy host ma token (sekcja 1), każde żądanie wymaga nagłówka `Authorization: Bearer <token>`, inaczej 401. Wyjątkiem są pliki klienta przeglądarkowego (`/app/`): są publiczne i nie zawierają danych. Bez tokenu host powinien nasłuchiwać tylko na 127.0.0.1, a żądanie z nagłówkiem proxy (sekcja 1) dostaje 401. Dostęp z telefonu przez tunel HTTPS wymaga więc tokenu.
 
 | metoda i ścieżka | opis |
 |---|---|

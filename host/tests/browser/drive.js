@@ -159,7 +159,7 @@ const scenarios = {
   // Zły token: kod 4003 i komunikat, bez połączenia.
   async badToken(page) {
     await connect(page, opts.device, opts.token);
-    await waitText(page, "#notice", "Host odrzucił token");
+    await waitText(page, "#notice", "Host odrzucił połączenie");
     return { notice: await page.textContent("#notice"), state: await page.textContent("#state") };
   },
 
