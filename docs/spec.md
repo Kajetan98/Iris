@@ -362,3 +362,41 @@ Silnik Claude API (`brain.llm.engine = "claude"`):
 - TLS w firmware HERMES (`wss://`, np. mbedTLS: pamięć RAM i flash). Bez TLS token i rozmowa idą przez sieć jawnie, więc HERMES powinien łączyć się tylko w zaufanej sieci.
 - Automatyczne przełączanie urządzenia (np. według obecności albo tego, gdzie użytkownik mówi).
 - Port firmware na STM32L476: moduł sieciowy (L476 nie ma Wi-Fi ani Ethernetu) z transportem TCP dla klienta `fw_ws`, kodek mikrofonu i koder Opus (CPU i RAM), czujniki, sterownik haptyki, pomiar baterii.
+
+## 14. Aplikacja Android (tryb bez hosta)
+
+`android/` to osobny program, który rozmawia z użytkownikiem bez hosta: nie używa `/ws`, REST ani protokołu z sekcji 2-6. Dzieli z hostem reguły uczenia się (sekcja 9) i politykę kontekstu LLM (sekcja 12). To wyjątek od zasady, że pełny model `self` istnieje tylko na hoście: aplikacja ma wyłącznie pamięć faktów, bez `body`, potrzeb (drives), urządzeń i zdarzeń. Prompt i kontekst nie opisują stanu ciała.
+
+Zakres wersji 1: rozmowa głosowa i tekstowa, polecenia pamięci, wnioski z rozmów, pytania, zanikanie, lista faktów z usuwaniem. Poza zakresem: HERMES, przełączanie urządzeń, inicjatywa, tryb ciszy, zapis zdarzeń.
+
+Silniki:
+
+- Rozpoznawanie mowy: `android.speech.SpeechRecognizer`, język `pl-PL`. Zależnie od urządzenia nagranie trafia do usługi systemu (zwykle Google) albo jest rozpoznawane offline. Opcja "Preferuj rozpoznawanie offline" ustawia `EXTRA_PREFER_OFFLINE`, bez gwarancji. Brak rozpoznawania w systemie aplikacja zgłasza wprost; można wtedy pisać.
+- Synteza: `TextToSpeech`, język `pl-PL`. Bez polskiego głosu w systemie aplikacja pokazuje tylko napisy i mówi o tym w ustawieniach.
+- Model: Claude API wywoływane z telefonu, `POST https://api.anthropic.com/v1/messages`. Silnik jest zdalny. Żądanie jak w sekcji 12: model domyślny `claude-opus-5-5`, `max_tokens` 300 plus zapas 2000 na myślenie, `output_config.effort` `low`, bez `temperature`, `top_p` i `top_k`. Nagłówki: `x-api-key`, `anthropic-version` (`2026-10-21`), `content-type: application/json`. Dla modeli z serwerowym zapasem (lista w sekcji 12) żądanie idzie na `/v1/messages?beta=true`, ma nagłówek `anthropic-beta: server-side-fallback-2026-07-01` i pole `fallbacks: "default"`. Klasy błędów i odpowiedź czytana na głos (bez markdownu) jak w sekcji 12; limit czasu 30 s, jedno ponowienie przy błędach 429, 5xx i braku połączenia.
+
+Klucz API:
+
+- Użytkownik wpisuje go w ustawieniach. Aplikacja zapisuje go zaszyfrowanego kluczem z Android Keystore; klucz nie trafia do logów, kopii zapasowej (`allowBackup=false`) ani do bazy faktów. Aplikacja nie ma własnego serwera ani własnego klucza.
+- Klucz zapisany w telefonie odczyta ktoś, kto ma dostęp do odblokowanego urządzenia, więc warto użyć klucza z limitem wydatków.
+
+Dane opuszczające telefon:
+
+- Do Anthropic: wypowiedź, ostatnie `history_turns` (10) par rozmowy, blok kontekstu (czas lokalny i fakty według ustawień niżej) oraz, przy włączonym uczeniu, osobne zapytanie o wnioski z samą wypowiedzią.
+- Do usługi mowy systemu: nagranie, gdy rozpoznawanie nie działa offline.
+- Nic innego. Aplikacja nie ma analityki. Rozmowa nie jest zapisywana, historia żyje w pamięci procesu; fakty są w bazie na telefonie i nie trafiają do logów (`logcat`).
+
+Ustawienia pamięci. Jedyny silnik jest zdalny, więc domyślne `send_facts = local_only` i `infer = local_only` z hosta oznaczałyby brak faktów w kontekście i brak wniosków. Aplikacja ma dwa przełączniki, domyślnie wyłączone, z opisem, co wychodzi do chmury:
+
+- "Używaj pamięci w rozmowie": `send_facts` równe `never` (wyłączony) albo `always` (włączony).
+- "Ucz się z rozmów": `infer` równe `never` albo `always`.
+
+Polecenia pamięci ("zapamiętaj ...", "zapomnij ...", "zapomnij wszystko", "co o mnie wiesz") i odpowiedzi tak/nie działają zawsze, lokalnie, bez modelu. Pozostałe wartości `learning.*` i `brain.llm.*` (progi, `history_turns`, `max_facts`, `min_inferred_confidence` itd.) to wartości początkowe hosta (`host/core/config.py`).
+
+Baza: SQLite w pamięci prywatnej aplikacji. Tabela `facts` jak w sekcji 9, bez `session_id` (nie ma sesji). Czas UTC, ISO 8601 ze stałą szerokością jak w sekcji 9. Identyfikatory rosną i nie są ponownie używane po usunięciu (jak `AUTOINCREMENT`).
+
+Prompt systemowy ma ten sam sens co w sekcji 12: IRIS jest programem, nie twierdzi, że coś czuje lub jest świadomy, opisuje pamięć tak, jak działa (fakty podane wprost, przypuszczenia z rozmów, polecenia), nie zmyśla i odpowiada krótko do czytania na głos. Mówi, że działa na telefonie użytkownika, i nie wspomina o ciele, baterii ani łączu. Blok kontekstu zawiera czas lokalny i fakty (sekcja 12), bez linii o stanie.
+
+Zgodność z hostem. Reguły z sekcji 9 i 12 muszą dawać w Kotlinie te same wyniki co w Pythonie: polecenia i odpowiedzi, podobieństwo, dane wrażliwe, pytania, "co o mnie wiesz", wnioski, zanikanie, wybór faktów i oczyszczanie odpowiedzi. Plik `android/core/src/test/resources/learning_vectors.json` generuje kod hosta (`python -m host.tests.make_android_vectors`), test w Pythonie sprawdza, że plik jest aktualny, a testy Kotlina odtwarzają każdy przypadek. Zmiana reguły w Pythonie wymaga więc regeneracji pliku i dopasowania Kotlina.
+
+Budowanie: Gradle w `android/`, moduł `core` (Kotlin/JVM, bez Androida, testowany na JVM) i moduł `app` (Android). APK buduje CI.
