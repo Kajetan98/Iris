@@ -182,6 +182,9 @@ def facts_cases() -> dict[str, Any]:
         mk(1, "Mówi po polsku", "stated", 1.0, age_days=5), mk(2, "Lubi kawę", "inferred", 0.8, age_days=1),
         mk(3, "Ma psa", "inferred", 0.45), mk(4, "Gra w szachy", "stated", 1.0, age_days=1),
         mk(5, "Jeździ rowerem", "inferred", 0.5, age_days=2), mk(6, "Lubi jazz", "inferred", 0.8, age_days=3),
+        # pewności na granicy zaokrąglenia do jednego miejsca: 0.55, 0.65, 0.75 (remis), 0.85
+        mk(7, "Ma rower górski", "inferred", 0.55), mk(8, "Lubi herbatę", "inferred", 0.65),
+        mk(9, "Lubi sery", "inferred", 0.75), mk(10, "Czyta książki", "inferred", 0.85),
     ]
     out["select_facts"] = []
     for send in ("always", "local_only", "never"):

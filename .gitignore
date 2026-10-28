@@ -17,3 +17,8 @@ voices/
 *.onnx
 *.onnx.json
 public/
+# Gradle i Android (android/)
+.gradle/
+.kotlin/
+local.properties
+*.apk
