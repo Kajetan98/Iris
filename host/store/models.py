@@ -52,3 +52,5 @@ class Fact:
     created_at: datetime
     updated_at: datetime
     session_id: int | None
+    reinforced: int = 0  # ile razy wniosek się powtórzył (spec, sekcja 9)
+    asked_at: datetime | None = None  # kiedy host ostatnio o niego pytał

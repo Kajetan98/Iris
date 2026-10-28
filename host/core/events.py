@@ -17,6 +17,10 @@ HostEventType = Literal[
     "action.sent",
     "action.ack",
     "device.switch",
+    "fact.learn",
+    "fact.confirm",
+    "fact.forget",
+    "fact.ask",
 ]
 
 

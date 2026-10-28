@@ -385,6 +385,52 @@ class Store:
             )
             return self._fact(fact_id)
 
+    def reinforce_fact(self, fact_id: int, step: float, cap: float) -> Fact | None:
+        """Powtórzony wniosek: pewność rośnie o step (najwyżej cap), licznik o 1 (spec, sekcja 9)."""
+        with self._lock, self._conn:
+            current = self._fact(fact_id)
+            if current is None:
+                return None
+            conf = max(current.confidence, min(cap, current.confidence + step))
+            self._conn.execute(
+                "UPDATE facts SET confidence = ?, reinforced = reinforced + 1, updated_at = ? WHERE id = ?",
+                (_check_confidence(conf), _to_db(self._clock.wall()), fact_id),
+            )
+            return self._fact(fact_id)
+
+    def mark_fact_asked(self, fact_id: int) -> Fact | None:
+        """Zapisuje pytanie o fakt. Nie odświeża updated_at, więc pytanie nie wstrzymuje zanikania."""
+        with self._lock, self._conn:
+            self._conn.execute(
+                "UPDATE facts SET asked_at = ? WHERE id = ?", (_to_db(self._clock.wall()), fact_id)
+            )
+            return self._fact(fact_id)
+
+    def decay_facts(self, older_than: datetime, step: float, forget_below: float) -> tuple[list[int], list[int]]:
+        """Zanikanie przypuszczeń niezmienionych od older_than. Zwraca (osłabione, usunięte)."""
+        now = _to_db(self._clock.wall())
+        with self._lock, self._conn:
+            rows = self._conn.execute(
+                "SELECT id, confidence FROM facts WHERE source = 'inferred' AND updated_at < ?",
+                (_to_db(older_than),),
+            ).fetchall()
+            weakened, forgotten = [], []
+            for r in rows:
+                conf = round(max(0.0, r["confidence"] - step), 6)
+                if conf < forget_below:
+                    self._conn.execute("DELETE FROM facts WHERE id = ?", (r["id"],))
+                    forgotten.append(r["id"])
+                else:
+                    self._conn.execute(
+                        "UPDATE facts SET confidence = ?, updated_at = ? WHERE id = ?", (conf, now, r["id"])
+                    )
+                    weakened.append(r["id"])
+        return weakened, forgotten
+
+    def delete_all_facts(self) -> int:
+        with self._lock, self._conn:
+            return self._conn.execute("DELETE FROM facts").rowcount
+
     def delete_fact(self, fact_id: int) -> bool:
         with self._lock, self._conn:
             cur = self._conn.execute("DELETE FROM facts WHERE id = ?", (fact_id,))
@@ -403,4 +449,5 @@ class Store:
         return Fact(
             r["id"], r["text"], r["source"], r["confidence"],
             _from_db(r["created_at"]), _from_db(r["updated_at"]), r["session_id"],
+            r["reinforced"], _from_db(r["asked_at"]) if r["asked_at"] else None,
         )

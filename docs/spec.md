@@ -257,7 +257,7 @@ Polecenia rozpoznaje host przed LLM i bez niego, jak komendę przełączenia (se
 - "zapomnij wszystko": IRIS pyta `Na pewno usunąć wszystko, co o tobie wiem (N)? Powiedz tak albo nie.` i usuwa wszystkie fakty dopiero po odpowiedzi "tak".
 - "co o mnie wiesz", "co wiesz o mnie", "czego się o mnie nauczyłaś" (także "nauczyłeś"): najwyżej 5 faktów `stated` (w cudzysłowie) i 3 przypuszczenia o pewności co najmniej `min_inferred_confidence` (z pewnością w procentach), potem liczba pozostałych. Bez faktów: `Jeszcze nic o tobie nie wiem. Możesz powiedzieć: zapamiętaj, że ...`
 
-Podobieństwo dwóch tekstów to indeks Jaccarda zbiorów słów po zmianie na małe litery i usunięciu interpunkcji, bez słów krótszych niż 3 znaki.
+Podobieństwo dwóch tekstów to indeks Jaccarda zbiorów rdzeni słów: słowa małymi literami, bez interpunkcji, słów krótszych niż 3 znaki i słów pomocniczych ("mam", "masz", "jest", zaimki), skrócone do 4 pierwszych liter (słowa 3-4-literowe do 3), bo odmiana zmienia końcówki ("pracuję" i "pracujesz", "kawa" i "kawę"). Liczby porównywane są w całości.
 
 Wnioski z rozmowy (`infer`: `local_only`, wartość początkowa, tylko przy silniku lokalnym; `always`; `never`):
 

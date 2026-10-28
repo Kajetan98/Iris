@@ -76,6 +76,51 @@ class InitiativeConfig(_Model):
     quiet: bool = False
 
 
+# Rdzenie słów danych wrażliwych: wniosków z nimi IRIS nie zapisuje sama (spec, sekcja 9).
+SENSITIVE_STEMS = [
+    # zdrowie
+    "zdrow", "chorob", "chory", "chora", "chorzy", "leki", "lekarstw", "lekarz", "leczen", "tętn", "puls",
+    "ciśnien", "cukrzyc", "depres", "terapi", "diagnoz", "ciąż", "szpital", "alergi", "nowotw", "onkolog",
+    "psychiat",
+    # położenie i adres
+    "adres", "mieszka", "ulic", "lokalizacj", "gps", "położeni",
+    # pieniądze i dokumenty
+    "pieniąd", "pieniędz", "zarab", "pensj", "wypłat", "konto", "konta", "bank", "zadłuż", "kredyt",
+    "pesel", "hasł", "dowód",
+    # przekonania i tożsamość
+    "wyzna", "religi", "wierząc", "ateist", "katolik", "polityk", "partii", "partia", "głosuj",
+    "orientacj", "seksual",
+]
+
+
+class LearningConfig(_Model):
+    """Uczenie się faktów o użytkowniku (spec, sekcja 9, "Uczenie się")."""
+
+    enabled: bool = True
+    infer: Literal["local_only", "always", "never"] = "local_only"
+    max_per_turn: int = Field(3, ge=0, le=10)
+    similar: float = Field(0.6, gt=0, le=1)
+    forget_match: float = Field(0.5, gt=0, le=1)
+    start_max: float = Field(0.45, gt=0, lt=1)
+    reinforce_step: float = Field(0.2, gt=0, le=1)
+    max_inferred: float = Field(0.9, gt=0, lt=1)
+    ask: bool = True
+    ask_min: float = Field(0.4, ge=0, le=1)
+    ask_interval_s: float = Field(900.0, ge=0)
+    ask_again_days: float = Field(7.0, ge=0)
+    answer_window_s: float = Field(120.0, gt=0)
+    decay_after_days: float = Field(30.0, gt=0)
+    decay_step: float = Field(0.1, gt=0, le=1)
+    forget_below: float = Field(0.2, ge=0, lt=1)
+    sensitive_words: list[str] = SENSITIVE_STEMS
+
+    @model_validator(mode="after")
+    def _ordered(self) -> "LearningConfig":
+        if not self.forget_below < self.start_max <= self.max_inferred:
+            raise ValueError("wymagane forget_below < start_max <= max_inferred")
+        return self
+
+
 class DevicesConfig(_Model):
     max_connected: int = Field(8, ge=1)  # spec, sekcja 1
     # Nazwy urządzeń w komendzie "przełącz na X", np. {"laptop": ["komputer", "laptopa"]}.
@@ -230,6 +275,7 @@ class Config(_Model):
     store: StoreConfig = StoreConfig()
     api: ApiConfig = ApiConfig()
     brain: BrainConfig = BrainConfig()
+    learning: LearningConfig = LearningConfig()
 
     @model_validator(mode="after")
     def _voice_engines_together(self) -> "Config":

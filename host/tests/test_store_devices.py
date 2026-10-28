@@ -8,7 +8,7 @@ import pytest
 from host.core.clock import ManualClock
 from host.core.events import HostEvent
 from host.store import Store
-from host.store.schema import _V1
+from host.store.schema import SCHEMA_VERSION, _V1
 from host.tests.helpers import make_event
 
 T0 = datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc)
@@ -51,7 +51,7 @@ def test_migration_from_single_body_database(tmp_path, clock):
     path = tmp_path / "iris.db"
     v1_database(path)
     s = Store(path, clock)
-    assert sqlite3.connect(path).execute("PRAGMA user_version").fetchone()[0] == 2
+    assert sqlite3.connect(path).execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     by_type = {e.type: e.device for e in s.events()}
     assert by_type == {
         "host.start": None, "drive.enter": None,

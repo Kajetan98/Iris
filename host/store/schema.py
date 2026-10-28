@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 _V1 = """
 CREATE TABLE sessions (
@@ -67,7 +67,13 @@ INSERT INTO devices(id, first_seen_at, last_seen_at, active)
     SELECT 'hermes', MIN(at), MAX(at), 1 FROM events WHERE source = 'body' HAVING COUNT(*) > 0;
 """
 
-_MIGRATIONS = {0: _V1 + _V2, 1: _V2}
+# Wersja 3: uczenie się faktów (docs/spec.md, sekcja 9, "Uczenie się").
+_V3 = """
+ALTER TABLE facts ADD COLUMN reinforced INTEGER NOT NULL DEFAULT 0 CHECK (reinforced >= 0);
+ALTER TABLE facts ADD COLUMN asked_at TEXT;
+"""
+
+_MIGRATIONS = {0: _V1 + _V2 + _V3, 1: _V2 + _V3, 2: _V3}
 
 
 class SchemaError(Exception):

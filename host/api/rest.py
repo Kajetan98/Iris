@@ -92,6 +92,8 @@ def _fact(f: Fact) -> dict[str, Any]:
         "text": f.text,
         "source": f.source,
         "confidence": f.confidence,
+        "reinforced": f.reinforced,
+        "asked_at": f.asked_at,
         "created_at": f.created_at,
         "updated_at": f.updated_at,
     }
