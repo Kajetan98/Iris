@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
@@ -13,7 +12,6 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
-@OptIn(ExperimentalCoroutinesApi::class)
 class ClaudeEngineTest {
     private val hello = listOf(Message(Role.USER, "Cześć"))
     private fun engine(transport: FakeTransport, config: LlmConfig = LlmConfig(), key: String? = "sk-ant-test-key", base: String = DEFAULT_BASE_URL) =

@@ -10,6 +10,7 @@ kotlin {
         jvmTarget.set(JvmTarget.JVM_17)
         freeCompilerArgs.add("-Xjdk-release=17")
         allWarningsAsErrors.set(true)
+        optIn.add("kotlinx.coroutines.ExperimentalCoroutinesApi") // runTest, advanceUntilIdle, currentTime w testach
     }
 }
 

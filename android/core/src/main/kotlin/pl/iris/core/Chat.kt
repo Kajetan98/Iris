@@ -9,6 +9,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+/** Rozmowa widziana z interfejsu: tura, lista faktów i usuwanie faktu. */
+interface Conversation {
+    suspend fun say(text: String): ChatReply
+
+    suspend fun facts(): List<Fact>
+
+    suspend fun forget(id: Long): Boolean
+}
+
 /** Odpowiedź tury rozmowy. `model` jest null dla odpowiedzi programu bez LLM (polecenia pamięci). */
 data class ChatReply(val text: String, val truncated: Boolean, val model: String?, val usage: Usage)
 
@@ -31,22 +40,22 @@ class Chat(
     private val assistant: Assistant?,
     private val scope: CoroutineScope,
     private val zone: ZoneId = ZoneId.systemDefault(),
-) {
+) : Conversation {
     private val learner = Learner(config.learning, config.llm.minInferredConfidence, config.quiet, clock, store)
     private val lock = Mutex()
     private val background = mutableListOf<Job>()
 
-    suspend fun say(raw: String): ChatReply {
-        val text = pyStrip(raw)
-        require(text.isNotEmpty()) { "pusta wypowiedź" }
+    override suspend fun say(text: String): ChatReply {
+        val utterance = pyStrip(text)
+        require(utterance.isNotEmpty()) { "pusta wypowiedź" }
         lock.withLock {
             learner.maybeDecay() // raz na dobę, przy pierwszej turze po starcie też
-            (learner.answer(text) ?: learner.command(text))?.let { return ChatReply(it, false, null, Usage(0, 0)) }
+            (learner.answer(utterance) ?: learner.command(utterance))?.let { return ChatReply(it, false, null, Usage(0, 0)) }
         }
         val engine = assistant ?: throw ChatDisabled()
         val reply = lock.withLock {
             val answer = try {
-                engine.ask(text, store.facts(), LocalDateTime.ofInstant(clock.now(), zone))
+                engine.ask(utterance, store.facts(), LocalDateTime.ofInstant(clock.now(), zone))
             } catch (e: LlmRefusal) {
                 throw ChatError(ChatErrorKind.REFUSED, e.message.orEmpty())
             } catch (e: LlmUnavailable) {
@@ -60,17 +69,17 @@ class Chat(
             ChatReply(if (question == null) answer.text else "${answer.text} $question", answer.truncated, answer.model, answer.usage)
         }
         if (learner.infersWith(engine.engine)) {
-            val job = scope.launch { learnFrom(engine.engine, text) }
+            val job = scope.launch { learnFrom(engine.engine, utterance) }
             synchronized(background) { background += job }
         }
         return reply
     }
 
     /** Usunięcie faktu z listy w aplikacji. */
-    suspend fun forget(id: Long): Boolean = lock.withLock { learner.forget(id) }
+    override suspend fun forget(id: Long): Boolean = lock.withLock { learner.forget(id) }
 
     /** Lista faktów dla ekranu "Co IRIS o mnie wie". */
-    suspend fun facts(): List<Fact> = lock.withLock { store.facts() }
+    override suspend fun facts(): List<Fact> = lock.withLock { store.facts() }
 
     /** Czeka na wnioski z rozmowy liczone w tle (testy, zamykanie aplikacji). */
     suspend fun idle() {
