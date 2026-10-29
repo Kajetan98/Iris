@@ -1,5 +1,6 @@
-# Testy rdzenia aplikacji Android (android/core, Kotlin/JVM, bez Androida; docs/spec.md, sekcja 14).
-# Zgodność z hostem pilnuje wspólny plik android/core/src/test/resources/learning_vectors.json.
+# Aplikacja Android (docs/spec.md, sekcja 14): testy rdzenia (android/core, Kotlin/JVM) i budowanie APK (android/app).
+# Zgodność reguł z hostem pilnuje wspólny plik android/core/src/test/resources/learning_vectors.json.
+# APK debug jest podpisany kluczem z repozytorium (android/app/debug.keystore), więc kolejne wersje instalują się na poprzednie.
 name: android
 
 on:
@@ -19,13 +20,15 @@ on:
       - "host/brain/prompt.py"
       - "host/tests/make_android_vectors.py"
       - ".github/workflows/android.yml"
+  workflow_dispatch:
 
 jobs:
-  core:
+  android:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: android
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 
@@ -36,5 +39,24 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Licencje Android SDK (AGP pobiera brakujące składniki)
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
       - name: Testy rdzenia
-        run: ./gradlew :core:test --no-daemon
+        run: ./gradlew :core:test --no-daemon --console=plain 2>&1 | tee build.log
+
+      - name: APK debug
+        run: ./gradlew :app:assembleDebug --no-daemon --console=plain 2>&1 | tee -a build.log
+
+      - name: Błędy budowania jako adnotacja (log jest dostępny tylko w przeglądarce)
+        if: failure()
+        run: |
+          msg=$( (grep -E '^e: |^w: .*-Werror|What went wrong|FAILURE|Could not|error:|Unresolved|Execution failed' -A3 build.log || tail -60 build.log) | tail -c 9000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
+          echo "::error title=gradle::$msg"
+
+      - name: Plik APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: iris-debug-apk
+          path: android/app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

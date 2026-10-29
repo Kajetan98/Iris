@@ -41,4 +41,23 @@ class PyTextTest {
             java.util.Locale.setDefault(previous)
         }
     }
+
+    @Test
+    fun `database time has a fixed width like the host`() {
+        assertEquals("2026-03-01T12:00:00.000+00:00", IsoTime.format(java.time.Instant.parse("2026-03-01T12:00:00Z")))
+        assertEquals("2026-03-01T12:00:00.250+00:00", IsoTime.format(java.time.Instant.parse("2026-03-01T12:00:00.25Z")))
+        assertEquals("2026-03-01T12:00:00.123+00:00", IsoTime.format(java.time.Instant.parse("2026-03-01T12:00:00.123456Z")))
+        assertEquals(java.time.Instant.parse("2026-03-01T13:00:00Z"), IsoTime.parse("2026-03-01T14:00:00.000+01:00"))
+        val s = "2026-10-28T19:34:47.512+00:00"
+        assertEquals(s, IsoTime.format(IsoTime.parse(s)))
+    }
+
+    @Test
+    fun `fact meta shows the source and the confidence in percent`() {
+        val t = java.time.Instant.EPOCH
+        fun fact(source: Source, c: Double) = Fact(1, "x", source, c, t, t)
+        assertEquals("od ciebie", Texts.factMeta(fact(Source.STATED, 1.0)))
+        assertEquals("przypuszczenie, pewność 65%", Texts.factMeta(fact(Source.INFERRED, 0.65)))
+        assertEquals("przypuszczenie, pewność 45%", Texts.factMeta(fact(Source.INFERRED, 0.45)))
+    }
 }

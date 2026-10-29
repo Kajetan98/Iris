@@ -84,6 +84,12 @@ object Texts {
     const val FAILED = "Nie udało się przygotować odpowiedzi."
     const val NO_VOICE = "System nie ma polskiego głosu, więc odpowiedzi są tylko w napisach."
 
+    /** Opis faktu na liście pamięci: od ciebie albo przypuszczenie z pewnością w procentach. */
+    fun factMeta(fact: Fact): String = when (fact.source) {
+        Source.STATED -> "od ciebie"
+        Source.INFERRED -> "przypuszczenie, pewność ${Math.rint(fact.confidence * 100).toLong()}%"
+    }
+
     fun state(phase: Phase, hasKey: Boolean): String = when (phase) {
         Phase.IDLE -> if (hasKey) STATE_IDLE else STATE_IDLE_NO_KEY
         Phase.LISTENING -> STATE_LISTENING

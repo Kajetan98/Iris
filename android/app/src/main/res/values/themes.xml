@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Ciemny motyw jak w kliencie przeglądarkowym; resztę rysuje Compose. -->
+    <style name="Theme.Iris" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">@color/iris_bg</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+    <color name="iris_bg">#07060B</color>
+</resources>

@@ -1,7 +1,11 @@
 package pl.iris.core
 
 import java.time.Instant
+import java.time.OffsetDateTime
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import java.util.Locale
 
 enum class Source(val wire: String) {
     STATED("stated"),
@@ -43,6 +47,15 @@ class ManualClock(private var wall: Instant = Instant.parse("2026-03-01T12:00:00
         mono += seconds
         wall = wall.plusMillis(Math.round(seconds * 1000))
     }
+}
+
+/** Czas w bazie: UTC, ISO 8601 ze stałą szerokością (`2026-03-01T12:00:00.000+00:00`), jak w sekcji 9 specyfikacji. */
+object IsoTime {
+    private val FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss.SSSxxx", Locale.ROOT).withZone(ZoneOffset.UTC)
+
+    fun format(instant: Instant): String = FORMAT.format(instant)
+
+    fun parse(text: String): Instant = OffsetDateTime.parse(text).toInstant()
 }
 
 internal fun Instant.toMillisPrecision(): Instant = truncatedTo(ChronoUnit.MILLIS)
