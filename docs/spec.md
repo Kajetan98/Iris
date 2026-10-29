@@ -395,6 +395,14 @@ Polecenia pamięci ("zapamiętaj ...", "zapomnij ...", "zapomnij wszystko", "co 
 
 Baza: SQLite w pamięci prywatnej aplikacji. Tabela `facts` jak w sekcji 9, bez `session_id` (nie ma sesji). Czas UTC, ISO 8601 ze stałą szerokością jak w sekcji 9. Identyfikatory rosną i nie są ponownie używane po usunięciu (jak `AUTOINCREMENT`).
 
+Interfejs. Jedna aktywność z trzema ekranami: rozmowa, ustawienia i pamięć ("Co IRIS o mnie wie"). Interfejs jest po polsku, ciemny, a teksty nie sugerują uczuć ani świadomości.
+
+- Ekran rozmowy: fala głosu, napis stanu, napisy rozmowy (rozpoznana wypowiedź i odpowiedź), przycisk mówienia i pole do pisania. Stany: w spoczynku ("Dotknij i mów"), słucham, przygotowuję odpowiedź, mówię, brak klucza ("Wpisz klucz API w ustawieniach"). Dotknięcie przycisku zaczyna słuchanie; rozpoznawanie kończy się samo po ciszy albo po ponownym dotknięciu. Odpowiedź jest od razu w napisach w całości i czytana przez syntezę mowy, o ile system ma polski głos.
+- Fala: poziom przy słuchaniu to poziom mikrofonu z `SpeechRecognizer`. `TextToSpeech` nie udostępnia dźwięku, więc przy mówieniu fala porusza się według stałego wzoru (przybliżenie, nie odczyt dźwięku). Kształt i stany jak w kliencie przeglądarkowym (sekcja 1).
+- Komunikaty błędów: brak rozpoznania "Nic nie rozpoznano. Mów bliżej mikrofonu."; brak zgody na mikrofon, brak usługi rozpoznawania i błędy modelu (niedostępny, konfiguracja, odmowa, inny; sekcja 12) z opisem, co zrobić. Napisy rozmowy zostają tylko w pamięci procesu aplikacji.
+- Ustawienia: klucz API, model, przełączniki pamięci (wyżej), "Preferuj rozpoznawanie offline". Pamięć: lista faktów (tekst, "od ciebie" albo przypuszczenie z pewnością w procentach) z usuwaniem pojedynczym.
+- Mikrofon wymaga zgody `RECORD_AUDIO` prośbą w czasie działania. Aplikacja ma tylko uprawnienie `INTERNET` i `RECORD_AUDIO`.
+
 Prompt systemowy ma ten sam sens co w sekcji 12: IRIS jest programem, nie twierdzi, że coś czuje lub jest świadomy, opisuje pamięć tak, jak działa (fakty podane wprost, przypuszczenia z rozmów, polecenia), nie zmyśla i odpowiada krótko do czytania na głos. Mówi, że działa na telefonie użytkownika, i nie wspomina o ciele, baterii ani łączu. Blok kontekstu zawiera czas lokalny i fakty (sekcja 12), bez linii o stanie.
 
 Zgodność z hostem. Reguły z sekcji 9 i 12 muszą dawać w Kotlinie te same wyniki co w Pythonie: polecenia i odpowiedzi, podobieństwo, dane wrażliwe, pytania, "co o mnie wiesz", wnioski, zanikanie, wybór faktów i oczyszczanie odpowiedzi. Plik `android/core/src/test/resources/learning_vectors.json` generuje kod hosta (`python -m host.tests.make_android_vectors`), test w Pythonie sprawdza, że plik jest aktualny, a testy Kotlina odtwarzają każdy przypadek. Zmiana reguły w Pythonie wymaga więc regeneracji pliku i dopasowania Kotlina.
