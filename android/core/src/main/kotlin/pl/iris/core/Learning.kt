@@ -28,6 +28,12 @@ private val RECALL = Regex(
     PREFIX + "(?:co (?:o mnie wiesz|wiesz o mnie)|czego się o mnie nauczył(?:aś|eś))$",
     RegexOption.IGNORE_CASE,
 )
+private val IRIS = Regex("^iris[ ,]+")
+
+// Reakcje to cała wypowiedź; dłuższe zdanie z takim słowem na początku ("źle się czuję") to zwykła rozmowa.
+private val PRAISE = setOf("dobrze", "świetnie", "dobra odpowiedź", "trafnie", "dokładnie tak", "dzięki", "dziękuję")
+private val CRITICISM = setOf("źle", "to nie tak", "nie tak", "nie o to pytałem", "nie o to chodziło", "to nieprawda", "mylisz się")
+
 private val YES = Regex("^(?:tak|zgadza się|dokładnie|owszem)$NOT_WORD", RegexOption.IGNORE_CASE)
 private val NO = Regex(
     "^(?:nie zgadza się|nieprawda|nie)$NOT_WORD[ ,.:;!-]*(?<rest>.*)$",
@@ -72,6 +78,18 @@ fun parseAnswer(text: String): ParsedAnswer {
     val m = NO.find(t) ?: return ParsedAnswer(null)
     val rest = factText(m.groups["rest"]!!.value)
     return ParsedAnswer(false, if (cpLength(rest) >= MIN_FACT_CHARS) rest else "")
+}
+
+enum class Feedback { PRAISE, CRITICISM }
+
+/** Pochwała albo krytyka ostatniej odpowiedzi (spec, sekcja 9, "Reakcje użytkownika"), inaczej null. */
+fun parseFeedback(text: String): Feedback? {
+    val t = stripChars(IRIS.replace(pyLower(clean(text)), ""), " ,;:")
+    return when (t) {
+        in PRAISE -> Feedback.PRAISE
+        in CRITICISM -> Feedback.CRITICISM
+        else -> null
+    }
 }
 
 // Rdzeń przybliżony: polska odmiana zmienia końcówki ("pracuję"/"pracujesz", "kawa"/"kawę").

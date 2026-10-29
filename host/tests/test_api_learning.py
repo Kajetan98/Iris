@@ -286,3 +286,64 @@ def test_rest_facts_say_which_reach_the_llm():
             store.add_fact("Grasz w szachy", "inferred", 0.45)
             got = [f["in_context"] for f in client.get("/facts").json()["facts"]]
         assert got == expected, (remote, send_facts)
+
+
+# --- reakcje użytkownika: nagroda dla przypuszczeń użytych w odpowiedzi ---
+
+
+def _service_with_used_guess(**config):
+    """Przypuszczenie o pewności 0,65 (powyżej progu użycia), więc trafia do kontekstu lokalnego modelu."""
+    service, engine, clock, store = make(["Dobrze.", NONE], learning={"ask": False, **config})
+    store.add_fact("Masz psa o imieniu Burek", "inferred", 0.65)
+    return service, engine, store
+
+
+def test_praise_strengthens_the_guesses_used_in_the_last_answer_without_the_llm():
+    service, engine, store = _service_with_used_guess()
+    turn(service, "Co słychać?")  # odpowiedź LLM z przypuszczeniem w kontekście
+    calls = len(engine.calls)
+    reply = turn(service, "Świetnie!")
+    assert reply["text"] == "Dobrze, zapisuję, że to było trafne." and reply["model"] is None
+    assert len(engine.calls) == calls  # reakcję obsługuje host, bez modelu
+    (f,) = store.facts()
+    assert (round(f.confidence, 2), f.reinforced) == (0.75, 1)
+    assert [e["how"] for e in events(store, "fact.learn")] == ["praised"]
+    assert "Burek" not in json.dumps(events(store, "fact.learn"))
+    # reakcja zużywa listę: druga pochwała idzie do modelu jak zwykła rozmowa
+    turn(service, "dzięki")
+    assert len(engine.calls) > calls
+    assert round(store.facts()[0].confidence, 2) == 0.75
+
+
+def test_criticism_weakens_the_guess_and_a_weak_guess_is_no_longer_judged():
+    service, engine, store = _service_with_used_guess()
+    turn(service, "Co słychać?")
+    assert turn(service, "To nie tak.")["text"] == "Dobrze, osłabiam przypuszczenia użyte w tej odpowiedzi."
+    assert round(store.facts()[0].confidence, 2) == 0.45
+    assert [e["how"] for e in events(store, "fact.learn")] == ["criticized"]
+    turn(service, "Jak się masz?")  # 0,45 jest poniżej progu użycia (0,5): nie trafia do kontekstu
+    assert turn(service, "źle")["model"] is not None  # nie było czego oceniać, więc zwykła rozmowa
+    assert round(store.facts()[0].confidence, 2) == 0.45
+
+
+def test_a_criticism_below_the_forget_threshold_removes_the_guess():
+    service, engine, clock, store = make(["Ok.", NONE], learning={"ask": False, "feedback_down": 0.4})
+    store.add_fact("Masz psa o imieniu Burek", "inferred", 0.55)
+    turn(service, "Co słychać?")
+    assert turn(service, "to nieprawda")["model"] is None  # 0,55 - 0,4 = 0,15 < forget_below (0,2)
+    assert store.facts() == []
+    forgotten = events(store, "fact.forget")
+    assert forgotten[-1]["why"] == "criticized" and "Burek" not in json.dumps(forgotten)
+
+
+def test_stated_facts_ignore_reactions_and_feedback_can_be_switched_off():
+    service, engine, clock, store = make(["Ok.", NONE])
+    store.add_fact("Mieszkasz w Gdyni", "stated")
+    turn(service, "Hej")
+    assert turn(service, "dzięki")["model"] is not None  # fakt stated: nie było czego oceniać
+    assert store.facts()[0].reinforced == 0
+
+    service, engine, store = _service_with_used_guess(feedback=False)
+    turn(service, "Co słychać?")
+    assert turn(service, "dzięki")["model"] is not None
+    assert round(store.facts()[0].confidence, 2) == 0.65

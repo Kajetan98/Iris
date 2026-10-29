@@ -22,6 +22,7 @@ class Learner(
     private var pending: Pending? = null
     private var lastQuestion: Double? = null
     private var lastDecay: Double? = null
+    private var contextIds: List<Long> = emptyList() // przypuszczenia z kontekstu ostatniej odpowiedzi LLM
 
     val enabled: Boolean get() = cfg.enabled
 
@@ -53,7 +54,7 @@ class Learner(
     /** Polecenie "zapamiętaj", "zapomnij", "zapomnij wszystko" lub "co o mnie wiesz". */
     fun command(text: String): String? {
         if (!enabled) return null
-        val cmd = parseMemory(text) ?: return null
+        val cmd = parseMemory(text) ?: return feedback(text)
         return when (cmd.kind) {
             MemoryKind.REMEMBER -> "Zapamiętane: \"${remember(cmd.text)?.text ?: cmd.text}\"."
             MemoryKind.FORGET -> forgetByText(cmd.text)
@@ -74,6 +75,30 @@ class Learner(
         pending = Pending(PendingKind.FORGET_ALL, clock.monotonic() + cfg.answerWindowS)
         val word = plural(count, "informacja", "informacje", "informacji")
         return "Na pewno usunąć wszystko, co o tobie wiem ($count $word)? Powiedz tak albo nie."
+    }
+
+    /** Przypuszczenia (`inferred`), które trafiły do kontekstu ostatniej odpowiedzi LLM. */
+    fun noteContext(ids: List<Long>) {
+        contextIds = ids.toList()
+    }
+
+    /** Pochwała albo krytyka odpowiedzi; null, gdy to nie reakcja albo nie było czego oceniać. */
+    private fun feedback(text: String): String? {
+        if (!(enabled && cfg.feedback)) return null
+        val kind = parseFeedback(text) ?: return null
+        val known = store.facts().associateBy { it.id }
+        val used = contextIds.mapNotNull { known[it] }.filter { it.source == Source.INFERRED }
+        if (used.isEmpty()) return null
+        contextIds = emptyList()
+        if (kind == Feedback.PRAISE) {
+            for (f in used) store.reinforceFact(f.id, cfg.feedbackUp, cfg.maxInferred)
+            return "Dobrze, zapisuję, że to było trafne."
+        }
+        for (f in used) {
+            val conf = roundTo6(maxOf(0.0, f.confidence - cfg.feedbackDown))
+            if (conf < cfg.forgetBelow) store.deleteFact(f.id) else store.updateFact(f.id, confidence = conf)
+        }
+        return "Dobrze, osłabiam przypuszczenia użyte w tej odpowiedzi."
     }
 
     /** Fakt podany wprost; podobny istniejący fakt zostaje zastąpiony nowym tekstem. */

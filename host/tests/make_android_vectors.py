@@ -23,6 +23,7 @@ from host.core.learning import (
     fact_text,
     is_sensitive,
     parse_answer,
+    parse_feedback,
     parse_memory,
     pick_question,
     question_for,
@@ -73,6 +74,11 @@ ANSWER_TEXTS = [
     "Jaka jest pogoda?", "", "  tak  ", "NIE, pracuję w Łodzi.", "nie\nmam kota", "tak.",
 ]
 FACT_TEXTS = ["  mam   psa. ", '"lubię kawę"', "„lubię herbatę”.", "Lubię jazz!?", "…", "„a”", "To jest zdanie…"]
+FEEDBACK_TEXTS = [
+    "Dobrze", "dobrze.", "Świetnie!", "dobra odpowiedź", "Trafnie", "dokładnie tak", "Dzięki", "dziękuję!", "IRIS, dzięki",
+    "iris dobrze", "Źle", "To nie tak.", "nie tak", "Nie o to pytałem", "nie o to chodziło!", "to nieprawda", "Mylisz się",
+    "źle się czuję", "dobrze, ale krócej", "dzięki za pogodę", "nie", "tak", "", "  DZIĘKI  ", "dzięki,", "iris, to nie tak",
+]
 SIMILARITY_PAIRS = [
     ("Pracujesz w Krakowie.", "pracuję w krakowie"), ("Lubisz kawę z mlekiem.", "Lubisz kawa z mlekiem"),
     ("Masz psa o imieniu Burek.", "Masz kota."), ("o 18:00 trening", "trening o 18:00"), ("", "coś"),
@@ -117,6 +123,7 @@ def rules() -> dict[str, Any]:
     out["parse_answer"] = [
         {"in": t, "yes": (a := parse_answer(t))[0], "correction": a[1]} for t in ANSWER_TEXTS
     ]
+    out["parse_feedback"] = [{"in": t, "out": parse_feedback(t)} for t in FEEDBACK_TEXTS]
     out["fact_text"] = [{"in": t, "out": fact_text(t)} for t in FACT_TEXTS]
     out["stems"] = [{"in": t, "out": sorted(stems(t))} for pair in SIMILARITY_PAIRS for t in pair]
     out["similarity"] = [{"a": a, "b": b, "out": similarity(a, b)} for a, b in SIMILARITY_PAIRS]
@@ -349,7 +356,52 @@ SCENARIOS: list[dict[str, Any]] = [
         {"op": "say", "text": "zapomnij o łódź"},
         {"op": "say", "text": "co o mnie wiesz"},
     ]},
+    {"name": "pochwała wzmacnia użyte przypuszczenia", "steps": [
+        {"op": "seed", "text": "Masz psa o imieniu Burek", "source": "inferred", "confidence": 0.65},
+        {"op": "seed", "text": "Lubisz kawę", "source": "inferred", "confidence": 0.85},
+        {"op": "seed", "text": "Grasz w szachy", "source": "inferred", "confidence": 0.65},
+        {"op": "say", "text": "dzięki"},
+        {"op": "context", "ids": [1, 2]},
+        {"op": "say", "text": "Świetnie!"},
+        {"op": "say", "text": "dzięki"},
+        {"op": "context", "ids": [1, 2, 3]},
+        {"op": "say", "text": "iris, dobrze"},
+    ]},
+    {"name": "krytyka osłabia i usuwa przypuszczenia", "steps": [
+        {"op": "seed", "text": "Masz psa o imieniu Burek", "source": "inferred", "confidence": 0.65},
+        {"op": "seed", "text": "Lubisz kawę", "source": "inferred", "confidence": 0.3},
+        {"op": "seed", "text": "Mieszkasz w Gdyni", "source": "stated", "confidence": 1.0},
+        {"op": "context", "ids": [1, 2, 3]},
+        {"op": "say", "text": "To nie tak."},
+        {"op": "say", "text": "mylisz się"},
+        {"op": "context", "ids": [1]},
+        {"op": "say", "text": "źle"},
+        {"op": "say", "text": "co o mnie wiesz"},
+    ]},
+    {"name": "reakcja bez użytych przypuszczeń to zwykła rozmowa", "steps": [
+        {"op": "seed", "text": "Mieszkasz w Gdyni", "source": "stated", "confidence": 1.0},
+        {"op": "context", "ids": [1]},
+        {"op": "say", "text": "dzięki"},
+        {"op": "context", "ids": []},
+        {"op": "say", "text": "źle"},
+        {"op": "context", "ids": [99]},
+        {"op": "say", "text": "dzięki"},
+    ]},
+    {"name": "reakcje wyłączone albo nauka wyłączona", "config": {"learning": {"feedback": False}}, "steps": [
+        {"op": "seed", "text": "Masz psa o imieniu Burek", "source": "inferred", "confidence": 0.65},
+        {"op": "context", "ids": [1]},
+        {"op": "say", "text": "dzięki"},
+        {"op": "say", "text": "to nie tak"},
+    ]},
+    {"name": "reakcja po pytaniu o przypuszczenie", "steps": [
+        {"op": "seed", "text": "Masz psa o imieniu Burek", "source": "inferred", "confidence": 0.65},
+        {"op": "context", "ids": [1]},
+        {"op": "question"},
+        {"op": "say", "text": "dzięki"},
+        {"op": "say", "text": "dzięki"},
+    ]},
 ]
+
 
 
 def run_scenario(scn: dict[str, Any]) -> dict[str, Any]:
@@ -374,6 +426,8 @@ def run_scenario(scn: dict[str, Any]) -> dict[str, Any]:
             store.add_fact(step["text"], step["source"], step["confidence"])
         elif op == "decay":
             learner.maybe_decay()
+        elif op == "context":
+            learner.note_context(step["ids"])
         elif op == "advance":
             clock.advance(step["seconds"])
         else:

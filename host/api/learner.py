@@ -18,6 +18,7 @@ from host.core.learning import (
     best_match,
     is_sensitive,
     parse_answer,
+    parse_feedback,
     parse_memory,
     pick_question,
     question_for,
@@ -70,6 +71,7 @@ class Learner:
         self.pending: Pending | None = None
         self._last_question: float | None = None
         self._last_decay: float | None = None
+        self._context_ids: list[int] = []  # przypuszczenia z kontekstu ostatniej odpowiedzi LLM
 
     @property
     def enabled(self) -> bool:
@@ -122,7 +124,7 @@ class Learner:
             return None
         cmd = parse_memory(text)
         if cmd is None:
-            return None
+            return self.feedback(text)
         log.info("polecenie pamięci: %s", cmd.kind)
         if cmd.kind == "remember":
             fact = self._remember(cmd.text, how="told")
@@ -144,6 +146,44 @@ class Learner:
             word = _plural(count, "informacja", "informacje", "informacji")
             return f"Na pewno usunąć wszystko, co o tobie wiem ({count} {word})? Powiedz tak albo nie."
         return recall_text(self._facts(), self.config.brain.llm.min_inferred_confidence)
+
+    # --- reakcje użytkownika: nagroda dla użytych przypuszczeń ---
+
+    def note_context(self, ids: list[int]) -> None:
+        """Przypuszczenia (`inferred`), które trafiły do kontekstu ostatniej odpowiedzi LLM."""
+        self._context_ids = list(ids)
+
+    def feedback(self, text: str) -> str | None:
+        """Pochwała albo krytyka odpowiedzi; None, gdy to nie reakcja albo nie było czego oceniać."""
+        if not (self.enabled and self.cfg.feedback):
+            return None
+        kind = parse_feedback(text)
+        if kind is None:
+            return None
+        known = {f.id: f for f in self._facts()}
+        used = [known[i] for i in self._context_ids if i in known and known[i].source == "inferred"]
+        if not used:
+            return None
+        self._context_ids = []
+        log.info("reakcja użytkownika: %s (%d przypuszczeń)", kind, len(used))
+        if kind == "praise":
+            for f in used:
+                fact = self._guard(self.store.reinforce_fact, f.id, self.cfg.feedback_up, self.cfg.max_inferred)
+                if fact is not None:
+                    self._event("fact.learn", id=fact.id, source="inferred", confidence=fact.confidence, how="praised")
+            self._refresh()
+            return "Dobrze, zapisuję, że to było trafne."
+        for f in used:
+            conf = round(max(0.0, f.confidence - self.cfg.feedback_down), 6)
+            if conf < self.cfg.forget_below:
+                self._guard(self.store.delete_fact, f.id)
+                self._event("fact.forget", id=f.id, why="criticized")
+            else:
+                fact = self._guard(self.store.update_fact, f.id, confidence=conf)
+                if fact is not None:
+                    self._event("fact.learn", id=fact.id, source="inferred", confidence=fact.confidence, how="criticized")
+        self._refresh()
+        return "Dobrze, osłabiam przypuszczenia użyte w tej odpowiedzi."
 
     def _remember(self, text: str, *, how: str) -> Fact | None:
         """Fakt podany wprost; podobny istniejący fakt zostaje zastąpiony nowym tekstem."""

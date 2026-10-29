@@ -34,7 +34,7 @@ class ChatError(val kind: ChatErrorKind, message: String) : Exception(message)
  * polecenia pamięci, LLM, pytanie o przypuszczenie, wnioski w tle. Tury są obsługiwane po kolei.
  */
 class Chat(
-    config: CoreConfig,
+    private val config: CoreConfig,
     private val clock: Clock,
     private val store: FactStore,
     private val assistant: Assistant?,
@@ -65,6 +65,9 @@ class Chat(
             } catch (e: LlmException) {
                 throw ChatError(ChatErrorKind.FAILED, e.message.orEmpty())
             }
+            val facts = store.facts()
+            // Które przypuszczenia poszły do modelu: pochwała lub krytyka dotyczy właśnie ich (spec, sekcja 9).
+            learner.noteContext(selectFacts(facts, config.llm, engine.engine.remote).filter { it.source == Source.INFERRED }.map { it.id })
             val question = learner.question() // pytanie o przypuszczenie (spec, sekcja 9)
             ChatReply(if (question == null) answer.text else "${answer.text} $question", answer.truncated, answer.model, answer.usage)
         }

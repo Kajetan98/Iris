@@ -12,6 +12,7 @@ from host.core.learning import (
     is_sensitive,
     parse_answer,
     parse_memory,
+    parse_feedback,
     pick_question,
     question_for,
     recall_text,
@@ -153,3 +154,27 @@ def test_learning_config_order():
     with pytest.raises(ValidationError):
         LearningConfig(start_max=0.95, max_inferred=0.9)
     assert Config.model_validate({"learning": {"infer": "never"}}).learning.infer == "never"
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        ("Dobrze", "praise"), ("dobrze.", "praise"), ("Świetnie!", "praise"), ("dobra odpowiedź", "praise"),
+        ("Trafnie", "praise"), ("dokładnie tak", "praise"), ("Dzięki", "praise"), ("dziękuję!", "praise"),
+        ("IRIS, dzięki", "praise"), ("  DZIĘKI  ", "praise"),
+        ("Źle", "criticism"), ("To nie tak.", "criticism"), ("nie tak", "criticism"), ("Nie o to pytałem", "criticism"),
+        ("nie o to chodziło!", "criticism"), ("to nieprawda", "criticism"), ("Mylisz się", "criticism"),
+        ("iris, to nie tak", "criticism"),
+        # zwykła rozmowa: słowo reakcji na początku dłuższej wypowiedzi to nie reakcja
+        ("źle się czuję", None), ("dobrze, ale krócej", None), ("dzięki za pogodę", None), ("nie", None), ("tak", None), ("", None),
+    ],
+)
+def test_feedback_is_the_whole_utterance(text, expected):
+    assert parse_feedback(text) == expected
+
+
+def test_feedback_settings_have_sane_defaults():
+    cfg = LearningConfig()
+    assert cfg.feedback and (cfg.feedback_up, cfg.feedback_down) == (0.1, 0.2)
+    with pytest.raises(ValidationError):
+        LearningConfig(feedback_up=0)

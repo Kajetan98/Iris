@@ -59,6 +59,7 @@ class VectorsTest {
             c = when (k) {
                 "enabled" -> c.copy(enabled = p.boolean)
                 "ask" -> c.copy(ask = p.boolean)
+                "feedback" -> c.copy(feedback = p.boolean)
                 "infer" -> c.copy(infer = InferPolicy.valueOf(p.content.uppercase()))
                 else -> error("nieobsłużone ustawienie learning.$k")
             }
@@ -91,6 +92,9 @@ class VectorsTest {
         assertEquals(l.getValue("decay_after_days").jsonPrimitive.double, c.decayAfterDays)
         assertEquals(l.getValue("decay_step").jsonPrimitive.double, c.decayStep)
         assertEquals(l.getValue("forget_below").jsonPrimitive.double, c.forgetBelow)
+        assertEquals(l.getValue("feedback").jsonPrimitive.boolean, c.feedback)
+        assertEquals(l.getValue("feedback_up").jsonPrimitive.double, c.feedbackUp)
+        assertEquals(l.getValue("feedback_down").jsonPrimitive.double, c.feedbackDown)
         assertEquals(l.arr("sensitive_words").map { it.jsonPrimitive.content }, c.sensitiveWords)
 
         val m = root.obj("defaults").obj("llm")
@@ -130,6 +134,14 @@ class VectorsTest {
             val yes = v.getValue("yes")
             assertEquals(if (yes is JsonNull) null else yes.jsonPrimitive.boolean, actual.yes, v.str("in"))
             assertEquals(v.str("correction"), actual.correction, v.str("in"))
+        }
+    }
+
+    @Test
+    fun `user reactions`() {
+        for (v in rules.arr("parse_feedback").objs()) {
+            val expected = v.strOrNull("out")
+            assertEquals(expected, parseFeedback(v.str("in"))?.name?.lowercase()?.let { if (it == "criticism") "criticism" else "praise" }, v.str("in"))
         }
     }
 
@@ -256,6 +268,7 @@ class VectorsTest {
                     "merge" -> learner.merge(step.arr("guesses").map { Guess(it.jsonArray[0].jsonPrimitive.content, it.jsonArray[1].jsonPrimitive.double) })
                     "seed" -> store.addFact(step.str("text"), Source.entries.first { it.wire == step.str("source") }, step.getValue("confidence").jsonPrimitive.double)
                     "decay" -> learner.maybeDecay()
+                    "context" -> learner.noteContext(step.arr("ids").map { it.jsonPrimitive.long })
                     "advance" -> clock.advance(step.getValue("seconds").jsonPrimitive.double)
                     else -> error(step.str("op"))
                 }

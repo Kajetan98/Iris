@@ -147,4 +147,39 @@ class ChatTest {
         r.turn("zapamiętaj, że gram w szachy")
         assertEquals(listOf(Triple("Lubisz kawę", Source.INFERRED, 0.35), Triple("gram w szachy", Source.STATED, 1.0)), r.facts())
     }
+
+    @Test
+    fun `praise and criticism act on the guesses that went to the model`() = runTest {
+        val config = CoreConfig(learning = LearningConfig(ask = false), llm = LlmConfig(sendFacts = SendFacts.ALWAYS))
+        val r = rig(listOf("Dobrze."), config = config)
+        r.store.addFact("Masz psa o imieniu Burek", Source.INFERRED, 0.65)
+        r.turn("Co słychać?")
+        val praise = r.turn("Świetnie!")
+        assertEquals(ChatReply("Dobrze, zapisuję, że to było trafne.", false, null, Usage(0, 0)), praise)
+        assertEquals(0.75, r.store.facts().single().confidence, 1e-9)
+        val calls = r.engine.chatCalls.size
+        r.turn("dzięki") // lista zużyta: zwykła rozmowa z modelem
+        assertEquals(calls + 1, r.engine.chatCalls.size)
+        r.turn("Co słychać?")
+        assertEquals("Dobrze, osłabiam przypuszczenia użyte w tej odpowiedzi.", r.turn("to nie tak").text)
+        assertEquals(0.55, r.store.facts().single().confidence, 1e-9)
+    }
+
+    @Test
+    fun `reactions need guesses in the context and the switch on`() = runTest {
+        val off = CoreConfig(learning = LearningConfig(ask = false, feedback = false), llm = LlmConfig(sendFacts = SendFacts.ALWAYS))
+        val a = rig(listOf("Dobrze."), config = off)
+        a.store.addFact("Masz psa o imieniu Burek", Source.INFERRED, 0.65)
+        a.turn("Co słychać?")
+        assertEquals("Dobrze.", a.turn("dzięki").text)
+        assertEquals(0.65, a.store.facts().single().confidence, 1e-9)
+
+        // pamięć w rozmowie wyłączona: przypuszczenie nie poszło do modelu, więc nie ma czego oceniać
+        val noMemory = CoreConfig(learning = LearningConfig(ask = false), llm = LlmConfig(sendFacts = SendFacts.NEVER))
+        val b = rig(listOf("Dobrze."), config = noMemory)
+        b.store.addFact("Masz psa o imieniu Burek", Source.INFERRED, 0.65)
+        b.turn("Co słychać?")
+        assertEquals("Dobrze.", b.turn("dzięki").text)
+        assertEquals(0.65, b.store.facts().single().confidence, 1e-9)
+    }
 }

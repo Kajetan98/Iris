@@ -37,6 +37,10 @@ data class LearningConfig(
     val decayAfterDays: Double = 30.0,
     val decayStep: Double = 0.1,
     val forgetBelow: Double = 0.2,
+    /** Pochwała i krytyka ostatniej odpowiedzi zmieniają pewność użytych przypuszczeń (spec, sekcja 9). */
+    val feedback: Boolean = true,
+    val feedbackUp: Double = 0.1,
+    val feedbackDown: Double = 0.2,
     val sensitiveWords: List<String> = SENSITIVE_STEMS,
 ) {
     init {

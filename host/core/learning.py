@@ -33,6 +33,10 @@ _RECALL = re.compile(
     _PREFIX + r"(?:co\s+(?:o\s+mnie\s+wiesz|wiesz\s+o\s+mnie)|czego\s+się\s+o\s+mnie\s+nauczył(?:aś|eś))$",
     re.IGNORECASE,
 )
+_IRIS = re.compile(r"^iris[\s,]+")
+# Reakcje to cała wypowiedź; dłuższe zdanie z takim słowem na początku ("źle się czuję") to zwykła rozmowa.
+_PRAISE = frozenset({"dobrze", "świetnie", "dobra odpowiedź", "trafnie", "dokładnie tak", "dzięki", "dziękuję"})
+_CRITICISM = frozenset({"źle", "to nie tak", "nie tak", "nie o to pytałem", "nie o to chodziło", "to nieprawda", "mylisz się"})
 _YES = re.compile(r"^(?:tak|zgadza\s+się|dokładnie|owszem)\b", re.IGNORECASE)
 _NO = re.compile(r"^(?:nie\s+zgadza\s+się|nieprawda|nie)\b[\s,.:;!-]*(?P<rest>.*)$", re.IGNORECASE | re.DOTALL)
 # Słowa pomocnicze pomijane przy porównaniu (zaimki, "mam/masz", "jest/jesteś").
@@ -87,6 +91,16 @@ def parse_answer(text: str) -> tuple[bool | None, str]:
         rest = fact_text(m.group("rest"))
         return False, rest if len(rest) >= MIN_FACT_CHARS else ""
     return None, ""
+
+
+def parse_feedback(text: str) -> Literal["praise", "criticism"] | None:
+    """Pochwała albo krytyka ostatniej odpowiedzi (spec, sekcja 9, "Reakcje użytkownika"), inaczej None."""
+    t = _IRIS.sub("", _clean(text).lower()).strip(" ,;:")
+    if t in _PRAISE:
+        return "praise"
+    if t in _CRITICISM:
+        return "criticism"
+    return None
 
 
 def _key(word: str) -> str:

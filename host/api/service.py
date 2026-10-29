@@ -609,6 +609,11 @@ class HostService:
                     raise ChatError("failed", str(e)) from None
                 raise
             reply_text = answer.text
+            from host.brain.prompt import select_facts
+
+            # Które przypuszczenia poszły do modelu: pochwała lub krytyka dotyczy właśnie ich (spec, sekcja 9).
+            used = select_facts(facts, self.config.brain.llm, remote=assistant.engine.remote)
+            self.learner.note_context([f.id for f in used if f.source == "inferred"])
             question = self.learner.question()  # pytanie o przypuszczenie (spec, sekcja 9)
             if question is not None:
                 reply_text = f"{reply_text} {question}"

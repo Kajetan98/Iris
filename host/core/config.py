@@ -113,6 +113,9 @@ class LearningConfig(_Model):
     decay_after_days: float = Field(30.0, gt=0)
     decay_step: float = Field(0.1, gt=0, le=1)
     forget_below: float = Field(0.2, ge=0, lt=1)
+    feedback: bool = True  # pochwała i krytyka ostatniej odpowiedzi zmieniają pewność użytych przypuszczeń
+    feedback_up: float = Field(0.1, gt=0, le=1)
+    feedback_down: float = Field(0.2, gt=0, le=1)
     sensitive_words: list[str] = SENSITIVE_STEMS
 
     @model_validator(mode="after")

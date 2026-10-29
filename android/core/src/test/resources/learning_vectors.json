@@ -19,6 +19,9 @@
    "decay_after_days": 30.0,
    "decay_step": 0.1,
    "forget_below": 0.2,
+   "feedback": true,
+   "feedback_up": 0.1,
+   "feedback_down": 0.2,
    "sensitive_words": [
     "zdrow",
     "chorob",
@@ -377,6 +380,112 @@
     "in": "tak.",
     "yes": true,
     "correction": ""
+   }
+  ],
+  "parse_feedback": [
+   {
+    "in": "Dobrze",
+    "out": "praise"
+   },
+   {
+    "in": "dobrze.",
+    "out": "praise"
+   },
+   {
+    "in": "Świetnie!",
+    "out": "praise"
+   },
+   {
+    "in": "dobra odpowiedź",
+    "out": "praise"
+   },
+   {
+    "in": "Trafnie",
+    "out": "praise"
+   },
+   {
+    "in": "dokładnie tak",
+    "out": "praise"
+   },
+   {
+    "in": "Dzięki",
+    "out": "praise"
+   },
+   {
+    "in": "dziękuję!",
+    "out": "praise"
+   },
+   {
+    "in": "IRIS, dzięki",
+    "out": "praise"
+   },
+   {
+    "in": "iris dobrze",
+    "out": "praise"
+   },
+   {
+    "in": "Źle",
+    "out": "criticism"
+   },
+   {
+    "in": "To nie tak.",
+    "out": "criticism"
+   },
+   {
+    "in": "nie tak",
+    "out": "criticism"
+   },
+   {
+    "in": "Nie o to pytałem",
+    "out": "criticism"
+   },
+   {
+    "in": "nie o to chodziło!",
+    "out": "criticism"
+   },
+   {
+    "in": "to nieprawda",
+    "out": "criticism"
+   },
+   {
+    "in": "Mylisz się",
+    "out": "criticism"
+   },
+   {
+    "in": "źle się czuję",
+    "out": null
+   },
+   {
+    "in": "dobrze, ale krócej",
+    "out": null
+   },
+   {
+    "in": "dzięki za pogodę",
+    "out": null
+   },
+   {
+    "in": "nie",
+    "out": null
+   },
+   {
+    "in": "tak",
+    "out": null
+   },
+   {
+    "in": "",
+    "out": null
+   },
+   {
+    "in": "  DZIĘKI  ",
+    "out": "praise"
+   },
+   {
+    "in": "dzięki,",
+    "out": "praise"
+   },
+   {
+    "in": "iris, to nie tak",
+    "out": "criticism"
    }
   ],
   "fact_text": [
@@ -5638,6 +5747,866 @@
        1.0,
        0,
        false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "pochwała wzmacnia użyte przypuszczenia",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Masz psa o imieniu Burek",
+     "source": "inferred",
+     "confidence": 0.65
+    },
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.85
+    },
+    {
+     "op": "seed",
+     "text": "Grasz w szachy",
+     "source": "inferred",
+     "confidence": 0.65
+    },
+    {
+     "op": "say",
+     "text": "dzięki"
+    },
+    {
+     "op": "context",
+     "ids": [
+      1,
+      2
+     ]
+    },
+    {
+     "op": "say",
+     "text": "Świetnie!"
+    },
+    {
+     "op": "say",
+     "text": "dzięki"
+    },
+    {
+     "op": "context",
+     "ids": [
+      1,
+      2,
+      3
+     ]
+    },
+    {
+     "op": "say",
+     "text": "iris, dobrze"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.85,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.85,
+       0,
+       false
+      ],
+      [
+       3,
+       "Grasz w szachy",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.85,
+       0,
+       false
+      ],
+      [
+       3,
+       "Grasz w szachy",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.85,
+       0,
+       false
+      ],
+      [
+       3,
+       "Grasz w szachy",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, zapisuję, że to było trafne.",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.75,
+       1,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.9,
+       1,
+       false
+      ],
+      [
+       3,
+       "Grasz w szachy",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.75,
+       1,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.9,
+       1,
+       false
+      ],
+      [
+       3,
+       "Grasz w szachy",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.75,
+       1,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.9,
+       1,
+       false
+      ],
+      [
+       3,
+       "Grasz w szachy",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, zapisuję, że to było trafne.",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.85,
+       2,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.9,
+       2,
+       false
+      ],
+      [
+       3,
+       "Grasz w szachy",
+       "inferred",
+       0.75,
+       1,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "krytyka osłabia i usuwa przypuszczenia",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Masz psa o imieniu Burek",
+     "source": "inferred",
+     "confidence": 0.65
+    },
+    {
+     "op": "seed",
+     "text": "Lubisz kawę",
+     "source": "inferred",
+     "confidence": 0.3
+    },
+    {
+     "op": "seed",
+     "text": "Mieszkasz w Gdyni",
+     "source": "stated",
+     "confidence": 1.0
+    },
+    {
+     "op": "context",
+     "ids": [
+      1,
+      2,
+      3
+     ]
+    },
+    {
+     "op": "say",
+     "text": "To nie tak."
+    },
+    {
+     "op": "say",
+     "text": "mylisz się"
+    },
+    {
+     "op": "context",
+     "ids": [
+      1
+     ]
+    },
+    {
+     "op": "say",
+     "text": "źle"
+    },
+    {
+     "op": "say",
+     "text": "co o mnie wiesz"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.3,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.3,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ],
+      [
+       2,
+       "Lubisz kawę",
+       "inferred",
+       0.3,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, osłabiam przypuszczenia użyte w tej odpowiedzi.",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.45,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.45,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.45,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, osłabiam przypuszczenia użyte w tej odpowiedzi.",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.25,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Wiem od ciebie: \"mieszkasz w Gdyni\". Oprócz tego 1 informacja, pełna lista jest w aplikacji.",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.25,
+       0,
+       false
+      ],
+      [
+       3,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "reakcja bez użytych przypuszczeń to zwykła rozmowa",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Mieszkasz w Gdyni",
+     "source": "stated",
+     "confidence": 1.0
+    },
+    {
+     "op": "context",
+     "ids": [
+      1
+     ]
+    },
+    {
+     "op": "say",
+     "text": "dzięki"
+    },
+    {
+     "op": "context",
+     "ids": []
+    },
+    {
+     "op": "say",
+     "text": "źle"
+    },
+    {
+     "op": "context",
+     "ids": [
+      99
+     ]
+    },
+    {
+     "op": "say",
+     "text": "dzięki"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Mieszkasz w Gdyni",
+       "stated",
+       1.0,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "reakcje wyłączone albo nauka wyłączona",
+   "config": {
+    "learning": {
+     "feedback": false
+    }
+   },
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Masz psa o imieniu Burek",
+     "source": "inferred",
+     "confidence": 0.65
+    },
+    {
+     "op": "context",
+     "ids": [
+      1
+     ]
+    },
+    {
+     "op": "say",
+     "text": "dzięki"
+    },
+    {
+     "op": "say",
+     "text": "to nie tak"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "reakcja po pytaniu o przypuszczenie",
+   "config": {},
+   "steps": [
+    {
+     "op": "seed",
+     "text": "Masz psa o imieniu Burek",
+     "source": "inferred",
+     "confidence": 0.65
+    },
+    {
+     "op": "context",
+     "ids": [
+      1
+     ]
+    },
+    {
+     "op": "question"
+    },
+    {
+     "op": "say",
+     "text": "dzięki"
+    },
+    {
+     "op": "say",
+     "text": "dzięki"
+    }
+   ],
+   "expected": [
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       false
+      ]
+     ]
+    },
+    {
+     "reply": "Czy dobrze rozumiem: masz psa o imieniu Burek?",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.65,
+       0,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": "Dobrze, zapisuję, że to było trafne.",
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.75,
+       1,
+       true
+      ]
+     ]
+    },
+    {
+     "reply": null,
+     "facts": [
+      [
+       1,
+       "Masz psa o imieniu Burek",
+       "inferred",
+       0.75,
+       1,
+       true
       ]
      ]
     }
