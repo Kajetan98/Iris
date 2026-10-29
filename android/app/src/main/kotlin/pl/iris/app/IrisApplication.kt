@@ -80,6 +80,10 @@ class AppContainer(app: Application) {
                 applySettings(_settings.value.copy(engine = EngineKind.LOCAL, localModel = name))
             } catch (e: ModelImportException) {
                 modelNotice.update { e.message }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                modelNotice.update { "Nie udało się wybrać pliku (${e.javaClass.simpleName}). Spróbuj ponownie albo wskaż plik z innego folderu, np. Pobrane." }
             }
         }
     }
