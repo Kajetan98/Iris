@@ -63,16 +63,16 @@ class FakeConversation(private val replies: MutableList<Any>) : Conversation {
 }
 
 class ControllerTest {
-    private class Rig(scope: TestScope, replies: List<Any>, speakerAvailable: Boolean = true, hasKey: Boolean = true) {
+    private class Rig(scope: TestScope, replies: List<Any>, speakerAvailable: Boolean = true, ready: Boolean = true) {
         val recognizer = FakeRecognizer()
         val speaker = FakeSpeaker(speakerAvailable)
         val conversation = FakeConversation(replies.toMutableList())
-        val controller = IrisController(conversation, recognizer, speaker, scope, hasKey)
+        val controller = IrisController(conversation, recognizer, speaker, scope, ready)
         val state get() = controller.state.value
     }
 
-    private fun TestScope.rig(vararg replies: Any, speakerAvailable: Boolean = true, hasKey: Boolean = true) =
-        Rig(this, replies.toList(), speakerAvailable, hasKey)
+    private fun TestScope.rig(vararg replies: Any, speakerAvailable: Boolean = true, ready: Boolean = true) =
+        Rig(this, replies.toList(), speakerAvailable, ready)
 
     @Test
     fun `a spoken turn goes through listening, thinking and speaking`() = runTest {
@@ -99,7 +99,7 @@ class ControllerTest {
     @Test
     fun `the offline preference reaches the recognizer`() = runTest {
         val r = rig("x")
-        r.controller.configure(hasKey = true, preferOffline = true)
+        r.controller.configure(ready = true, preferOffline = true)
         r.controller.onTalk()
         assertEquals(true, r.recognizer.offline)
     }
@@ -182,7 +182,7 @@ class ControllerTest {
     @Test
     fun `chat errors become notes on the turn`() = runTest {
         val cases = listOf(
-            ChatDisabled() to Pair(Texts.NO_KEY, false),
+            ChatDisabled() to Pair(Texts.NO_MODEL, false),
             ChatError(ChatErrorKind.REFUSED, "x") to Pair(Texts.REFUSED, true),
             ChatError(ChatErrorKind.UNAVAILABLE, "x") to Pair(Texts.UNAVAILABLE, true),
             ChatError(ChatErrorKind.CONFIG, "Claude API zwróciło 401: invalid x-api-key") to Pair("${Texts.CONFIG}\nClaude API zwróciło 401: invalid x-api-key", true),
@@ -217,10 +217,10 @@ class ControllerTest {
 
     @Test
     fun `permission denial, notice clearing, key flag and shutdown`() = runTest {
-        val r = rig("x", hasKey = false)
-        assertEquals(Texts.STATE_IDLE_NO_KEY, Texts.state(r.state.phase, r.state.hasKey))
-        r.controller.configure(hasKey = true, preferOffline = false)
-        assertEquals(Texts.STATE_IDLE, Texts.state(r.state.phase, r.state.hasKey))
+        val r = rig("x", ready = false)
+        assertEquals(Texts.STATE_IDLE_NO_MODEL, Texts.state(r.state.phase, r.state.ready))
+        r.controller.configure(ready = true, preferOffline = false)
+        assertEquals(Texts.STATE_IDLE, Texts.state(r.state.phase, r.state.ready))
         r.controller.onTalk()
         r.controller.onPermissionDenied()
         assertEquals(Phase.IDLE, r.state.phase)
@@ -237,7 +237,7 @@ class ControllerTest {
         assertEquals("Słucham", Texts.state(Phase.LISTENING, true))
         assertEquals("Przygotowuję odpowiedź", Texts.state(Phase.THINKING, true))
         assertEquals("Mówię", Texts.state(Phase.SPEAKING, true))
-        val all = listOf(Texts.NO_KEY, Texts.NO_MATCH, Texts.NO_PERMISSION, Texts.RECOGNIZER_UNAVAILABLE, Texts.REFUSED, Texts.UNAVAILABLE, Texts.CONFIG, Texts.FAILED, Texts.NO_VOICE)
+        val all = listOf(Texts.NO_MODEL, Texts.NO_MATCH, Texts.NO_PERMISSION, Texts.RECOGNIZER_UNAVAILABLE, Texts.REFUSED, Texts.UNAVAILABLE, Texts.CONFIG, Texts.FAILED, Texts.NO_VOICE)
         for (t in all) for (word in listOf("czuj", "smutn", "przykro mi", "cieszę")) assertTrue(word !in t.lowercase(), "$word w: $t")
     }
 }

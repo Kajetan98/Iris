@@ -5,9 +5,15 @@ import kotlinx.coroutines.CoroutineScope
 
 /**
  * Ustawienia aplikacji (docs/spec.md, sekcja 14). Pamięć w rozmowie i uczenie się są domyślnie wyłączone:
- * jedyny silnik jest zdalny, więc ich włączenie oznacza, że fakty i wypowiedzi trafiają do Anthropic.
+ * przy silniku Claude ich włączenie oznacza, że fakty i wypowiedzi trafiają do Anthropic.
  */
+enum class EngineKind { CLAUDE, LOCAL }
+
 data class Settings(
+    /** Claude API (zdalny) albo model na telefonie (lokalny, bez klucza i opłat). */
+    val engine: EngineKind = EngineKind.CLAUDE,
+    /** Nazwa pliku `.litertlm` skopiowanego do pamięci aplikacji; puste, gdy nie wybrano modelu. */
+    val localModel: String = "",
     val apiKey: String = "",
     /** Identyfikator workspace (`wrkspc_...`); potrzebny tylko dla klucza niepowiązanego z workspace. */
     val workspaceId: String = "",
@@ -19,12 +25,15 @@ data class Settings(
     val preferOffline: Boolean = false,
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
+
+    /** Jest czym rozmawiać: klucz dla Claude albo wybrany plik modelu dla silnika lokalnego. */
+    val ready: Boolean get() = if (engine == EngineKind.LOCAL) localModel.isNotBlank() else hasKey
 }
 
 fun Settings.toCoreConfig(): CoreConfig = CoreConfig(
     learning = LearningConfig(infer = if (learn) InferPolicy.ALWAYS else InferPolicy.NEVER),
     llm = LlmConfig(
-        model = model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL },
+        model = if (engine == EngineKind.LOCAL) localModel.trim() else model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL },
         sendFacts = if (useMemory) SendFacts.ALWAYS else SendFacts.NEVER,
     ),
 )
@@ -38,7 +47,7 @@ interface SettingsStore {
 
 /**
  * Rozmowa zależna od ustawień: po każdej zmianie buduje [Chat] od nowa (z nową konfiguracją i kluczem).
- * Bez klucza działają polecenia pamięci, a rozmowa z modelem kończy się [ChatDisabled].
+ * Bez klucza (albo bez wybranego modelu lokalnego) działają polecenia pamięci, a rozmowa kończy się [ChatDisabled].
  */
 class ConversationHost(
     private val store: FactStore,
@@ -47,6 +56,7 @@ class ConversationHost(
     private val scope: CoroutineScope,
     private val zone: ZoneId = ZoneId.systemDefault(),
     initial: Settings = Settings(),
+    private val local: LocalGenerator? = null,
 ) : Conversation {
     @Volatile
     private var chat: Chat = build(initial)
@@ -57,11 +67,12 @@ class ConversationHost(
 
     private fun build(settings: Settings): Chat {
         val config = settings.toCoreConfig()
-        val assistant = if (settings.hasKey) {
-            Assistant(ClaudeEngine({ settings.apiKey }, config.llm, transport, workspaceId = settings.workspaceId), config.llm)
-        } else {
-            null
+        val engine: LlmEngine? = when {
+            settings.engine == EngineKind.LOCAL -> if (settings.ready && local != null) LocalEngine(local, settings.localModel.trim()) else null
+            settings.hasKey -> ClaudeEngine({ settings.apiKey }, config.llm, transport, workspaceId = settings.workspaceId)
+            else -> null
         }
+        val assistant = engine?.let { Assistant(it, config.llm) }
         return Chat(config, clock, store, assistant, scope, zone)
     }
 

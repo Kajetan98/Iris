@@ -61,17 +61,17 @@ data class UiState(
     val notice: String? = null,
     /** Poziom dźwięku dla fali (0-1): mikrofon przy słuchaniu. */
     val level: Float = 0f,
-    val hasKey: Boolean = false,
+    val ready: Boolean = false,
 )
 
 object Texts {
     const val STATE_IDLE = "Dotknij i mów"
-    const val STATE_IDLE_NO_KEY = "Wpisz klucz API w ustawieniach"
+    const val STATE_IDLE_NO_MODEL = "Wybierz model w ustawieniach"
     const val STATE_LISTENING = "Słucham"
     const val STATE_THINKING = "Przygotowuję odpowiedź"
     const val STATE_SPEAKING = "Mówię"
 
-    const val NO_KEY = "Wpisz klucz API w ustawieniach, żeby rozmawiać z modelem. Polecenia pamięci działają bez klucza."
+    const val NO_MODEL = "Wybierz model w ustawieniach (klucz Claude API albo plik modelu na telefonie), żeby rozmawiać. Polecenia pamięci działają bez modelu."
     const val NO_MATCH = "Nic nie rozpoznano. Mów bliżej mikrofonu."
     const val NO_PERMISSION = "Brak zgody na mikrofon. Zezwól na nią w ustawieniach systemu albo pisz."
     const val RECOGNIZER_UNAVAILABLE = "Ten telefon nie ma usługi rozpoznawania mowy. Możesz pisać."
@@ -90,8 +90,8 @@ object Texts {
         Source.INFERRED -> "przypuszczenie, pewność ${Math.rint(fact.confidence * 100).toLong()}%"
     }
 
-    fun state(phase: Phase, hasKey: Boolean): String = when (phase) {
-        Phase.IDLE -> if (hasKey) STATE_IDLE else STATE_IDLE_NO_KEY
+    fun state(phase: Phase, ready: Boolean): String = when (phase) {
+        Phase.IDLE -> if (ready) STATE_IDLE else STATE_IDLE_NO_MODEL
         Phase.LISTENING -> STATE_LISTENING
         Phase.THINKING -> STATE_THINKING
         Phase.SPEAKING -> STATE_SPEAKING
@@ -124,10 +124,10 @@ class IrisController(
     private val recognizer: Recognizer,
     private val speaker: Speaker,
     private val scope: CoroutineScope,
-    hasKey: Boolean = false,
+    ready: Boolean = false,
     private var preferOffline: Boolean = false,
 ) {
-    private val _state = MutableStateFlow(UiState(hasKey = hasKey))
+    private val _state = MutableStateFlow(UiState(ready = ready))
     val state: StateFlow<UiState> = _state.asStateFlow()
 
     private var counter = 0
@@ -164,9 +164,9 @@ class IrisController(
 
     fun clearNotice() = _state.update { it.copy(notice = null) }
 
-    fun configure(hasKey: Boolean, preferOffline: Boolean) {
+    fun configure(ready: Boolean, preferOffline: Boolean) {
         this.preferOffline = preferOffline
-        _state.update { it.copy(hasKey = hasKey) }
+        _state.update { it.copy(ready = ready) }
     }
 
     fun shutdown() {
@@ -217,7 +217,7 @@ class IrisController(
             } catch (e: CancellationException) {
                 throw e
             } catch (_: ChatDisabled) {
-                failTurn(id, Texts.NO_KEY, warn = false)
+                failTurn(id, Texts.NO_MODEL, warn = false)
             } catch (e: ChatError) {
                 val note = if (e.kind == ChatErrorKind.CONFIG) Texts.config(e.message.orEmpty()) else Texts.chat(e.kind)
                 failTurn(id, note, warn = true)

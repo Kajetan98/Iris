@@ -83,4 +83,33 @@ class SettingsTest {
         testScheduler.advanceUntilIdle()
         assertTrue(off.facts().isEmpty())
     }
+
+    @Test
+    fun `the local engine needs a chosen model, not a key, and keeps facts on the phone`() = runTest {
+        assertFalse(Settings(engine = EngineKind.LOCAL, apiKey = "sk").ready)
+        assertTrue(Settings(engine = EngineKind.LOCAL, localModel = "gemma.litertlm").ready)
+        assertTrue(Settings(apiKey = "sk").ready)
+        assertEquals("gemma.litertlm", Settings(engine = EngineKind.LOCAL, localModel = " gemma.litertlm ").toCoreConfig().llm.model)
+
+        val clock = ManualClock()
+        val store = InMemoryFactStore(clock)
+        val gen = object : LocalGenerator {
+            var last = ""
+            override suspend fun generate(system: String, message: String): String {
+                last = message
+                return "Dobrze."
+            }
+        }
+        val host = ConversationHost(store, clock, FakeTransport(emptyList()), this, local = gen)
+        host.say("zapamiętaj, że mam psa Burka")
+
+        host.update(Settings(engine = EngineKind.LOCAL))
+        assertFailsWith<ChatDisabled> { host.say("Cześć") } // brak wybranego modelu
+
+        host.update(Settings(engine = EngineKind.LOCAL, localModel = "m.litertlm", useMemory = true))
+        val reply = host.say("Jak się wabi mój pies?")
+        assertEquals("Dobrze.", reply.text)
+        assertEquals("m.litertlm", reply.model)
+        assertTrue("Burka" in gen.last) // silnik lokalny: pamięć nie wychodzi poza telefon, przełącznik ją włącza
+    }
 }

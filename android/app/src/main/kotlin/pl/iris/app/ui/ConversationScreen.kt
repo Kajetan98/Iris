@@ -91,10 +91,10 @@ fun ConversationScreen(
 
         WaveCanvas(ui.phase, ui.level, Modifier.fillMaxWidth().height(180.dp))
         Text(
-            Texts.state(ui.phase, ui.hasKey),
+            Texts.state(ui.phase, ui.ready),
             color = IrisColors.Ink2,
             textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).semantics { contentDescription = "Stan: ${Texts.state(ui.phase, ui.hasKey)}" },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).semantics { contentDescription = "Stan: ${Texts.state(ui.phase, ui.ready)}" },
         )
 
         if (ui.turns.isEmpty()) {

@@ -386,9 +386,18 @@ Klucz API:
 - Użytkownik wpisuje go w ustawieniach (klucz z Claude Console, `platform.claude.com/settings/keys`; zalecany klucz przypisany do workspace z ustawionym limitem wydatków, bo wtedy identyfikator workspace nie jest potrzebny). Aplikacja zapisuje go zaszyfrowanego kluczem z Android Keystore; klucz nie trafia do logów, kopii zapasowej (`allowBackup=false`) ani do bazy faktów. Aplikacja nie ma własnego serwera ani własnego klucza.
 - Klucz zapisany w telefonie odczyta ktoś, kto ma dostęp do odblokowanego urządzenia, więc warto użyć klucza z limitem wydatków.
 
+Silnik lokalny. Zamiast Claude API aplikacja może uruchamiać model językowy na telefonie, bez konta, klucza i opłat za tokeny:
+
+- Środowisko: LiteRT-LM (`com.google.ai.edge.litertlm:litertlm-android`, Kotlin API: `Engine`, `Conversation`), procesor (CPU), tylko `arm64-v8a`. Środowisko MediaPipe LLM Inference jest dla Androida oznaczone jako wycofywane, więc nie jest używane.
+- Model to pojedynczy plik `.litertlm`. Aplikacja go nie pobiera: użytkownik wskazuje plik systemowym wyborem plików, a aplikacja kopiuje go do pamięci prywatnej (jeden model naraz, nowy zastępuje stary; można go usunąć w ustawieniach). W ustawieniach zapisana jest tylko nazwa pliku.
+- Silnik jest lokalny (`remote = false`): wypowiedzi, fakty i wnioski z rozmów nie opuszczają telefonu. Przełączniki pamięci z powyższego akapitu działają tak samo, ale ich opisy mówią o tym, że dane zostają na telefonie.
+- Model ładuje się przy pierwszej rozmowie po wyborze (kilka do kilkudziesięciu sekund); w tym czasie stan to "Przygotowuję odpowiedź". Plik, którego nie da się wczytać (zły format, za mało pamięci), daje błąd konfiguracji z opisem, bez awarii aplikacji.
+- Prompt: `system` jest instrukcją systemową rozmowy, a historia i bieżąca wypowiedź (z blokiem kontekstu) są jedną wiadomością użytkownika w postaci zapisu rozmowy ("Użytkownik: ...", "IRIS: ..."), bo każde wywołanie tworzy nową rozmowę. Zapis jest przycinany od najstarszych tur do 6000 znaków; ostatnia wiadomość zostaje zawsze. Z odpowiedzi usuwane są bloki `<think>...</think>`. Liczba tokenów odpowiedzi nie jest ograniczana przez `max_tokens` (środowisko tego nie udostępnia); odpowiedź kończy model.
+- Model małego rozmiaru (do ok. 2 mld parametrów) odpowiada gorzej niż Claude, zwłaszcza po polsku, i może się mylić w wyciąganiu faktów. Przypuszczenia z rozmów podlegają tym samym regułom pewności i pytaniom (sekcja 9).
+
 Dane opuszczające telefon:
 
-- Do Anthropic: wypowiedź, ostatnie `history_turns` (10) par rozmowy, blok kontekstu (czas lokalny i fakty według ustawień niżej) oraz, przy włączonym uczeniu, osobne zapytanie o wnioski z samą wypowiedzią.
+- Do Anthropic (tylko przy silniku Claude): wypowiedź, ostatnie `history_turns` (10) par rozmowy, blok kontekstu (czas lokalny i fakty według ustawień niżej) oraz, przy włączonym uczeniu, osobne zapytanie o wnioski z samą wypowiedzią.
 - Do usługi mowy systemu: nagranie, gdy rozpoznawanie nie działa offline.
 - Nic innego. Aplikacja nie ma analityki. Rozmowa nie jest zapisywana, historia żyje w pamięci procesu; fakty są w bazie na telefonie i nie trafiają do logów (`logcat`).
 
@@ -406,7 +415,7 @@ Interfejs. Jedna aktywność z trzema ekranami: rozmowa, ustawienia i pamięć (
 - Ekran rozmowy: fala głosu, napis stanu, napisy rozmowy (rozpoznana wypowiedź i odpowiedź), przycisk mówienia i pole do pisania. Stany: w spoczynku ("Dotknij i mów"), słucham, przygotowuję odpowiedź, mówię, brak klucza ("Wpisz klucz API w ustawieniach"). Dotknięcie przycisku zaczyna słuchanie; rozpoznawanie kończy się samo po ciszy albo po ponownym dotknięciu. Odpowiedź jest od razu w napisach w całości i czytana przez syntezę mowy, o ile system ma polski głos.
 - Fala: poziom przy słuchaniu to poziom mikrofonu z `SpeechRecognizer`. `TextToSpeech` nie udostępnia dźwięku, więc przy mówieniu fala porusza się według stałego wzoru (przybliżenie, nie odczyt dźwięku). Kształt i stany jak w kliencie przeglądarkowym (sekcja 1).
 - Komunikaty błędów: brak rozpoznania "Nic nie rozpoznano. Mów bliżej mikrofonu."; brak zgody na mikrofon, brak usługi rozpoznawania i błędy modelu (niedostępny, konfiguracja, odmowa, inny; sekcja 12) z opisem, co zrobić. Napisy rozmowy zostają tylko w pamięci procesu aplikacji.
-- Ustawienia: klucz API, identyfikator workspace (opcjonalny), model, przełączniki pamięci (wyżej), "Preferuj rozpoznawanie offline". Pamięć: lista faktów (tekst, "od ciebie" albo przypuszczenie z pewnością w procentach) z usuwaniem pojedynczym.
+- Ustawienia: silnik (Claude API albo model na telefonie); dla Claude klucz API, identyfikator workspace (opcjonalny), model; dla modelu na telefonie wybór i usunięcie pliku modelu; przełączniki pamięci (wyżej), "Preferuj rozpoznawanie offline". Pamięć: lista faktów (tekst, "od ciebie" albo przypuszczenie z pewnością w procentach) z usuwaniem pojedynczym.
 - Mikrofon wymaga zgody `RECORD_AUDIO` prośbą w czasie działania. Aplikacja ma tylko uprawnienie `INTERNET` i `RECORD_AUDIO`.
 
 Prompt systemowy ma ten sam sens co w sekcji 12: IRIS jest programem, nie twierdzi, że coś czuje lub jest świadomy, opisuje pamięć tak, jak działa (fakty podane wprost, przypuszczenia z rozmów, polecenia), nie zmyśla i odpowiada krótko do czytania na głos. Mówi, że działa na telefonie użytkownika, i nie wspomina o ciele, baterii ani łączu. Blok kontekstu zawiera czas lokalny i fakty (sekcja 12), bez linii o stanie.
