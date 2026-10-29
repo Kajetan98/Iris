@@ -106,6 +106,9 @@ object Texts {
         RecognizerError.OTHER -> RECOGNIZER_OTHER
     }
 
+    /** Błąd konfiguracji z opisem od API (status i komunikat, bez klucza i bez treści rozmowy), żeby było widać przyczynę. */
+    fun config(detail: String): String = if (detail.isBlank()) CONFIG else "$CONFIG\n$detail"
+
     fun chat(kind: ChatErrorKind): String = when (kind) {
         ChatErrorKind.REFUSED -> REFUSED
         ChatErrorKind.UNAVAILABLE -> UNAVAILABLE
@@ -216,7 +219,8 @@ class IrisController(
             } catch (_: ChatDisabled) {
                 failTurn(id, Texts.NO_KEY, warn = false)
             } catch (e: ChatError) {
-                failTurn(id, Texts.chat(e.kind), warn = true)
+                val note = if (e.kind == ChatErrorKind.CONFIG) Texts.config(e.message.orEmpty()) else Texts.chat(e.kind)
+                failTurn(id, note, warn = true)
             } catch (_: Exception) {
                 failTurn(id, Texts.FAILED, warn = true) // np. baza faktów; treść wyjątku może zawierać dane
             }

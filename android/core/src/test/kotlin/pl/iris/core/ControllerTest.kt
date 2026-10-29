@@ -185,7 +185,8 @@ class ControllerTest {
             ChatDisabled() to Pair(Texts.NO_KEY, false),
             ChatError(ChatErrorKind.REFUSED, "x") to Pair(Texts.REFUSED, true),
             ChatError(ChatErrorKind.UNAVAILABLE, "x") to Pair(Texts.UNAVAILABLE, true),
-            ChatError(ChatErrorKind.CONFIG, "x") to Pair(Texts.CONFIG, true),
+            ChatError(ChatErrorKind.CONFIG, "Claude API zwróciło 401: invalid x-api-key") to Pair("${Texts.CONFIG}\nClaude API zwróciło 401: invalid x-api-key", true),
+            ChatError(ChatErrorKind.CONFIG, "") to Pair(Texts.CONFIG, true),
             ChatError(ChatErrorKind.FAILED, "x") to Pair(Texts.FAILED, true),
             IllegalStateException("treść: bardzo prywatne") to Pair(Texts.FAILED, true),
         )
