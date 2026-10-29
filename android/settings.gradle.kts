@@ -6,9 +6,9 @@ pluginManagement {
     }
     plugins {
         // Wersje w jednym miejscu: moduły stosują wtyczki bez wersji, więc Kotlin ładuje się raz.
-        id("org.jetbrains.kotlin.jvm") version "2.2.21"
-        id("org.jetbrains.kotlin.android") version "2.2.21"
-        id("org.jetbrains.kotlin.plugin.compose") version "2.2.21"
+        id("org.jetbrains.kotlin.jvm") version "2.4.0"
+        id("org.jetbrains.kotlin.android") version "2.4.0"
+        id("org.jetbrains.kotlin.plugin.compose") version "2.4.0"
         id("com.android.application") version "8.13.2"
     }
 }
