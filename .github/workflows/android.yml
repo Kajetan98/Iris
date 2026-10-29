@@ -25,6 +25,8 @@ on:
 jobs:
   android:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # wydanie android-latest z plikiem APK
     defaults:
       run:
         working-directory: android
@@ -60,3 +62,16 @@ jobs:
           name: iris-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
+
+      - name: Wydanie android-latest (plik APK do pobrania prosto na telefonie)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          cp app/build/outputs/apk/debug/app-debug.apk iris-debug.apk
+          gh release view android-latest > /dev/null 2>&1 || gh release create android-latest \
+            --prerelease --target "$GITHUB_SHA" --title "IRIS na Androida (ostatni build)" \
+            --notes "Plik APK z ostatniego builda gałęzi main. Instalacja: README, sekcja Android."
+          gh release edit android-latest --notes "Build z commita ${GITHUB_SHA::7}. Instalacja: README, sekcja Android."
+          gh release upload android-latest iris-debug.apk --clobber

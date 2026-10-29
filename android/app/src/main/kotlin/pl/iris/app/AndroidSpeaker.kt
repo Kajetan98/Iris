@@ -1,6 +1,8 @@
 package pl.iris.app
 
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import java.util.Locale
@@ -14,7 +16,10 @@ class AndroidSpeaker(context: Context) : Speaker {
     @Volatile
     private var onDone: (() -> Unit)? = null
 
-    private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status -> init(status) }
+    private val main = Handler(Looper.getMainLooper())
+
+    // Wywołanie zwrotne idzie przez main.post, więc `tts` jest już przypisane, gdy init() się wykona.
+    private val tts: TextToSpeech = TextToSpeech(context.applicationContext) { status -> main.post { init(status) } }
 
     override val available: Boolean get() = ready
 
