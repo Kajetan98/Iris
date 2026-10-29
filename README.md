@@ -92,7 +92,7 @@ Bez tunelu, w sieci domowej, host może mieć własny certyfikat (`python -m hos
 
 ## Android: aplikacja bez hosta
 
-Osobna aplikacja na Androida (`android/`, Kotlin i Jetpack Compose) rozmawia bez hosta: mowa i synteza z systemu, model przez Claude API wywoływany z telefonu, fakty o Tobie w bazie SQLite na telefonie. Reguły uczenia się są te same co na hoście (spec, sekcje 9 i 14), a zgodność pilnuje wspólny plik testowy. Nie ma w niej HERMES, przełączania urządzeń ani zdarzeń.
+Osobna aplikacja na Androida (`android/`, Kotlin i Jetpack Compose) rozmawia bez hosta: mowa i synteza z systemu, model przez Claude API albo uruchamiany na telefonie (bez opłat), fakty o Tobie w bazie SQLite na telefonie. Reguły uczenia się są te same co na hoście (spec, sekcje 9 i 14), a zgodność pilnuje wspólny plik testowy. Nie ma w niej HERMES, przełączania urządzeń ani zdarzeń.
 
 Instalacja:
 
@@ -101,7 +101,9 @@ Instalacja:
 3. W aplikacji wejdź w Ustawienia i wpisz klucz API Claude, potem Zapisz. Klucz utworzysz w Claude Console (`platform.claude.com/settings/keys`, przycisk Create key). Wybierz przy tworzeniu workspace, do którego ma być przypisany: wtedy nic więcej nie trzeba wpisywać. Klucz niepowiązany z workspace wymaga w aplikacji pola "ID workspace" (`wrkspc_...`, kolumna ID na stronie `platform.claude.com/settings/workspaces`). Limit wydatków ustawisz na tej samej stronie (workspace, Spend limits).
 4. Dotknij "Mów" i zezwól na mikrofon. Możesz też pisać w polu na dole.
 
-Co wychodzi z telefonu: wypowiedź, kilka ostatnich wymian i czas lokalny trafiają do Anthropic. Fakty o Tobie trafiają tam tylko po włączeniu "Używaj pamięci w rozmowie", a wnioski z rozmów powstają tylko po włączeniu "Ucz się z rozmów" (oba przełączniki są domyślnie wyłączone). Rozpoznawanie mowy zwykle wysyła nagranie do usługi systemu (Google), chyba że telefon ma pakiet offline i włączysz "Preferuj rozpoznawanie offline". Klucz API jest zaszyfrowany kluczem z Android Keystore i nie trafia do kopii zapasowej. Polecenia "zapamiętaj, że ...", "zapomnij ...", "co o mnie wiesz" działają lokalnie i bez klucza.
+Model na telefonie (bez konta, klucza i opłat): w Ustawieniach wybierz "Model na telefonie" i wskaż plik `.litertlm` (format LiteRT-LM), pobrany wcześniej na telefon z Hugging Face, z organizacji `litert-community` (np. `Qwen3-0.6B`, mały, albo `gemma-4-E2B-it-litert-lm`, ok. 2,6 GB). Niektóre modele wymagają zalogowania i akceptacji licencji. Aplikacja kopiuje plik do swojej pamięci, więc potrzeba tyle wolnego miejsca, ile zajmuje model. Wymagany jest 64-bitowy telefon (arm64) z kilkoma GB pamięci RAM. Rozmowa, fakty i wnioski zostają wtedy na telefonie. Mały model odpowiada wyraźnie gorzej niż Claude, zwłaszcza po polsku. Ta ścieżka nie była uruchamiana na prawdziwym telefonie w czasie pisania; jeśli model się nie wczyta, aplikacja pokaże powód pod odpowiedzią.
+
+Przy silniku Claude wychodzi z telefonu: wypowiedź, kilka ostatnich wymian i czas lokalny trafiają do Anthropic. Fakty o Tobie trafiają tam tylko po włączeniu "Używaj pamięci w rozmowie", a wnioski z rozmów powstają tylko po włączeniu "Ucz się z rozmów" (oba przełączniki są domyślnie wyłączone). Rozpoznawanie mowy zwykle wysyła nagranie do usługi systemu (Google), chyba że telefon ma pakiet offline i włączysz "Preferuj rozpoznawanie offline". Klucz API jest zaszyfrowany kluczem z Android Keystore i nie trafia do kopii zapasowej. Polecenia "zapamiętaj, że ...", "zapomnij ...", "co o mnie wiesz" działają lokalnie i bez klucza.
 
 Wymagania i ograniczenia: Android 8.0 lub nowszy, polski głos w systemie do czytania odpowiedzi (bez niego są tylko napisy). Fala podczas mowy porusza się według stałego wzoru, bo synteza systemowa nie udostępnia dźwięku. Aplikacja nie była uruchamiana na prawdziwym telefonie przez autora kodu: pierwsza wersja może wymagać poprawek.
 

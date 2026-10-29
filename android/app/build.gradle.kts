@@ -16,6 +16,9 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+
+        // LiteRT-LM ma biblioteki natywne tylko dla 64-bitowych układów; 32-bitowe telefony nie uruchomią modelu lokalnego.
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     // Klucz debug w repozytorium: każdy build z CI ma ten sam podpis, więc nową wersję można
@@ -56,6 +59,7 @@ kotlin {
 dependencies {
     implementation(project(":core"))
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.18.0")
 
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
     implementation("androidx.compose.ui:ui")

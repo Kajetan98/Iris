@@ -1,6 +1,7 @@
 package pl.iris.app
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
@@ -47,6 +48,15 @@ private fun IrisRoot(container: AppContainer) {
         if (granted) container.controller.onTalk() else container.controller.onPermissionDenied()
     }
 
+    val importStatus by container.models.progress.collectAsState()
+    val modelNotice by container.modelNotice.collectAsState()
+    val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+            container.importModel(uri)
+        }
+    }
+
     BackHandler(enabled = screen != Screen.CONVERSATION) { screen = Screen.CONVERSATION }
 
     when (screen) {
@@ -63,6 +73,9 @@ private fun IrisRoot(container: AppContainer) {
         )
         Screen.SETTINGS -> SettingsScreen(
             initial = settings,
+            importStatus = importStatus ?: modelNotice,
+            onPickModel = { pickModel.launch(arrayOf("*/*")) },
+            onRemoveModel = container::removeModel,
             onSave = container::applySettings,
             onBack = { screen = Screen.CONVERSATION },
         )

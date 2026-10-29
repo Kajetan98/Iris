@@ -10,6 +10,7 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 import pl.iris.core.DEFAULT_CLAUDE_MODEL
+import pl.iris.core.EngineKind
 import pl.iris.core.Settings
 import pl.iris.core.SettingsStore
 
@@ -21,6 +22,8 @@ class KeystoreSettingsStore(context: Context) : SettingsStore {
     private val prefs = context.applicationContext.getSharedPreferences("iris_settings", Context.MODE_PRIVATE)
 
     override fun load(): Settings = Settings(
+        engine = prefs.getString(KEY_ENGINE, null)?.let { name -> EngineKind.entries.firstOrNull { it.name == name } } ?: EngineKind.CLAUDE,
+        localModel = prefs.getString(KEY_LOCAL_MODEL, null).orEmpty(),
         apiKey = prefs.getString(KEY_API, null)?.let(::decrypt).orEmpty(),
         workspaceId = prefs.getString(KEY_WORKSPACE, null).orEmpty(),
         model = prefs.getString(KEY_MODEL, null) ?: DEFAULT_CLAUDE_MODEL,
@@ -33,6 +36,8 @@ class KeystoreSettingsStore(context: Context) : SettingsStore {
         prefs.edit().apply {
             val key = settings.apiKey.trim()
             if (key.isEmpty()) remove(KEY_API) else putString(KEY_API, encrypt(key))
+            putString(KEY_ENGINE, settings.engine.name)
+            putString(KEY_LOCAL_MODEL, settings.localModel)
             putString(KEY_WORKSPACE, settings.workspaceId.trim())
             putString(KEY_MODEL, settings.model)
             putBoolean(KEY_MEMORY, settings.useMemory)
@@ -78,6 +83,8 @@ class KeystoreSettingsStore(context: Context) : SettingsStore {
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_BYTES = 12
         const val KEY_API = "api_key_enc"
+        const val KEY_ENGINE = "engine"
+        const val KEY_LOCAL_MODEL = "local_model"
         const val KEY_WORKSPACE = "workspace_id"
         const val KEY_MODEL = "model"
         const val KEY_MEMORY = "use_memory"

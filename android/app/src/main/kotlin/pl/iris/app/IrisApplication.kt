@@ -6,6 +6,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import android.net.Uri
+import pl.iris.core.EngineKind
 import pl.iris.core.ConversationHost
 import pl.iris.core.IrisController
 import pl.iris.core.RowFactStore
@@ -31,12 +35,19 @@ class AppContainer(app: Application) {
 
     val settings: StateFlow<Settings> = _settings
 
+    val models = ModelFiles(app)
+    private val generator = LiteRtGenerator(app, models, scope)
+
+    /** Komunikat o wyborze modelu (np. zły plik); null, gdy nie ma czego pokazać. */
+    val modelNotice = MutableStateFlow<String?>(null)
+
     val conversation = ConversationHost(
         store = RowFactStore(SystemClock, SqliteFactRows(app)),
         clock = SystemClock,
         transport = UrlConnectionTransport(),
         scope = scope,
         initial = _settings.value,
+        local = generator,
     )
 
     val controller = IrisController(
@@ -44,14 +55,39 @@ class AppContainer(app: Application) {
         recognizer = AndroidRecognizer(app),
         speaker = AndroidSpeaker(app),
         scope = scope,
-        hasKey = _settings.value.hasKey,
+        ready = _settings.value.ready,
         preferOffline = _settings.value.preferOffline,
     )
+
+    init {
+        generator.useModel(if (_settings.value.engine == EngineKind.LOCAL) _settings.value.localModel else "")
+    }
 
     fun applySettings(settings: Settings) {
         settingsStore.save(settings)
         _settings.value = settings
+        generator.useModel(if (settings.engine == EngineKind.LOCAL) settings.localModel else "")
         conversation.update(settings)
-        controller.configure(settings.hasKey, settings.preferOffline)
+        controller.configure(settings.ready, settings.preferOffline)
+    }
+
+    /** Kopiuje wskazany plik modelu i przełącza na silnik lokalny. */
+    fun importModel(uri: Uri) {
+        modelNotice.value = null
+        scope.launch {
+            try {
+                val name = models.import(uri)
+                applySettings(_settings.value.copy(engine = EngineKind.LOCAL, localModel = name))
+            } catch (e: ModelImportException) {
+                modelNotice.update { e.message }
+            }
+        }
+    }
+
+    fun removeModel() {
+        modelNotice.value = null
+        generator.useModel("")
+        models.clear()
+        applySettings(_settings.value.copy(localModel = ""))
     }
 }
