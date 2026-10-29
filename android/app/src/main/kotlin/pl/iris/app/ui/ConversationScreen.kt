@@ -1,10 +1,12 @@
 package pl.iris.app.ui
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,6 +36,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -46,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import pl.iris.app.R
 import pl.iris.core.Phase
 import pl.iris.core.Texts
 import pl.iris.core.Turn
@@ -73,7 +78,12 @@ fun ConversationScreen(
             .safeDrawingPadding(),
     ) {
         Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("IRIS", color = IrisColors.Ink, fontWeight = FontWeight.SemiBold, fontSize = 18.sp, letterSpacing = 2.sp)
+            Image(
+                painter = painterResource(R.drawable.iris_wordmark),
+                contentDescription = "IRIS",
+                modifier = Modifier.height(20.dp).aspectRatio(616f / 177f),
+                colorFilter = ColorFilter.tint(IrisColors.Ink),
+            )
             Box(Modifier.weight(1f))
             TextButton(onClick = onOpenMemory) { Text("Pamięć", color = IrisColors.Ink2) }
             TextButton(onClick = onOpenSettings) { Text("Ustawienia", color = IrisColors.Ink2) }

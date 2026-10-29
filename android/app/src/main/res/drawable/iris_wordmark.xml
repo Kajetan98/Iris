@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Logotyp IRIS (ten sam wektor co w host/api/static/index.html). Kolor ustawia ColorFilter w Compose. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="88dp"
+    android:height="25.29dp"
+    android:viewportWidth="616"
+    android:viewportHeight="177">
+    <group
+        android:translateX="-204"
+        android:translateY="-423">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M225 424V583A16 16 0 0 1 209 599H205V440A16 16 0 0 1 221 424Z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineJoin="round"
+            android:strokeWidth="1" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M286 424H427.5A48.5 48.5 0 0 1 427.5 521H357A48 48 0 0 0 309 569V594H289V569A68 68 0 0 1 357 501H427.5A28.5 28.5 0 0 0 427.5 444H291Z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineJoin="round"
+            android:strokeWidth="1" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M403 521H430L498 594H471Z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineJoin="round"
+            android:strokeWidth="1" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M583 424V583A16 16 0 0 1 567 599H563V440A16 16 0 0 1 579 424Z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineJoin="round"
+            android:strokeWidth="1" />
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:pathData="M796 424A20 20 0 0 1 776 444H697.5A28.5 28.5 0 0 0 697.5 501H769.5A48.5 48.5 0 0 1 769.5 598H660A20 20 0 0 1 680 578H769.5A28.5 28.5 0 0 0 769.5 521H697.5A48.5 48.5 0 0 1 697.5 424Z"
+            android:strokeColor="#FFFFFFFF"
+            android:strokeLineJoin="round"
+            android:strokeWidth="1" />
+    </group>
+</vector>
