@@ -44,6 +44,7 @@ class ClaudeEngine(
     private val config: LlmConfig,
     private val transport: HttpTransport,
     private val baseUrl: String = DEFAULT_BASE_URL,
+    private val workspaceId: String = "",
 ) : LlmEngine {
     private val useFallbacks = config.fallbacks && config.model in FALLBACK_MODELS
 
@@ -59,6 +60,8 @@ class ClaudeEngine(
             put("anthropic-version", ANTHROPIC_API_VERSION)
             put("content-type", "application/json")
             if (useFallbacks) put("anthropic-beta", FALLBACK_BETA)
+            // Klucz niepowiązany z workspace wymaga jego identyfikatora w każdym żądaniu.
+            if (workspaceId.isNotBlank()) put("anthropic-workspace-id", workspaceId.trim())
         }
         val body = requestBody(system, messages, maxTokens).toString()
         return withRetries(config.retries) { attempt(url, headers, body) }
@@ -88,7 +91,7 @@ class ClaudeEngine(
         val status = response.status
         return when {
             status in 200..299 -> parse(response.body)
-            status == 401 || status == 403 || status == 404 ->
+            status == 401 || status == 403 || status == 404 || (status == 400 && mentionsWorkspace(response.body)) ->
                 throw LlmConfigError("Claude API zwróciło $status: ${errorText(response.body)}")
             status == 408 || status == 409 || status == 429 || status >= 500 ->
                 throw LlmUnavailable("Claude API zwróciło $status: ${errorText(response.body)}")
@@ -120,6 +123,9 @@ class ClaudeEngine(
     }
 
     private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+
+    /** 400 z komunikatem o `anthropic-workspace-id`: klucz bez workspace i brak jego identyfikatora w ustawieniach. */
+    private fun mentionsWorkspace(raw: String): Boolean = "anthropic-workspace-id" in errorText(raw)
 
     private fun errorText(raw: String): String {
         val message = runCatching { ((Json.parseToJsonElement(raw) as JsonObject)["error"] as JsonObject).str("message") }.getOrNull()

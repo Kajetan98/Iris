@@ -80,7 +80,7 @@ object Texts {
     const val RECOGNIZER_OTHER = "Rozpoznawanie mowy nie zadziałało. Spróbuj ponownie."
     const val REFUSED = "Model odmówił odpowiedzi."
     const val UNAVAILABLE = "Brak połączenia z modelem. Spróbuj ponownie."
-    const val CONFIG = "Model odrzucił klucz API albo ustawienia. Sprawdź je w ustawieniach."
+    const val CONFIG = "Model odrzucił klucz API albo ustawienia. Sprawdź klucz, a jeśli nie jest przypisany do workspace, wpisz jego ID w ustawieniach."
     const val FAILED = "Nie udało się przygotować odpowiedzi."
     const val NO_VOICE = "System nie ma polskiego głosu, więc odpowiedzi są tylko w napisach."
 

@@ -97,7 +97,7 @@ Instalacja:
 
 1. Na telefonie otwórz repozytorium na GitHubie (zalogowany na konto z dostępem), zakładka Releases, wydanie "IRIS na Androida (ostatni build)".
 2. Pobierz `iris-debug.apk` i otwórz go. System poprosi o zgodę na instalację aplikacji z tego źródła (przeglądarki albo menedżera plików).
-3. W aplikacji wejdź w Ustawienia i wpisz klucz API Claude (z konsoli Anthropic, najlepiej klucz z limitem wydatków), potem Zapisz.
+3. W aplikacji wejdź w Ustawienia i wpisz klucz API Claude, potem Zapisz. Klucz utworzysz w Claude Console (`platform.claude.com/settings/keys`, przycisk Create key). Wybierz przy tworzeniu workspace, do którego ma być przypisany: wtedy nic więcej nie trzeba wpisywać. Klucz niepowiązany z workspace wymaga w aplikacji pola "ID workspace" (`wrkspc_...`, kolumna ID na stronie `platform.claude.com/settings/workspaces`). Limit wydatków ustawisz na tej samej stronie (workspace, Spend limits).
 4. Dotknij "Mów" i zezwól na mikrofon. Możesz też pisać w polu na dole.
 
 Co wychodzi z telefonu: wypowiedź, kilka ostatnich wymian i czas lokalny trafiają do Anthropic. Fakty o Tobie trafiają tam tylko po włączeniu "Używaj pamięci w rozmowie", a wnioski z rozmów powstają tylko po włączeniu "Ucz się z rozmów" (oba przełączniki są domyślnie wyłączone). Rozpoznawanie mowy zwykle wysyła nagranie do usługi systemu (Google), chyba że telefon ma pakiet offline i włączysz "Preferuj rozpoznawanie offline". Klucz API jest zaszyfrowany kluczem z Android Keystore i nie trafia do kopii zapasowej. Polecenia "zapamiętaj, że ...", "zapomnij ...", "co o mnie wiesz" działają lokalnie i bez klucza.

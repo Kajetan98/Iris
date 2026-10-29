@@ -9,6 +9,8 @@ import kotlinx.coroutines.CoroutineScope
  */
 data class Settings(
     val apiKey: String = "",
+    /** Identyfikator workspace (`wrkspc_...`); potrzebny tylko dla klucza niepowiązanego z workspace. */
+    val workspaceId: String = "",
     val model: String = DEFAULT_CLAUDE_MODEL,
     /** Fakty trafiają do kontekstu modelu (`send_facts = always`), inaczej `never`. */
     val useMemory: Boolean = false,
@@ -56,7 +58,7 @@ class ConversationHost(
     private fun build(settings: Settings): Chat {
         val config = settings.toCoreConfig()
         val assistant = if (settings.hasKey) {
-            Assistant(ClaudeEngine({ settings.apiKey }, config.llm, transport), config.llm)
+            Assistant(ClaudeEngine({ settings.apiKey }, config.llm, transport, workspaceId = settings.workspaceId), config.llm)
         } else {
             null
         }

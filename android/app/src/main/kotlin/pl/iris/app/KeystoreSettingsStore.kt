@@ -22,6 +22,7 @@ class KeystoreSettingsStore(context: Context) : SettingsStore {
 
     override fun load(): Settings = Settings(
         apiKey = prefs.getString(KEY_API, null)?.let(::decrypt).orEmpty(),
+        workspaceId = prefs.getString(KEY_WORKSPACE, null).orEmpty(),
         model = prefs.getString(KEY_MODEL, null) ?: DEFAULT_CLAUDE_MODEL,
         useMemory = prefs.getBoolean(KEY_MEMORY, false),
         learn = prefs.getBoolean(KEY_LEARN, false),
@@ -32,6 +33,7 @@ class KeystoreSettingsStore(context: Context) : SettingsStore {
         prefs.edit().apply {
             val key = settings.apiKey.trim()
             if (key.isEmpty()) remove(KEY_API) else putString(KEY_API, encrypt(key))
+            putString(KEY_WORKSPACE, settings.workspaceId.trim())
             putString(KEY_MODEL, settings.model)
             putBoolean(KEY_MEMORY, settings.useMemory)
             putBoolean(KEY_LEARN, settings.learn)
@@ -76,6 +78,7 @@ class KeystoreSettingsStore(context: Context) : SettingsStore {
         const val TRANSFORMATION = "AES/GCM/NoPadding"
         const val IV_BYTES = 12
         const val KEY_API = "api_key_enc"
+        const val KEY_WORKSPACE = "workspace_id"
         const val KEY_MODEL = "model"
         const val KEY_MEMORY = "use_memory"
         const val KEY_LEARN = "learn"

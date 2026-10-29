@@ -56,11 +56,13 @@ class SettingsTest {
         val first = Json.parseToJsonElement(transport.requests.last().body).jsonObject
         assertFalse("Burka" in first.toString()) // pamięć wyłączona: fakty nie wychodzą do chmury
 
-        host.update(Settings(apiKey = "sk-ant-test", useMemory = true))
+        assertFalse("anthropic-workspace-id" in transport.requests.last().headers)
+        host.update(Settings(apiKey = "sk-ant-test", workspaceId = "wrkspc_01ABC", useMemory = true))
         host.say("Cześć jeszcze raz")
         val second = Json.parseToJsonElement(transport.requests.last().body).jsonObject
         assertTrue("mam psa Burka" in second.getValue("messages").toString())
         assertEquals("sk-ant-test", transport.requests.last().headers["x-api-key"])
+        assertEquals("wrkspc_01ABC", transport.requests.last().headers["anthropic-workspace-id"])
         assertEquals(DEFAULT_CLAUDE_MODEL, second.getValue("model").jsonPrimitive.content)
     }
 

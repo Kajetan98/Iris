@@ -14,8 +14,13 @@ import kotlinx.serialization.json.jsonPrimitive
 
 class ClaudeEngineTest {
     private val hello = listOf(Message(Role.USER, "Cześć"))
-    private fun engine(transport: FakeTransport, config: LlmConfig = LlmConfig(), key: String? = "sk-ant-test-key", base: String = DEFAULT_BASE_URL) =
-        ClaudeEngine({ key }, config, transport, base)
+    private fun engine(
+        transport: FakeTransport,
+        config: LlmConfig = LlmConfig(),
+        key: String? = "sk-ant-test-key",
+        base: String = DEFAULT_BASE_URL,
+        workspace: String = "",
+    ) = ClaudeEngine({ key }, config, transport, base, workspace)
 
     @Test
     fun `request for a model with the server side fallback`() = runTest {
@@ -64,6 +69,33 @@ class ClaudeEngineTest {
         assertEquals("https://api.anthropic.com/v1/messages", r.url)
         assertFalse("anthropic-beta" in r.headers)
         assertFalse("fallbacks" in Json.parseToJsonElement(r.body).jsonObject)
+    }
+
+    @Test
+    fun `the workspace id is sent only when it is set`() = runTest {
+        val without = FakeTransport(listOf(HttpResponse(200, okBody())))
+        engine(without).complete("S", hello, 10)
+        assertFalse("anthropic-workspace-id" in without.requests.single().headers)
+        val blank = FakeTransport(listOf(HttpResponse(200, okBody())))
+        engine(blank, workspace = "   ").complete("S", hello, 10)
+        assertFalse("anthropic-workspace-id" in blank.requests.single().headers)
+        val with = FakeTransport(listOf(HttpResponse(200, okBody())))
+        engine(with, workspace = " wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ ").complete("S", hello, 10)
+        assertEquals("wrkspc_01JwQvzr7rXLA5AGx3HKfFUJ", with.requests.single().headers["anthropic-workspace-id"])
+    }
+
+    @Test
+    fun `a missing workspace id is a configuration error`() = runTest {
+        val body = """{"type":"error","error":{"type":"invalid_request_error","message":"This API key is not scoped to a workspace, so this request must include the anthropic-workspace-id header with the ID of the workspace to use."}}"""
+        val e = assertFailsWith<LlmConfigError> {
+            engine(FakeTransport(listOf(HttpResponse(400, body))), LlmConfig(retries = 2)).complete("S", hello, 10)
+        }
+        assertTrue("anthropic-workspace-id" in e.message.orEmpty())
+        // inne 400 zostają zwykłym błędem silnika
+        val other = assertFailsWith<LlmException> {
+            engine(FakeTransport(listOf(HttpResponse(400, """{"error":{"message":"max_tokens: too large"}}""")))).complete("S", hello, 10)
+        }
+        assertFalse(other is LlmConfigError)
     }
 
     @Test

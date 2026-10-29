@@ -34,6 +34,7 @@ import pl.iris.core.Settings
 @Composable
 fun SettingsScreen(initial: Settings, onSave: (Settings) -> Unit, onBack: () -> Unit) {
     var key by remember(initial) { mutableStateOf(initial.apiKey) }
+    var workspace by remember(initial) { mutableStateOf(initial.workspaceId) }
     var model by remember(initial) { mutableStateOf(initial.model) }
     var useMemory by remember(initial) { mutableStateOf(initial.useMemory) }
     var learn by remember(initial) { mutableStateOf(initial.learn) }
@@ -67,6 +68,15 @@ fun SettingsScreen(initial: Settings, onSave: (Settings) -> Unit, onBack: () -> 
         )
 
         OutlinedTextField(
+            value = workspace,
+            onValueChange = { workspace = it },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text("ID workspace (opcjonalnie)") },
+            singleLine = true,
+            supportingText = { Text("Puste, jeśli klucz jest przypisany do workspace. Inaczej wpisz ID w postaci wrkspc_...") },
+        )
+
+        OutlinedTextField(
             value = model,
             onValueChange = { model = it },
             modifier = Modifier.fillMaxWidth(),
@@ -94,7 +104,7 @@ fun SettingsScreen(initial: Settings, onSave: (Settings) -> Unit, onBack: () -> 
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = {
-                onSave(Settings(apiKey = key.trim(), model = model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL }, useMemory = useMemory, learn = learn, preferOffline = offline))
+                onSave(Settings(apiKey = key.trim(), workspaceId = workspace.trim(), model = model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL }, useMemory = useMemory, learn = learn, preferOffline = offline))
                 onBack()
             }) { Text("Zapisz") }
             OutlinedButton(onClick = onBack) { Text("Anuluj") }
