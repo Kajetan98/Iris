@@ -6,6 +6,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import pl.iris.core.wakeListening
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import android.net.Uri
@@ -60,6 +65,54 @@ class AppContainer(app: Application) {
         ready = _settings.value.ready,
         preferOffline = _settings.value.preferOffline,
     )
+
+    // Hasło wybudzające: nasłuch tylko przy otwartej aplikacji, w spoczynku i z mikrofonem (spec, sekcja 14).
+    val foreground = MutableStateFlow(false)
+    val micGranted = MutableStateFlow(false)
+    val wakeModel = WakeModel(app)
+    val wakeNotice = MutableStateFlow<String?>(null)
+
+    private val wake = WakeWordListener(wakeModel, scope) {
+        delay(150) // mikrofon musi się zwolnić, zanim ruszy rozpoznawanie systemu
+        withContext(Dispatchers.Main) { controller.onTalk() }
+    }
+
+    val wakeProblem: StateFlow<String?> = wake.problem
+
+    init {
+        scope.launch {
+            combine(_settings, controller.state, foreground, micGranted, wakeModel.installed) { s, ui, fg, mic, installed ->
+                Pair(wakeListening(s.wakeWord, installed, mic, fg, ui.phase), s.wakeWord && installed)
+            }.distinctUntilChanged().collect { (listen, loaded) ->
+                if (listen) wake.start() else wake.stop()
+                if (!loaded) wake.release()
+            }
+        }
+    }
+
+    fun downloadWakeModel() = runWakeModel { wakeModel.download() }
+
+    fun importWakeModel(uri: Uri) = runWakeModel { wakeModel.importZip(uri) }
+
+    fun removeWakeModel() {
+        wakeNotice.value = null
+        wakeModel.clear()
+    }
+
+    private fun runWakeModel(block: suspend () -> Unit) {
+        wakeNotice.value = null
+        scope.launch {
+            try {
+                block()
+            } catch (e: WakeModelException) {
+                wakeNotice.value = e.message
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                wakeNotice.value = "Nie udało się zainstalować modelu hasła (${e.javaClass.simpleName})."
+            }
+        }
+    }
 
     init {
         if (_settings.value.checkUpdates) updater.check()

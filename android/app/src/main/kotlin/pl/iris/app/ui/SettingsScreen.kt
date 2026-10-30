@@ -45,6 +45,11 @@ fun SettingsScreen(
     update: UpdateState,
     onCheckUpdate: () -> Unit,
     onInstallUpdate: (UpdateInfo) -> Unit,
+    wakeInstalled: Boolean,
+    wakeStatus: String?,
+    onDownloadWake: () -> Unit,
+    onPickWakeZip: () -> Unit,
+    onRemoveWake: () -> Unit,
     onSave: (Settings) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -56,6 +61,7 @@ fun SettingsScreen(
     var learn by remember(initial) { mutableStateOf(initial.learn) }
     var offline by remember(initial) { mutableStateOf(initial.preferOffline) }
     var checkUpdates by remember(initial) { mutableStateOf(initial.checkUpdates) }
+    var wake by remember(initial) { mutableStateOf(initial.wakeWord) }
 
     Column(
         Modifier
@@ -146,6 +152,25 @@ fun SettingsScreen(
         ) { offline = it }
 
         SwitchRow(
+            "Hasło wybudzające",
+            "Powiedz „Hej Iris” albo „Irysku”, zamiast dotykać Mów. Działa tylko przy otwartej aplikacji (ekran nie wygasa), " +
+                "rozpoznawanie jest offline na telefonie i nic nie jest wysyłane. Zużywa baterię i czasem się myli.",
+            wake,
+        ) { wake = it }
+        if (wake) {
+            Text(if (wakeInstalled) "Model hasła: zainstalowany." else "Model hasła: brak. Pobierz go (ok. 50 MB), żeby hasło działało.", color = IrisColors.Ink)
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                if (!wakeInstalled) {
+                    Button(onClick = onDownloadWake) { Text("Pobierz model") }
+                    OutlinedButton(onClick = onPickWakeZip) { Text("Wybierz plik .zip") }
+                } else {
+                    OutlinedButton(onClick = onRemoveWake) { Text("Usuń model hasła") }
+                }
+            }
+            if (wakeStatus != null) Text(wakeStatus, color = IrisColors.Ink2, fontSize = 14.sp)
+        }
+
+        SwitchRow(
             "Sprawdzaj aktualizacje przy starcie",
             "Przy uruchomieniu aplikacja pyta GitHuba o nowszą wersję. Wysyła tylko zwykłe żądanie HTTPS (adres IP), bez rozmów, faktów i klucza.",
             checkUpdates,
@@ -170,7 +195,7 @@ fun SettingsScreen(
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = {
-                onSave(Settings(engine = engine, localModel = initial.localModel, apiKey = key.trim(), workspaceId = workspace.trim(), model = model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL }, useMemory = useMemory, learn = learn, preferOffline = offline, checkUpdates = checkUpdates))
+                onSave(Settings(engine = engine, localModel = initial.localModel, apiKey = key.trim(), workspaceId = workspace.trim(), model = model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL }, useMemory = useMemory, learn = learn, preferOffline = offline, checkUpdates = checkUpdates, wakeWord = wake))
                 onBack()
             }) { Text("Zapisz") }
             OutlinedButton(onClick = onBack) { Text("Anuluj") }

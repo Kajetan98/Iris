@@ -1,10 +1,12 @@
 package pl.iris.app
 
 import android.Manifest
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.BackHandler
@@ -13,6 +15,8 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,6 +38,18 @@ class MainActivity : ComponentActivity() {
         val container = (application as IrisApplication).container
         setContent { IrisTheme { IrisRoot(container) } }
     }
+
+    override fun onResume() {
+        super.onResume()
+        val container = (application as IrisApplication).container
+        container.micGranted.value = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        container.foreground.value = true
+    }
+
+    override fun onPause() {
+        (application as IrisApplication).container.foreground.value = false
+        super.onPause()
+    }
 }
 
 private enum class Screen { CONVERSATION, SETTINGS, MEMORY }
@@ -50,12 +66,32 @@ private fun IrisRoot(container: AppContainer) {
 
     val importStatus by container.models.progress.collectAsState()
     val update by container.updater.state.collectAsState()
+    val wakeInstalled by container.wakeModel.installed.collectAsState()
+    val wakeProgress by container.wakeModel.progress.collectAsState()
+    val wakeNotice by container.wakeNotice.collectAsState()
+    val wakeProblem by container.wakeProblem.collectAsState()
     val modelNotice by container.modelNotice.collectAsState()
     val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
             runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
             container.importModel(uri)
         }
+    }
+
+    val wakePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+        container.micGranted.value = granted
+    }
+    val pickWakeZip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) container.importWakeModel(uri)
+    }
+    // Hasło wybudzające potrzebuje zgody na mikrofon od razu po włączeniu, a ekran ma nie wygasać.
+    LaunchedEffect(settings.wakeWord) {
+        if (settings.wakeWord && !container.micGranted.value) wakePermission.launch(Manifest.permission.RECORD_AUDIO)
+    }
+    DisposableEffect(settings.wakeWord) {
+        val window = (context as? Activity)?.window
+        if (settings.wakeWord) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 
     BackHandler(enabled = screen != Screen.CONVERSATION) { screen = Screen.CONVERSATION }
@@ -83,6 +119,11 @@ private fun IrisRoot(container: AppContainer) {
             update = update,
             onCheckUpdate = container.updater::check,
             onInstallUpdate = container.updater::install,
+            wakeInstalled = wakeInstalled,
+            wakeStatus = wakeProgress ?: wakeNotice ?: wakeProblem,
+            onDownloadWake = container::downloadWakeModel,
+            onPickWakeZip = { pickWakeZip.launch(arrayOf("*/*")) },
+            onRemoveWake = container::removeWakeModel,
             onSave = container::applySettings,
             onBack = { screen = Screen.CONVERSATION },
         )
