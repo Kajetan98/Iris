@@ -30,6 +30,7 @@ class KeystoreSettingsStore(context: Context) : SettingsStore {
         useMemory = prefs.getBoolean(KEY_MEMORY, false),
         learn = prefs.getBoolean(KEY_LEARN, false),
         preferOffline = prefs.getBoolean(KEY_OFFLINE, false),
+        checkUpdates = prefs.getBoolean(KEY_CHECK_UPDATES, true),
     )
 
     override fun save(settings: Settings) {
@@ -43,6 +44,7 @@ class KeystoreSettingsStore(context: Context) : SettingsStore {
             putBoolean(KEY_MEMORY, settings.useMemory)
             putBoolean(KEY_LEARN, settings.learn)
             putBoolean(KEY_OFFLINE, settings.preferOffline)
+            putBoolean(KEY_CHECK_UPDATES, settings.checkUpdates)
         }.apply()
     }
 
@@ -90,5 +92,6 @@ class KeystoreSettingsStore(context: Context) : SettingsStore {
         const val KEY_MEMORY = "use_memory"
         const val KEY_LEARN = "learn"
         const val KEY_OFFLINE = "prefer_offline"
+        const val KEY_CHECK_UPDATES = "check_updates"
     }
 }

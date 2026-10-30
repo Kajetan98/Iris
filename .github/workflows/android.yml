@@ -48,7 +48,7 @@ jobs:
         run: ./gradlew :core:test --no-daemon --console=plain 2>&1 | tee build.log
 
       - name: APK debug
-        run: ./gradlew :app:assembleDebug --no-daemon --console=plain 2>&1 | tee -a build.log
+        run: ./gradlew :app:assembleDebug -PversionCode=${{ github.run_number }} --no-daemon --console=plain 2>&1 | tee -a build.log
 
       - name: Błędy budowania jako adnotacja (log jest dostępny tylko w przeglądarce)
         if: failure()
@@ -70,8 +70,11 @@ jobs:
           GH_REPO: ${{ github.repository }}
         run: |
           cp app/build/outputs/apk/debug/app-debug.apk iris-debug.apk
+          # Plik dla aktualizacji w aplikacji (spec, sekcja 14): numer wersji, adres i skrót APK.
+          printf '{"versionCode": %s, "versionName": "0.1.%s", "apk": "https://github.com/%s/releases/download/android-latest/iris-debug.apk", "sha256": "%s"}\n' \
+            "${{ github.run_number }}" "${{ github.run_number }}" "$GH_REPO" "$(sha256sum iris-debug.apk | cut -d' ' -f1)" > latest.json
           gh release view android-latest > /dev/null 2>&1 || gh release create android-latest \
             --prerelease --target "$GITHUB_SHA" --title "IRIS na Androida (ostatni build)" \
             --notes "Plik APK z ostatniego builda gałęzi main. Instalacja: README, sekcja Android."
           gh release edit android-latest --notes "Build z commita ${GITHUB_SHA::7}. Instalacja: README, sekcja Android."
-          gh release upload android-latest iris-debug.apk --clobber
+          gh release upload android-latest iris-debug.apk latest.json --clobber

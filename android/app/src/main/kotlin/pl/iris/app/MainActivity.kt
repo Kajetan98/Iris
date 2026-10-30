@@ -49,6 +49,7 @@ private fun IrisRoot(container: AppContainer) {
     }
 
     val importStatus by container.models.progress.collectAsState()
+    val update by container.updater.state.collectAsState()
     val modelNotice by container.modelNotice.collectAsState()
     val pickModel = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) {
@@ -70,12 +71,18 @@ private fun IrisRoot(container: AppContainer) {
             onDismissNotice = container.controller::clearNotice,
             onOpenMemory = { screen = Screen.MEMORY },
             onOpenSettings = { screen = Screen.SETTINGS },
+            update = update,
+            onInstallUpdate = container.updater::install,
         )
         Screen.SETTINGS -> SettingsScreen(
             initial = settings,
             importStatus = importStatus ?: modelNotice,
             onPickModel = { pickModel.launch(arrayOf("*/*")) },
             onRemoveModel = container::removeModel,
+            versionName = container.updater.installedName,
+            update = update,
+            onCheckUpdate = container.updater::check,
+            onInstallUpdate = container.updater::install,
             onSave = container::applySettings,
             onBack = { screen = Screen.CONVERSATION },
         )

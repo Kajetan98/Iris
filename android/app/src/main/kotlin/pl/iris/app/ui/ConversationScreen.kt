@@ -51,6 +51,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pl.iris.app.R
+import pl.iris.app.UpdateState
+import pl.iris.core.UpdateInfo
 import pl.iris.core.Phase
 import pl.iris.core.Texts
 import pl.iris.core.Turn
@@ -64,6 +66,8 @@ fun ConversationScreen(
     onDismissNotice: () -> Unit,
     onOpenMemory: () -> Unit,
     onOpenSettings: () -> Unit,
+    update: UpdateState = UpdateState.Idle,
+    onInstallUpdate: (UpdateInfo) -> Unit = {},
 ) {
     var text by rememberSaveable { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -88,6 +92,8 @@ fun ConversationScreen(
             TextButton(onClick = onOpenMemory) { Text("Pamięć", color = IrisColors.Ink2) }
             TextButton(onClick = onOpenSettings) { Text("Ustawienia", color = IrisColors.Ink2) }
         }
+
+        UpdateBar(update, onInstallUpdate)
 
         WaveCanvas(ui.phase, ui.level, Modifier.fillMaxWidth().height(180.dp))
         Text(
@@ -188,5 +194,21 @@ private fun TalkButton(phase: Phase, onClick: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Text(label, color = if (active) Color.White else IrisColors.Ink, fontSize = 20.sp, modifier = Modifier.width(220.dp), textAlign = TextAlign.Center)
+    }
+}
+
+/** Pasek nad falą: tylko gdy jest nowsza wersja albo trwa jej pobieranie (spec, sekcja 14, "Aktualizacje"). */
+@Composable
+private fun UpdateBar(update: UpdateState, onInstall: (UpdateInfo) -> Unit) {
+    val (text, info) = when (update) {
+        is UpdateState.Available -> "Dostępna aktualizacja (wersja ${update.info.versionName})" to update.info
+        is UpdateState.Downloading -> "Pobieram aktualizację... ${update.percent}%" to null
+        is UpdateState.NeedsPermission -> "Zezwól IRIS na instalowanie aplikacji w ustawieniach systemu, potem dotknij Zainstaluj" to update.info
+        is UpdateState.Failed -> if (update.info != null) update.reason to update.info else return
+        else -> return
+    }
+    Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(text, color = IrisColors.Ink, modifier = Modifier.weight(1f))
+        if (info != null) TextButton(onClick = { onInstall(info) }) { Text("Zainstaluj", color = IrisColors.Ink2) }
     }
 }

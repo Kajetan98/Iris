@@ -31,7 +31,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import pl.iris.core.DEFAULT_CLAUDE_MODEL
 import pl.iris.core.EngineKind
+import pl.iris.app.UpdateState
 import pl.iris.core.Settings
+import pl.iris.core.UpdateInfo
 
 @Composable
 fun SettingsScreen(
@@ -39,6 +41,10 @@ fun SettingsScreen(
     importStatus: String?,
     onPickModel: () -> Unit,
     onRemoveModel: () -> Unit,
+    versionName: String,
+    update: UpdateState,
+    onCheckUpdate: () -> Unit,
+    onInstallUpdate: (UpdateInfo) -> Unit,
     onSave: (Settings) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -49,6 +55,7 @@ fun SettingsScreen(
     var useMemory by remember(initial) { mutableStateOf(initial.useMemory) }
     var learn by remember(initial) { mutableStateOf(initial.learn) }
     var offline by remember(initial) { mutableStateOf(initial.preferOffline) }
+    var checkUpdates by remember(initial) { mutableStateOf(initial.checkUpdates) }
 
     Column(
         Modifier
@@ -138,9 +145,32 @@ fun SettingsScreen(
             offline,
         ) { offline = it }
 
+        SwitchRow(
+            "Sprawdzaj aktualizacje przy starcie",
+            "Przy uruchomieniu aplikacja pyta GitHuba o nowszą wersję. Wysyła tylko zwykłe żądanie HTTPS (adres IP), bez rozmów, faktów i klucza.",
+            checkUpdates,
+        ) { checkUpdates = it }
+
+        Text("Wersja $versionName", color = IrisColors.Ink)
+        val status = when (update) {
+            UpdateState.Idle -> null
+            UpdateState.Checking -> "Sprawdzam..."
+            UpdateState.UpToDate -> "Masz najnowszą wersję."
+            is UpdateState.Available -> "Dostępna wersja ${update.info.versionName}."
+            is UpdateState.Downloading -> "Pobieram... ${update.percent}%"
+            is UpdateState.NeedsPermission -> "Zezwól IRIS na instalowanie aplikacji w ustawieniach systemu, potem dotknij Zainstaluj."
+            is UpdateState.Failed -> update.reason
+        }
+        if (status != null) Text(status, color = IrisColors.Ink2, fontSize = 14.sp)
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedButton(onClick = onCheckUpdate) { Text("Sprawdź aktualizacje") }
+            val offered = (update as? UpdateState.Available)?.info ?: (update as? UpdateState.NeedsPermission)?.info ?: (update as? UpdateState.Failed)?.info
+            if (offered != null) Button(onClick = { onInstallUpdate(offered) }) { Text("Zainstaluj") }
+        }
+
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = {
-                onSave(Settings(engine = engine, localModel = initial.localModel, apiKey = key.trim(), workspaceId = workspace.trim(), model = model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL }, useMemory = useMemory, learn = learn, preferOffline = offline))
+                onSave(Settings(engine = engine, localModel = initial.localModel, apiKey = key.trim(), workspaceId = workspace.trim(), model = model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL }, useMemory = useMemory, learn = learn, preferOffline = offline, checkUpdates = checkUpdates))
                 onBack()
             }) { Text("Zapisz") }
             OutlinedButton(onClick = onBack) { Text("Anuluj") }

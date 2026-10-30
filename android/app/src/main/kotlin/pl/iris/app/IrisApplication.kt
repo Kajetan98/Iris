@@ -35,6 +35,8 @@ class AppContainer(app: Application) {
 
     val settings: StateFlow<Settings> = _settings
 
+    private val transport = UrlConnectionTransport()
+    val updater = AppUpdater(app, transport, scope)
     val models = ModelFiles(app)
     private val generator = LiteRtGenerator(app, models, scope)
 
@@ -44,7 +46,7 @@ class AppContainer(app: Application) {
     val conversation = ConversationHost(
         store = RowFactStore(SystemClock, SqliteFactRows(app)),
         clock = SystemClock,
-        transport = UrlConnectionTransport(),
+        transport = transport,
         scope = scope,
         initial = _settings.value,
         local = generator,
@@ -60,6 +62,7 @@ class AppContainer(app: Application) {
     )
 
     init {
+        if (_settings.value.checkUpdates) updater.check()
         generator.useModel(if (_settings.value.engine == EngineKind.LOCAL) _settings.value.localModel else "")
     }
 

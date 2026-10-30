@@ -14,8 +14,11 @@ android {
         applicationId = "pl.iris.app"
         minSdk = 26
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        // CI podaje numer uruchomienia workflow (-PversionCode=N), więc każdy build jest nowszy od poprzedniego;
+        // aplikacja porównuje go z latest.json w wydaniu (spec, sekcja 14, "Aktualizacje").
+        val code = (project.findProperty("versionCode") as String?)?.toIntOrNull() ?: 1
+        versionCode = code
+        versionName = "0.1.$code"
 
         // LiteRT-LM ma biblioteki natywne tylko dla 64-bitowych układów; 32-bitowe telefony nie uruchomią modelu lokalnego.
         ndk { abiFilters += "arm64-v8a" }
