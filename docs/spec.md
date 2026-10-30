@@ -399,6 +399,7 @@ Dane opuszczające telefon:
 
 - Do Anthropic (tylko przy silniku Claude): wypowiedź, ostatnie `history_turns` (10) par rozmowy, blok kontekstu (czas lokalny i fakty według ustawień niżej) oraz, przy włączonym uczeniu, osobne zapytanie o wnioski z samą wypowiedzią.
 - Do usługi mowy systemu: nagranie, gdy rozpoznawanie nie działa offline.
+- Do GitHuba: sprawdzenie i pobranie aktualizacji (sekcja "Aktualizacje" wyżej).
 - Nic innego. Aplikacja nie ma analityki. Rozmowa nie jest zapisywana, historia żyje w pamięci procesu; fakty są w bazie na telefonie i nie trafiają do logów (`logcat`).
 
 Ustawienia pamięci. Jedyny silnik jest zdalny, więc domyślne `send_facts = local_only` i `infer = local_only` z hosta oznaczałyby brak faktów w kontekście i brak wniosków. Aplikacja ma dwa przełączniki, domyślnie wyłączone, z opisem, co wychodzi do chmury:
@@ -419,6 +420,15 @@ Interfejs. Jedna aktywność z trzema ekranami: rozmowa, ustawienia i pamięć (
 - Mikrofon wymaga zgody `RECORD_AUDIO` prośbą w czasie działania. Aplikacja ma tylko uprawnienie `INTERNET` i `RECORD_AUDIO`.
 
 Prompt systemowy ma ten sam sens co w sekcji 12: IRIS jest programem, nie twierdzi, że coś czuje lub jest świadomy, opisuje pamięć tak, jak działa (fakty podane wprost, przypuszczenia z rozmów, polecenia), nie zmyśla i odpowiada krótko do czytania na głos. Mówi, że działa na telefonie użytkownika, i nie wspomina o ciele, baterii ani łączu. Blok kontekstu zawiera czas lokalny i fakty (sekcja 12), bez linii o stanie.
+
+Aktualizacje. Aplikacja instaluje nowe wersje sama po jednym potwierdzeniu użytkownika (Android nie pozwala instalować cicho):
+
+- Wydanie `android-latest` w repozytorium (publicznym) zawiera `iris-debug.apk` i `latest.json`: `{"versionCode": N, "versionName": "0.1.N", "apk": "<adres https>", "sha256": "<hex>"}`. CI ustawia `versionCode` na numer uruchomienia workflow `android`, więc rośnie z każdym buildem.
+- Sprawdzenie: `GET https://github.com/Kajetan98/Iris/releases/download/android-latest/latest.json` przy starcie aplikacji (można wyłączyć przełącznikiem "Sprawdzaj aktualizacje przy starcie", domyślnie włączony) i na żądanie w ustawieniach. Do GitHuba trafia tylko zwykłe żądanie HTTPS (adres IP, nagłówki); nie są wysyłane fakty, rozmowy ani klucz API. Sprawdzenie nie czeka na sieć: błąd daje komunikat w ustawieniach, a na ekranie rozmowy nic.
+- Wersja jest nowsza, gdy `versionCode` z `latest.json` jest większy od zainstalowanego. Adres `apk` musi zaczynać się od `https://github.com/Kajetan98/Iris/releases/download/`; inny jest odrzucany.
+- Gdy jest nowsza, ekran rozmowy pokazuje pasek "Dostępna aktualizacja (wersja X)" z przyciskiem "Zainstaluj". Przycisk pobiera plik do pamięci podręcznej aplikacji (z postępem), sprawdza SHA-256 z `latest.json` (niezgodny plik jest usuwany, a użytkownik widzi błąd) i otwiera systemowy instalator. System dodatkowo sprawdza podpis: plik podpisany innym kluczem niż zainstalowana aplikacja nie zostanie zainstalowany.
+- Uprawnienie `REQUEST_INSTALL_PACKAGES`. Gdy system nie zezwala jeszcze IRIS na instalowanie aplikacji, aplikacja otwiera jego ustawienie "Instalowanie nieznanych aplikacji" dla IRIS i po powrocie czeka na ponowne dotknięcie "Zainstaluj".
+- Dane i ustawienia przeżywają aktualizację (ten sam podpis i identyfikator aplikacji).
 
 Zgodność z hostem. Reguły z sekcji 9 i 12 muszą dawać w Kotlinie te same wyniki co w Pythonie: polecenia i odpowiedzi, podobieństwo, dane wrażliwe, pytania, "co o mnie wiesz", wnioski, zanikanie, wybór faktów i oczyszczanie odpowiedzi. Plik `android/core/src/test/resources/learning_vectors.json` generuje kod hosta (`python -m host.tests.make_android_vectors`), test w Pythonie sprawdza, że plik jest aktualny, a testy Kotlina odtwarzają każdy przypadek. Zmiana reguły w Pythonie wymaga więc regeneracji pliku i dopasowania Kotlina.
 

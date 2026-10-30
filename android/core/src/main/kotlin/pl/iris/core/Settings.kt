@@ -23,6 +23,8 @@ data class Settings(
     /** Wnioski z rozmów (`infer = always`), inaczej `never`. */
     val learn: Boolean = false,
     val preferOffline: Boolean = false,
+    /** Sprawdzanie aktualizacji aplikacji przy starcie (żądanie do GitHuba). */
+    val checkUpdates: Boolean = true,
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
 
