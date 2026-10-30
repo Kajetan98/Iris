@@ -400,6 +400,7 @@ Dane opuszczające telefon:
 - Do Anthropic (tylko przy silniku Claude): wypowiedź, ostatnie `history_turns` (10) par rozmowy, blok kontekstu (czas lokalny i fakty według ustawień niżej) oraz, przy włączonym uczeniu, osobne zapytanie o wnioski z samą wypowiedzią.
 - Do usługi mowy systemu: nagranie, gdy rozpoznawanie nie działa offline.
 - Do GitHuba: sprawdzenie i pobranie aktualizacji (sekcja "Aktualizacje" wyżej).
+- Do `alphacephei.com`: jednorazowe pobranie modelu hasła wybudzającego, na żądanie (sekcja "Hasło wybudzające" wyżej).
 - Nic innego. Aplikacja nie ma analityki. Rozmowa nie jest zapisywana, historia żyje w pamięci procesu; fakty są w bazie na telefonie i nie trafiają do logów (`logcat`).
 
 Ustawienia pamięci. Jedyny silnik jest zdalny, więc domyślne `send_facts = local_only` i `infer = local_only` z hosta oznaczałyby brak faktów w kontekście i brak wniosków. Aplikacja ma dwa przełączniki, domyślnie wyłączone, z opisem, co wychodzi do chmury:
@@ -416,10 +417,19 @@ Interfejs. Jedna aktywność z trzema ekranami: rozmowa, ustawienia i pamięć (
 - Ekran rozmowy: fala głosu, napis stanu, napisy rozmowy (rozpoznana wypowiedź i odpowiedź), przycisk mówienia i pole do pisania. Stany: w spoczynku ("Dotknij i mów"), słucham, przygotowuję odpowiedź, mówię, brak klucza ("Wpisz klucz API w ustawieniach"). Dotknięcie przycisku zaczyna słuchanie; rozpoznawanie kończy się samo po ciszy albo po ponownym dotknięciu. Odpowiedź jest od razu w napisach w całości i czytana przez syntezę mowy, o ile system ma polski głos.
 - Fala: poziom przy słuchaniu to poziom mikrofonu z `SpeechRecognizer`. `TextToSpeech` nie udostępnia dźwięku, więc przy mówieniu fala porusza się według stałego wzoru (przybliżenie, nie odczyt dźwięku). Kształt i stany jak w kliencie przeglądarkowym (sekcja 1).
 - Komunikaty błędów: brak rozpoznania "Nic nie rozpoznano. Mów bliżej mikrofonu."; brak zgody na mikrofon, brak usługi rozpoznawania i błędy modelu (niedostępny, konfiguracja, odmowa, inny; sekcja 12) z opisem, co zrobić. Napisy rozmowy zostają tylko w pamięci procesu aplikacji.
-- Ustawienia: silnik (Claude API albo model na telefonie); dla Claude klucz API, identyfikator workspace (opcjonalny), model; dla modelu na telefonie wybór i usunięcie pliku modelu; przełączniki pamięci (wyżej), "Preferuj rozpoznawanie offline". Pamięć: lista faktów (tekst, "od ciebie" albo przypuszczenie z pewnością w procentach) z usuwaniem pojedynczym.
+- Ustawienia: silnik (Claude API albo model na telefonie); dla Claude klucz API, identyfikator workspace (opcjonalny), model; dla modelu na telefonie wybór i usunięcie pliku modelu; przełączniki pamięci (wyżej), hasło wybudzające (przełącznik, pobranie i usunięcie modelu), "Preferuj rozpoznawanie offline". Pamięć: lista faktów (tekst, "od ciebie" albo przypuszczenie z pewnością w procentach) z usuwaniem pojedynczym.
 - Mikrofon wymaga zgody `RECORD_AUDIO` prośbą w czasie działania. Aplikacja ma tylko uprawnienie `INTERNET` i `RECORD_AUDIO`.
 
 Prompt systemowy ma ten sam sens co w sekcji 12: IRIS jest programem, nie twierdzi, że coś czuje lub jest świadomy, opisuje pamięć tak, jak działa (fakty podane wprost, przypuszczenia z rozmów, polecenia), nie zmyśla i odpowiada krótko do czytania na głos. Mówi, że działa na telefonie użytkownika, i nie wspomina o ciele, baterii ani łączu. Blok kontekstu zawiera czas lokalny i fakty (sekcja 12), bez linii o stanie.
+
+Hasło wybudzające. Zamiast dotykać przycisku, użytkownik mówi "Hej Iris" albo "Irysku", a aplikacja zaczyna słuchać wypowiedzi tak, jak po dotknięciu "Mów":
+
+- Silnik: Vosk (`com.alphacephei:vosk-android`), rozpoznawanie offline na telefonie. Mikrofon jest przetwarzany tylko na urządzeniu, nic nie jest zapisywane ani wysyłane. Przełącznik "Hasło wybudzające" w ustawieniach jest domyślnie wyłączony.
+- Model: mały model polski Vosk (`vosk-model-small-pl-0.22`, ok. 50 MB), pobierany na żądanie z `https://alphacephei.com/vosk/models/vosk-model-small-pl-0.22.zip` albo wskazany jako plik `.zip` z telefonu. Aplikacja rozpakowuje go do pamięci prywatnej (bez nadrzędnego katalogu archiwum, ścieżki spoza katalogu modelu są odrzucane) i sprawdza, czy zawiera `am/final.mdl`. Model można usunąć w ustawieniach. Bez modelu hasło nie działa, a przełącznik pokazuje, czego brakuje.
+- Dopasowanie: rozpoznany tekst (w tym wynik częściowy) jest zamieniany na małe litery i dzielony na słowa z liter; hasło wykryto, gdy jakieś słowo zaczyna się od `iris` lub `irys` ("iris", "irys", "irysku", "irysek"). Samo "hej" nie wystarcza. Rozpoznawanie nie jest ograniczone gramatyką, bo słowa spoza słownika modelu zostałyby pominięte.
+- Kiedy aplikacja słucha hasła: przełącznik włączony, model zainstalowany, zgoda na mikrofon, aplikacja na ekranie (wznowiona) i stan "w spoczynku". Podczas słuchania wypowiedzi, odpowiedzi i mówienia nasłuch hasła jest wyłączony, więc IRIS nie reaguje na własny głos. Poza otwartą aplikacją (w tle, przy wyłączonym ekranie) hasło nie działa. Przy włączonym przełączniku ekran nie wygasa, dopóki aplikacja jest otwarta.
+- Po wykryciu: nasłuch hasła zwalnia mikrofon, potem aplikacja startuje jak po dotknięciu "Mów" (system pokazuje stan "Słucham"). Wypowiedź należy zacząć po tym, jak aplikacja zacznie słuchać; słowa wypowiedziane tuż po haśle mogą zostać pominięte.
+- Ograniczenia: stały nasłuch zużywa baterię i procesor; mały model myli się, zwłaszcza w hałasie, więc zdarzają się niewykryte i fałszywe wywołania. Skuteczności nie sprawdzano na prawdziwym telefonie.
 
 Aktualizacje. Aplikacja instaluje nowe wersje sama po jednym potwierdzeniu użytkownika (Android nie pozwala instalować cicho):
 

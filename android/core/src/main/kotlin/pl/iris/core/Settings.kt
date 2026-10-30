@@ -25,6 +25,8 @@ data class Settings(
     val preferOffline: Boolean = false,
     /** Sprawdzanie aktualizacji aplikacji przy starcie (żądanie do GitHuba). */
     val checkUpdates: Boolean = true,
+    /** Hasło wybudzające "Hej Iris" / "Irysku" przy otwartej aplikacji (wymaga modelu Vosk). */
+    val wakeWord: Boolean = false,
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
 
