@@ -5,6 +5,7 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -88,9 +89,18 @@ private fun IrisRoot(container: AppContainer) {
     LaunchedEffect(settings.wakeWord) {
         if (settings.wakeWord && !container.micGranted.value) wakePermission.launch(Manifest.permission.RECORD_AUDIO)
     }
-    DisposableEffect(settings.wakeWord) {
+    // Powiadomienie usługi w tle wymaga zgody na Androidzie 13+; bez niej usługa działa, ale powiadomienie jest ukryte.
+    val notificationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
+    LaunchedEffect(settings.wakeWord, settings.wakeBackground) {
+        if (settings.wakeWord && settings.wakeBackground && Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            notificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    DisposableEffect(settings.wakeWord && !settings.wakeBackground) {
         val window = (context as? Activity)?.window
-        if (settings.wakeWord) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        if (settings.wakeWord && !settings.wakeBackground) window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         onDispose { window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
     }
 

@@ -62,6 +62,7 @@ fun SettingsScreen(
     var offline by remember(initial) { mutableStateOf(initial.preferOffline) }
     var checkUpdates by remember(initial) { mutableStateOf(initial.checkUpdates) }
     var wake by remember(initial) { mutableStateOf(initial.wakeWord) }
+    var wakeBg by remember(initial) { mutableStateOf(initial.wakeBackground) }
 
     Column(
         Modifier
@@ -158,6 +159,12 @@ fun SettingsScreen(
             wake,
         ) { wake = it }
         if (wake) {
+            SwitchRow(
+                "Słuchaj też w tle",
+                "Hasło działa także po zamknięciu aplikacji i przy wyłączonym ekranie. Pokazuje stałe powiadomienie „IRIS słucha hasła”, " +
+                    "Android wyświetla wskaźnik mikrofonu, a bateria schodzi szybciej. Odpowiedź w tle jest tylko głosowa.",
+                wakeBg,
+            ) { wakeBg = it }
             Text(if (wakeInstalled) "Model hasła: zainstalowany." else "Model hasła: brak. Pobierz go (ok. 50 MB), żeby hasło działało.", color = IrisColors.Ink)
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 if (!wakeInstalled) {
@@ -195,7 +202,7 @@ fun SettingsScreen(
 
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             Button(onClick = {
-                onSave(Settings(engine = engine, localModel = initial.localModel, apiKey = key.trim(), workspaceId = workspace.trim(), model = model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL }, useMemory = useMemory, learn = learn, preferOffline = offline, checkUpdates = checkUpdates, wakeWord = wake))
+                onSave(Settings(engine = engine, localModel = initial.localModel, apiKey = key.trim(), workspaceId = workspace.trim(), model = model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL }, useMemory = useMemory, learn = learn, preferOffline = offline, checkUpdates = checkUpdates, wakeWord = wake, wakeBackground = wake && wakeBg))
                 onBack()
             }) { Text("Zapisz") }
             OutlinedButton(onClick = onBack) { Text("Anuluj") }

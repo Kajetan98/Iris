@@ -27,6 +27,8 @@ data class Settings(
     val checkUpdates: Boolean = true,
     /** Hasło wybudzające "Hej Iris" / "Irysku" przy otwartej aplikacji (wymaga modelu Vosk). */
     val wakeWord: Boolean = false,
+    /** Nasłuch hasła także w tle i przy wyłączonym ekranie (usługa pierwszoplanowa ze stałym powiadomieniem). */
+    val wakeBackground: Boolean = false,
 ) {
     val hasKey: Boolean get() = apiKey.isNotBlank()
 

@@ -16,7 +16,7 @@ Asystent głosowy po polsku, zbudowany z ciała (HERMES, STM32L476) i hosta (Pyt
 - LLM: adapter z wymiennym silnikiem (Ollama lokalnie, Claude API opcjonalnie).
 - STT: faster-whisper. TTS: Piper (polskie głosy), do zweryfikowania jakości. `piper-tts` ma licencję GPL-3.0-or-later: sprawdź zgodność przed dystrybucją hosta.
 - Pełny model `self` istnieje tylko na hoście. Wyjątek: aplikacja Android bez hosta ma tylko pamięć faktów (spec, sekcja 14).
-- Android: Kotlin, Gradle (`android/`), moduł `core` (czysty Kotlin/JVM, testowany tutaj) i `app` (Android, budowany w CI). Mowa z systemu, model przez Claude API z telefonu (klucz wpisywany w aplikacji) albo lokalny model `.litertlm` przez LiteRT-LM (`android/app`, `LiteRtGenerator`; port `LocalGenerator` w `core`). Hasło wybudzające "Hej Iris" / "Irysku": Vosk offline (`WakeWordListener`, model polski pobierany na żądanie), tylko przy otwartej aplikacji.
+- Android: Kotlin, Gradle (`android/`), moduł `core` (czysty Kotlin/JVM, testowany tutaj) i `app` (Android, budowany w CI). Mowa z systemu, model przez Claude API z telefonu (klucz wpisywany w aplikacji) albo lokalny model `.litertlm` przez LiteRT-LM (`android/app`, `LiteRtGenerator`; port `LocalGenerator` w `core`). Hasło wybudzające "Hej Iris" / "Irysku": Vosk offline (`WakeWordListener`, model polski pobierany na żądanie), przy otwartej aplikacji albo w tle (`ListenService`, usługa pierwszoplanowa z mikrofonem).
 
 ## Ograniczenia
 

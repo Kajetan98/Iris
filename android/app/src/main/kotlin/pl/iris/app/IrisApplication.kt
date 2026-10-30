@@ -34,6 +34,7 @@ class IrisApplication : Application() {
 
 /** Obiekty żyjące tak długo jak proces: stan rozmowy przeżywa obrót ekranu i powrót do aplikacji. */
 class AppContainer(app: Application) {
+    private val appContext = app
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val settingsStore: SettingsStore = KeystoreSettingsStore(app)
     private val _settings = MutableStateFlow(settingsStore.load())
@@ -82,13 +83,41 @@ class AppContainer(app: Application) {
     init {
         scope.launch {
             combine(_settings, controller.state, foreground, micGranted, wakeModel.installed) { s, ui, fg, mic, installed ->
-                Pair(wakeListening(s.wakeWord, installed, mic, fg, ui.phase), s.wakeWord && installed)
+                Pair(wakeListening(s.wakeWord, installed, mic, fg || s.wakeBackground, ui.phase), s.wakeWord && installed)
             }.distinctUntilChanged().collect { (listen, loaded) ->
                 if (listen) wake.start() else wake.stop()
                 if (!loaded) wake.release()
             }
         }
     }
+
+    // Słuchanie w tle: usługa działa, dopóki jest włączone i możliwe; startuje tylko przy widocznej aplikacji.
+    init {
+        scope.launch {
+            combine(_settings, wakeModel.installed, micGranted, foreground) { s, installed, mic, fg ->
+                val want = s.wakeWord && s.wakeBackground && installed && mic
+                when {
+                    !want -> ServiceAction.STOP
+                    fg -> ServiceAction.START
+                    else -> ServiceAction.KEEP
+                }
+            }.distinctUntilChanged().collect { action ->
+                when (action) {
+                    ServiceAction.START -> if (!ListenService.running) {
+                        if (ListenService.start(appContext)) {
+                            wakeNotice.value = null
+                        } else {
+                            wakeNotice.value = "Android nie pozwolił uruchomić słuchania w tle. Otwórz aplikację i spróbuj ponownie."
+                        }
+                    }
+                    ServiceAction.STOP -> if (ListenService.running) ListenService.stop(appContext)
+                    ServiceAction.KEEP -> Unit
+                }
+            }
+        }
+    }
+
+    private enum class ServiceAction { START, STOP, KEEP }
 
     fun downloadWakeModel() = runWakeModel { wakeModel.download() }
 

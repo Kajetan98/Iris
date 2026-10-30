@@ -5,6 +5,11 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- Instalacja pobranej aktualizacji (system i tak pyta użytkownika o potwierdzenie). -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Hasło wybudzające w tle: usługa pierwszoplanowa z mikrofonem, powiadomienie i blokada procesora. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!-- Android 11+: bez tego aplikacja nie widzi usług rozpoznawania i syntezy mowy. -->
     <queries>
@@ -25,6 +30,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Iris"
         android:usesCleartextTraffic="false">
+        <service
+            android:name=".ListenService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.updates"
