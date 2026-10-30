@@ -432,6 +432,12 @@ Hasło wybudzające. Zamiast dotykać przycisku, użytkownik mówi "Hej Iris" al
 - Po wykryciu: nasłuch hasła zwalnia mikrofon, potem aplikacja startuje jak po dotknięciu "Mów" (system pokazuje stan "Słucham"). Wypowiedź należy zacząć po tym, jak aplikacja zacznie słuchać; słowa wypowiedziane tuż po haśle mogą zostać pominięte.
 - Ograniczenia: stały nasłuch zużywa baterię i procesor; mały model myli się, zwłaszcza w hałasie, więc zdarzają się niewykryte i fałszywe wywołania. Skuteczności nie sprawdzano na prawdziwym telefonie.
 
+Eksport faktów. Ekran pamięci ma przycisk "Eksportuj do pliku" (widoczny, gdy są fakty), który zapisuje wszystkie fakty do pliku wybranego przez użytkownika w systemowym oknie "Zapisz jako" (domyślna nazwa `iris-fakty-RRRR-MM-DD.json`):
+
+- Plik to JSON w UTF-8 z wcięciami: `{"format": "iris-facts", "version": 1, "exportedAt": "<ISO 8601>", "facts": [...]}`. Każdy fakt: `text`, `source` (`stated` albo `inferred`), `confidence`, `reinforced`, `createdAt`, `updatedAt`, `askedAt` (null, gdy nie pytano). Czasy w formacie z sekcji 9. Bez `id` (to numery lokalne bazy). Kolejność jak na ekranie pamięci: najpierw fakty podane wprost, potem przypuszczenia od najpewniejszych.
+- Plik jest nieszyfrowany i zawiera treść faktów, więc ekran ostrzega, że to dane osobiste. Aplikacja zapisuje go tylko tam, gdzie wskaże użytkownik, i niczego nie wysyła. Po zapisie ekran pokazuje liczbę zapisanych faktów albo błąd.
+- Wczytywanie z pliku nie jest częścią tej wersji.
+
 Aktualizacje. Aplikacja instaluje nowe wersje sama po jednym potwierdzeniu użytkownika (Android nie pozwala instalować cicho):
 
 - Wydanie `android-latest` w repozytorium (publicznym) zawiera `iris-debug.apk` i `latest.json`: `{"versionCode": N, "versionName": "0.1.N", "apk": "<adres https>", "sha256": "<hex>"}`. CI ustawia `versionCode` na numer uruchomienia workflow `android`, więc rośnie z każdym buildem.
