@@ -82,6 +82,10 @@ private fun IrisRoot(container: AppContainer) {
     val wakePermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         container.micGranted.value = granted
     }
+    val exportNotice by container.exportNotice.collectAsState()
+    val exportFacts = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
+        if (uri != null) container.exportFacts(uri)
+    }
     val pickWakeZip = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         if (uri != null) container.importWakeModel(uri)
     }
@@ -139,6 +143,8 @@ private fun IrisRoot(container: AppContainer) {
         )
         Screen.MEMORY -> MemoryScreen(
             conversation = container.conversation,
+            exportNotice = exportNotice,
+            onExport = { exportFacts.launch("iris-fakty-${java.time.LocalDate.now()}.json") },
             onBack = { screen = Screen.CONVERSATION },
         )
     }

@@ -36,7 +36,7 @@ import pl.iris.core.Texts
 
 /** "Co IRIS o mnie wie": fakty z pewnością i usuwanie pojedynczego faktu (spec, sekcja 14). */
 @Composable
-fun MemoryScreen(conversation: Conversation, onBack: () -> Unit) {
+fun MemoryScreen(conversation: Conversation, exportNotice: String?, onExport: () -> Unit, onBack: () -> Unit) {
     var facts by remember { mutableStateOf<List<Fact>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -95,6 +95,15 @@ fun MemoryScreen(conversation: Conversation, onBack: () -> Unit) {
                     }
                 }
             }
+        }
+        if (!facts.isNullOrEmpty()) {
+            Text(
+                "Eksport zapisuje wszystkie fakty do pliku JSON, który wskażesz. Plik nie jest szyfrowany i zawiera dane osobiste, więc trzymaj go w bezpiecznym miejscu.",
+                color = IrisColors.Ink2,
+                fontSize = 14.sp,
+            )
+            if (exportNotice != null) Text(exportNotice, color = IrisColors.Ink)
+            OutlinedButton(onClick = onExport) { Text("Eksportuj do pliku") }
         }
         OutlinedButton(onClick = onBack) { Text("Zamknij") }
     }
