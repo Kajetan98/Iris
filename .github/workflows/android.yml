@@ -56,11 +56,37 @@ jobs:
           msg=$( (grep -E '^e: |^w: .*-Werror|What went wrong|FAILURE|Could not|error:|Unresolved|Execution failed' -A3 build.log || tail -60 build.log) | tail -c 9000 | sed ':a;N;$!ba;s/%/%25/g;s/\r/%0D/g;s/\n/%0A/g')
           echo "::error title=gradle::$msg"
 
+      # Rotacja klucza (spec, sekcja 14, "Podpis"): klucz debug jest publiczny (w repozytorium), więc APK
+      # dostaje też podpis prywatnym kluczem z sekretów i dowód rotacji (lineage, schemat v3). Android 9+
+      # przyjmuje taki plik jako aktualizację bez utraty danych, a potem odrzuca pliki podpisane samym
+      # kluczem debug. Bez sekretów APK ma tylko podpis debug, jak dotąd.
+      - name: Podpis kluczem prywatnym z rotacją z klucza debug
+        env:
+          RELEASE_KEYSTORE: ${{ secrets.IRIS_RELEASE_KEYSTORE }}
+          RELEASE_PASSWORD: ${{ secrets.IRIS_RELEASE_PASSWORD }}
+        run: |
+          if [ -z "$RELEASE_KEYSTORE" ] || [ -z "$RELEASE_PASSWORD" ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk iris-debug.apk
+            echo "::warning title=podpis::Brak sekretów IRIS_RELEASE_KEYSTORE i IRIS_RELEASE_PASSWORD: APK ma tylko publiczny podpis debug."
+            exit 0
+          fi
+          bt=$(ls -d "$ANDROID_HOME"/build-tools/* | sort -V | tail -1)
+          ks="$RUNNER_TEMP/release.jks"
+          trap 'rm -f "$ks"' EXIT
+          echo "$RELEASE_KEYSTORE" | base64 -d > "$ks"
+          old=(--ks app/debug.keystore --ks-key-alias androiddebugkey --ks-pass pass:android --key-pass pass:android)
+          new=(--ks "$ks" --ks-key-alias iris --ks-pass env:RELEASE_PASSWORD --key-pass env:RELEASE_PASSWORD)
+          "$bt/apksigner" rotate --out "$RUNNER_TEMP/lineage" --old-signer "${old[@]}" --new-signer "${new[@]}"
+          "$bt/apksigner" sign "${old[@]}" --next-signer "${new[@]}" \
+            --lineage "$RUNNER_TEMP/lineage" --rotation-min-sdk-version 28 --v4-signing-enabled false \
+            --out iris-debug.apk app/build/outputs/apk/debug/app-debug.apk
+          "$bt/apksigner" verify --verbose --print-certs iris-debug.apk | grep -E "^Verified using|certificate SHA-256" || true
+
       - name: Plik APK
         uses: actions/upload-artifact@v4
         with:
           name: iris-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          path: android/iris-debug.apk
           if-no-files-found: error
 
       - name: Wydanie android-latest (plik APK do pobrania prosto na telefonie)
@@ -69,7 +95,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          cp app/build/outputs/apk/debug/app-debug.apk iris-debug.apk
           # Plik dla aktualizacji w aplikacji (spec, sekcja 14): numer wersji, adres i skrót APK.
           printf '{"versionCode": %s, "versionName": "0.1.%s", "apk": "https://github.com/%s/releases/download/android-latest/iris-debug.apk", "sha256": "%s"}\n' \
             "${{ github.run_number }}" "${{ github.run_number }}" "$GH_REPO" "$(sha256sum iris-debug.apk | cut -d' ' -f1)" > latest.json

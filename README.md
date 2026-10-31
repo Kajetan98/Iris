@@ -113,6 +113,8 @@ Przy silniku Claude wychodzi z telefonu: wypowiedź, kilka ostatnich wymian i cz
 
 Wymagania i ograniczenia: Android 8.0 lub nowszy, polski głos w systemie do czytania odpowiedzi (bez niego są tylko napisy). Fala podczas mowy porusza się według stałego wzoru, bo synteza systemowa nie udostępnia dźwięku. Aplikacja nie była uruchamiana na prawdziwym telefonie przez autora kodu: pierwsza wersja może wymagać poprawek.
 
+Podpis: klucz debug jest publiczny, więc po dodaniu w ustawieniach repozytorium sekretów `IRIS_RELEASE_KEYSTORE` i `IRIS_RELEASE_PASSWORD` CI podpisuje APK też kluczem prywatnym, z rotacją klucza (Android 9+ instaluje taką wersję na starą bez utraty danych). Instrukcja tworzenia klucza i zasady: [docs/spec.md](docs/spec.md), sekcja 14, "Podpis". Kopię pliku klucza i hasła trzymaj poza repozytorium; bez nich kolejnych wersji nie da się zainstalować na starą.
+
 Budowanie: APK buduje CI (workflow `android`) i publikuje w wydaniu `android-latest`. Plik jest podpisany kluczem debug z repozytorium (`android/app/debug.keystore`), więc każda nowa wersja instaluje się na poprzednią bez utraty faktów. To klucz do testów, nie wydawniczy. Testy rdzenia lokalnie: `cd android && ./gradlew :core:test` (JDK 17). Moduł `app` wymaga Android SDK i bez niego jest pomijany.
 
 ## Inne urządzenia
