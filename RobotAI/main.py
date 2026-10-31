@@ -30,7 +30,7 @@ przodu albo do tyłu.
 
 GEMMA JAKO MÓZG. Model językowy odpowiada w czasie rzędu sekund, a stabilny chód wymaga decyzji
 60 razy na sekundę. Gemma działa więc jako warstwa decyzyjna: co kilkadziesiąt klatek dostaje opis
-stanu robota i wybiera zachowanie (iść, stać, pochylić się). Momenty w stawach liczy kontroler niskiego
+stanu robota i wybiera zachowanie (iść albo stać). Momenty w stawach liczy kontroler niskiego
 poziomu: polityka PPO dla chodu i regulator PD dla postawy. Zapytanie do modelu idzie w osobnym wątku,
 więc symulacja nie zatrzymuje się w trakcie odpowiedzi.
 """
@@ -121,6 +121,7 @@ class WalkerBulletEnv(gym.Env):
         self._lower = np.zeros(len(self.MOTOR_JOINTS))
         self._upper = np.zeros(len(self.MOTOR_JOINTS))
         self._last_frame = 0.0
+        self._previous_position = (0.0, 0.0)  # (x, wysokość tułowia) po poprzednim kroku
 
     # --- połączenie ---
 
@@ -160,6 +161,8 @@ class WalkerBulletEnv(gym.Env):
             raise SimulatorClosed(str(e)) from e
         self._last_frame = time.perf_counter()
         state = self._read_state()
+        self._previous_position = (state["x"], state["height"])
+        state["vx_mean"], state["vz_mean"] = 0.0, 0.0
         return self._observation(state), self._info(state, np.zeros(len(self._motors)))
 
     def step(self, action):
@@ -176,9 +179,16 @@ class WalkerBulletEnv(gym.Env):
             state = self._read_state()
         except p.error as e:
             raise SimulatorClosed(str(e)) from e
+        # Prędkości do nagrody liczone z przesunięcia w całym kroku sterowania, nie z odczytu chwilowego:
+        # chwilowa prędkość z końca kroku pozwala "zarabiać" drganiem w miejscu, które w chwili odczytu
+        # zawsze idzie do przodu.
+        x_before, height_before = self._previous_position
+        state["vx_mean"] = (state["x"] - x_before) / self.dt
+        state["vz_mean"] = (state["height"] - height_before) / self.dt
+        self._previous_position = (state["x"], state["height"])
         fallen = state["height"] < self.FALL_HEIGHT or abs(state["pitch"]) > self.FALL_PITCH
         # Nagroda bazowa: postęp i przeżycie. Właściwą nagrodę "ludzkiego" chodu liczy HumanlikeGaitReward.
-        reward = float(state["vx"]) + (0.0 if fallen else 1.0)
+        reward = float(state["vx_mean"]) + (0.0 if fallen else 1.0)
         if self.render_mode == "human":
             self._follow_camera(state)
             self._sleep_to_real_time()
@@ -248,8 +258,8 @@ class WalkerBulletEnv(gym.Env):
     def _info(self, s: dict[str, Any], action: np.ndarray) -> dict[str, Any]:
         return {
             "x_position": float(s["x"]),
-            "forward_velocity": float(s["vx"]),
-            "vertical_velocity": float(s["vz"]),
+            "forward_velocity": float(s["vx_mean"]),  # średnia w kroku sterowania (m/s)
+            "vertical_velocity": float(s["vz_mean"]),  # średnia zmiana wysokości tułowia (m/s)
             "pitch": float(s["pitch"]),
             "pitch_rate": float(s["pitch_rate"]),
             "torso_height": float(s["height"]),
@@ -325,6 +335,9 @@ class HumanlikeGaitReward(gym.Wrapper):
     dużo, więc polityka dąży do spokojnego ruchu wokół pozycji równowagi. Ograniczenie
     min(v_x, v_max) usuwa motywację do chaotycznego biegu. Upadek kończy epizod (terminated=True),
     a algorytm od razu zaczyna nowy.
+
+    v_x i v_z to średnie prędkości w kroku sterowania (przesunięcie tułowia podzielone przez 1/60 s).
+    Prędkość chwilowa z końca kroku pozwalała zdobywać nagrodę za postęp drganiem w miejscu.
     """
 
     def __init__(self, env: gym.Env, weights: RewardWeights | None = None) -> None:
@@ -379,6 +392,7 @@ class TrainConfig:
     eval_every: int = 20_000  # kroków łącznie (wszystkie środowiska)
     eval_episodes: int = 5
     render: bool = False
+    torch_threads: int = 1  # wątki PyTorch w procesie uczącym
 
 
 def ppo_hyperparameters() -> dict[str, Any]:
@@ -472,6 +486,12 @@ def train(cfg: TrainConfig) -> Path:
         callback_on_new_best=SaveNormalizationOnBest(),
         verbose=1,
     )
+    # Sieci 256x256 są małe: przy wielu wątkach PyTorch synchronizacja kosztuje więcej, niż daje liczenie
+    # równoległe, a wątki konkurują o rdzenie z procesami symulacji. Pomiar na 4 rdzeniach, 4 środowiska:
+    # 1 wątek 567 kroków/s, 2 wątki 516, 4 wątki 420.
+    import torch
+
+    torch.set_num_threads(cfg.torch_threads)
     model = PPO("MlpPolicy", venv, seed=cfg.seed, verbose=1, device="cpu", **ppo_hyperparameters())
     try:
         model.learn(total_timesteps=cfg.timesteps, callback=eval_callback, progress_bar=False)

@@ -44,6 +44,21 @@ def test_without_torque_the_robot_falls_and_the_episode_ends(env):
     assert info["reward_terms"]["fall"] == -env.weights.fall
 
 
+def test_reward_velocities_come_from_the_displacement_in_each_control_step(env):
+    # Chwilowa prędkość z końca kroku dawała się oszukać drganiem w miejscu (nagroda bez postępu).
+    _, info = env.reset(seed=0)
+    assert info["forward_velocity"] == 0.0 and info["vertical_velocity"] == 0.0
+    dt = env.unwrapped.dt
+    rng = np.random.default_rng(0)
+    for _ in range(60):
+        x_before, height_before = info["x_position"], info["torso_height"]
+        _, _, terminated, _, info = env.step(rng.uniform(-1.0, 1.0, 6))
+        assert info["forward_velocity"] == pytest.approx((info["x_position"] - x_before) / dt)
+        assert info["vertical_velocity"] == pytest.approx((info["torso_height"] - height_before) / dt)
+        if terminated:
+            break
+
+
 def test_reward_terms_follow_the_formula(env):
     w = env.weights
     info = {

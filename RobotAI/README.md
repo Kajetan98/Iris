@@ -29,7 +29,7 @@ python main.py gemma --policy models/best_model.zip
 
 Trening zapisuje w `models/`: `best_model.zip` (najlepszy wynik w ocenach co 20 tys. kroków), `final_model.zip` i statystyki normalizacji obserwacji (`vecnormalize_*.pkl`), bez których polityka nie działa poprawnie. Ctrl+C przerywa trening i zapisuje stan. Zamknięcie okna PyBullet kończy pokaz bez błędu.
 
-Na 4 rdzeniach procesora trening idzie z prędkością ok. 350 kroków na sekundę, więc 2 mln kroków to ok. 1,5 godziny.
+Na 4 rdzeniach procesora z 4 środowiskami trening idzie z prędkością ok. 570 kroków na sekundę, więc 2 mln kroków to ok. godziny. Proces uczący używa jednego wątku PyTorch (`TrainConfig.torch_threads`): przy małych sieciach to szybciej niż kilka wątków, które konkurują o rdzenie z procesami symulacji.
 
 ## Jak to działa
 
@@ -57,6 +57,8 @@ r = 1,5·min(v_x, 1,2)  + 1                      postęp do przodu (bez premii z
 ```
 
 Kary kwadratowe są małe przy drobnych odchyleniach i duże przy dużych, więc najbardziej opłaca się spokojny ruch blisko równowagi. Wagi są w klasie `RewardWeights` i można je zmieniać.
+
+`v_x` i `v_z` to średnie prędkości w kroku sterowania: przesunięcie tułowia podzielone przez 1/60 s. Pierwsza wersja brała prędkość chwilową z końca kroku. Polityka nauczyła się wtedy drgać w miejscu tak, że w chwili odczytu robot zawsze szedł do przodu. Dostawała nagrodę za postęp, a w 16,7 s przesuwała się o 0,17 m.
 
 ### PPO
 
