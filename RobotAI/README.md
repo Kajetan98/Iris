@@ -25,12 +25,14 @@ Trening ma dwa etapy. Pierwszy uczy samego chodu, drugi doucza go karami za "nie
 
 ```
 python main.py train --reward basic --timesteps 1000000 --out models/etap1
-python main.py train --reward humanlike --init models/etap1/final_model.zip --timesteps 3000000 --out models/etap2
-python main.py eval --policy models/etap2/final_model.zip      # pokaz w oknie 3D, akcje deterministyczne
-python main.py gemma --policy models/etap2/final_model.zip
+python main.py train --reward humanlike --init models/etap1/final_model.zip --timesteps 1000000 --out models/etap2
+python main.py train --reward humanlike --init models/etap2/final_model.zip --timesteps 2000000 --out models/etap3
+python main.py eval --headless --episodes 20 --policy models/etap3/best_model.zip
+python main.py eval --policy models/etap3/best_model.zip       # pokaz w oknie 3D, akcje deterministyczne
+python main.py gemma --policy models/etap3/best_model.zip
 ```
 
-Trening od razu z nagrodą `humanlike` (bez `--init`) kończy się zwykle robotem, który stoi w miejscu (sekcja "Dwa etapy" niżej).
+Ta kolejność (1 mln kroków chodu, potem 1 i 2 mln kroków douczania) jest sprawdzona, wyniki w sekcji "Dwa etapy i wyniki". Na 4 rdzeniach zajmuje ok. 2 godzin. Trening od razu z nagrodą `humanlike` (bez `--init`) kończył się robotem, który stoi w miejscu.
 
 Każdy trening zapisuje w katalogu `--out`: `best_model.zip` (najlepszy wynik w ocenach co `--eval-every` kroków), `final_model.zip` i statystyki normalizacji obserwacji (`vecnormalize_*.pkl`), bez których polityka nie działa poprawnie. Ocena w trakcie treningu to tylko 5 epizodów, więc `best_model.zip` bywa gorszy od `final_model.zip`; warto sprawdzić oba przez `eval --headless --episodes 20`. Ctrl+C przerywa trening i zapisuje stan. Zamknięcie okna PyBullet kończy pokaz bez błędu.
 
@@ -65,6 +67,23 @@ Kary kwadratowe są małe przy drobnych odchyleniach i duże przy dużych, więc
 
 `v_x` i `v_z` to średnie prędkości w kroku sterowania: przesunięcie tułowia podzielone przez 1/60 s. Pierwsza wersja brała prędkość chwilową z końca kroku. Polityka nauczyła się wtedy drgać w miejscu tak, że w chwili odczytu robot zawsze szedł do przodu. Dostawała nagrodę za postęp, a w 16,7 s przesuwała się o 0,17 m.
 
+### Dwa etapy i wyniki
+
+Z pełnymi karami od początku polityka uczy się stać: 1000 punktów za przeżycie epizodu jest pewne, a każda próba kroku grozi karą 50 za upadek. W dwóch takich treningach po 1 mln kroków robot przesuwał się w epizodzie o 0,02 m i 0,8 m.
+
+Dlatego `--reward basic` (etap 1) ma proporcje nagrody środowiska Walker2d-v4 z Gymnasium (MuJoCo): prędkość 1, przeżycie 1, koszt sterowania 10⁻³·Σa², bez innych kar. Robot uczy się iść, ale z tułowiem pochylonym o ok. 50°, blisko progu upadku (57°). Dalszy trening etapu 1 tego nie zmienia. `--reward humanlike --init` (etap 2) zaczyna od tej polityki, z jej statystykami normalizacji i współczynnikiem uczenia 10⁻⁴ zamiast 3·10⁻⁴, i doucza ją pełną nagrodą.
+
+Pomiar: 20 epizodów po 1000 kroków (16,7 s), akcje deterministyczne, dwa zestawy ziaren losowych (7 i 99):
+
+| Model | Upadki na 20 | Dystans średnio | Przechył tułowia średnio |
+|---|---|---|---|
+| etap 1, 1 mln kroków | 5 i 7 | 3,5 i 3,1 m | 48,7° |
+| etap 1, 3 mln kroków | 7 | 3,5 m | 50,7° |
+| etap 1 + 1 mln kroków etapu 2 | 8 | 3,7 m | 19,4° |
+| etap 1 + 3 mln kroków etapu 2 (`best_model`) | 2 i 3 | 5,7 i 5,4 m | 18,5° |
+
+Wyniki pochodzą z jednego przebiegu treningu dla każdego wiersza. Inne ziarno treningu (`--seed`) może dać inny wynik.
+
 ### PPO
 
 Ustawienia są w funkcji `ppo_hyperparameters()`, z opisem każdego parametru:
@@ -91,6 +110,7 @@ co 1/60 s: komenda → walk: polityka PPO | stand: regulator PD postawy → mome
 
 ## Ograniczenia
 
+- Chód po obu etapach nie jest jeszcze ludzki. Robot idzie z prędkością ok. 0,33 m/s i upada w 2-3 epizodach na 20. Silniki pracują blisko pełnego momentu: średnie a² wynosi ok. 0,77 przy maksimum 1, więc kary za energię nie zmieniły stylu ruchu na oszczędny.
 - Ścieżki z prawdziwym modelem Gemma nie uruchamiałem, bo plik modelu nie był dostępny. API LiteRT-LM jest sprawdzone na pakiecie `litert-lm-api` 0.19.0, a pętlę decyzji testują atrapy modelu z opóźnieniem. Szybkość odpowiedzi Gemmy na CPU zależy od komputera.
 - Regulator postawy utrzymuje robota na stojąco, ale silne pchnięcie zwykle go przewraca. Przejście z chodu do stania w trakcie kroku może skończyć się upadkiem.
 - Bez `--policy` komenda "walk" działa jak "stand", bo chód wymaga wytrenowanej polityki.
