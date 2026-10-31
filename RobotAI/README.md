@@ -21,13 +21,18 @@ Ten katalog jest niezależny od IRIS: ma własne zależności i nie wchodzi do t
 
 ## Uruchomienie
 
+Trening ma dwa etapy. Pierwszy uczy samego chodu, drugi doucza go karami za "nieludzki" ruch:
+
 ```
-python main.py train --timesteps 2000000     # trening bez okna, kilka procesów naraz
-python main.py eval                          # pokaz w oknie 3D, akcje deterministyczne
-python main.py gemma --policy models/best_model.zip
+python main.py train --reward basic --timesteps 1000000 --out models/etap1
+python main.py train --reward humanlike --init models/etap1/final_model.zip --timesteps 3000000 --out models/etap2
+python main.py eval --policy models/etap2/final_model.zip      # pokaz w oknie 3D, akcje deterministyczne
+python main.py gemma --policy models/etap2/final_model.zip
 ```
 
-Trening zapisuje w `models/`: `best_model.zip` (najlepszy wynik w ocenach co 20 tys. kroków), `final_model.zip` i statystyki normalizacji obserwacji (`vecnormalize_*.pkl`), bez których polityka nie działa poprawnie. Ctrl+C przerywa trening i zapisuje stan. Zamknięcie okna PyBullet kończy pokaz bez błędu.
+Trening od razu z nagrodą `humanlike` (bez `--init`) kończy się zwykle robotem, który stoi w miejscu (sekcja "Dwa etapy" niżej).
+
+Każdy trening zapisuje w katalogu `--out`: `best_model.zip` (najlepszy wynik w ocenach co `--eval-every` kroków), `final_model.zip` i statystyki normalizacji obserwacji (`vecnormalize_*.pkl`), bez których polityka nie działa poprawnie. Ocena w trakcie treningu to tylko 5 epizodów, więc `best_model.zip` bywa gorszy od `final_model.zip`; warto sprawdzić oba przez `eval --headless --episodes 20`. Ctrl+C przerywa trening i zapisuje stan. Zamknięcie okna PyBullet kończy pokaz bez błędu.
 
 Na 4 rdzeniach procesora z 4 środowiskami trening idzie z prędkością ok. 570 kroków na sekundę, więc 2 mln kroków to ok. godziny. Proces uczący używa jednego wątku PyTorch (`TrainConfig.torch_threads`): przy małych sieciach to szybciej niż kilka wątków, które konkurują o rdzenie z procesami symulacji.
 
