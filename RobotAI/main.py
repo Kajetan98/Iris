@@ -45,7 +45,7 @@ import os
 import re
 import sys
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -315,6 +315,20 @@ class RewardWeights:
     reference_height: float = 1.2  # h_ref (m): wysokość tułowia przy naturalnym chodzie
 
 
+# Presety wag dla dwóch etapów treningu (--reward). Od razu z pełnymi karami polityka uczy się stać:
+# 1000 punktów za przeżycie jest pewne, a pierwszy krok grozi upadkiem. Etap "basic" ma proporcje
+# nagrody Walker2d-v4 z Gymnasium (MuJoCo): prędkość 1, przeżycie 1, koszt sterowania 1e-3·Σa²
+# (= 0,006·średnia z 6 stawów), bez innych kar. Etap "humanlike" doucza chód karami za przechył,
+# podskoki, energię i szarpanie (--init z modelu po etapie "basic").
+REWARD_PRESETS: dict[str, RewardWeights] = {
+    "basic": RewardWeights(
+        forward=1.0, target_speed=10.0, tilt=0.0, tilt_rate=0.0, bob=0.0, height=0.0,
+        energy=0.006, power=0.0, smoothness=0.0, airborne=0.0, fall=0.0,
+    ),
+    "humanlike": RewardWeights(),
+}
+
+
 class HumanlikeGaitReward(gym.Wrapper):
     """Zastępuje nagrodę środowiska nagrodą za stabilny, oszczędny i płynny chód.
 
@@ -393,9 +407,11 @@ class TrainConfig:
     eval_episodes: int = 5
     render: bool = False
     torch_threads: int = 1  # wątki PyTorch w procesie uczącym
+    reward: str = "humanlike"  # klucz REWARD_PRESETS
+    init: Path | None = None  # model do douczenia (statystyki normalizacji obok, jak w stats_for)
 
 
-def ppo_hyperparameters() -> dict[str, Any]:
+def ppo_hyperparameters(initial_lr: float = 3e-4) -> dict[str, Any]:
     """Ustawienia PPO dobrane pod stabilność nauki chodu (ciągłe sterowanie momentem).
 
     - n_steps · n_envs = 512 · 8 = 4096 próbek na aktualizację: gradient z wielu epizodów naraz ma
@@ -411,7 +427,7 @@ def ppo_hyperparameters() -> dict[str, Any]:
     import torch.nn as nn
 
     return {
-        "learning_rate": lambda progress_remaining: 3e-4 * progress_remaining,
+        "learning_rate": lambda progress_remaining: initial_lr * progress_remaining,
         "n_steps": 512,
         "batch_size": 128,
         "n_epochs": 10,
@@ -432,7 +448,7 @@ def ppo_hyperparameters() -> dict[str, Any]:
     }
 
 
-def make_env(rank: int, seed: int, render_mode: str | None = None):
+def make_env(rank: int, seed: int, render_mode: str | None = None, weights: RewardWeights | None = None):
     """Fabryka środowiska dla wektora środowisk SB3 (każde w osobnym procesie lub w tym samym)."""
 
     def _init() -> gym.Env:
@@ -440,7 +456,7 @@ def make_env(rank: int, seed: int, render_mode: str | None = None):
 
         register_env()
         env = gym.make(ENV_ID, render_mode=render_mode)
-        env = HumanlikeGaitReward(env)
+        env = HumanlikeGaitReward(env, replace(weights) if weights is not None else None)
         env = Monitor(env)  # zapisuje sumę nagrody i długość epizodu
         env.reset(seed=seed + rank)
         return env
@@ -453,6 +469,13 @@ def train(cfg: TrainConfig) -> Path:
     from stable_baselines3.common.callbacks import BaseCallback, EvalCallback
     from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv, VecNormalize
 
+    if cfg.reward not in REWARD_PRESETS:
+        raise ValueError(f"nieznany preset nagrody: {cfg.reward} (dostępne: {', '.join(REWARD_PRESETS)})")
+    weights = REWARD_PRESETS[cfg.reward]
+    if cfg.init is not None:
+        for path in (cfg.init, stats_for(cfg.init)):
+            if not path.exists():
+                raise FileNotFoundError(f"Brak {path} (model do douczenia i jego statystyki normalizacji).")
     cfg.out_dir.mkdir(parents=True, exist_ok=True)
     stats_best = cfg.out_dir / "vecnormalize_best.pkl"
 
@@ -468,13 +491,18 @@ def train(cfg: TrainConfig) -> Path:
     # Trening bez okna (p.DIRECT) w kilku procesach: GUI PyBullet działa tylko w jednym procesie.
     render_mode = "human" if cfg.render else None
     n_envs = 1 if cfg.render else cfg.n_envs
-    env_fns = [make_env(i, cfg.seed, render_mode) for i in range(n_envs)]
-    venv = SubprocVecEnv(env_fns) if n_envs > 1 else DummyVecEnv(env_fns)
-    # Normalizacja obserwacji i nagrody: sieć dostaje wartości rzędu 1, co stabilizuje gradienty.
-    venv = VecNormalize(venv, norm_obs=True, norm_reward=True, clip_obs=10.0, gamma=0.99)
+    env_fns = [make_env(i, cfg.seed, render_mode, weights) for i in range(n_envs)]
+    raw_venv = SubprocVecEnv(env_fns) if n_envs > 1 else DummyVecEnv(env_fns)
+    if cfg.init is None:
+        # Normalizacja obserwacji i nagrody: sieć dostaje wartości rzędu 1, co stabilizuje gradienty.
+        venv = VecNormalize(raw_venv, norm_obs=True, norm_reward=True, clip_obs=10.0, gamma=0.99)
+    else:
+        # Douczanie: polityka zna obserwacje tylko w skali z poprzedniego treningu.
+        venv = VecNormalize.load(str(stats_for(cfg.init)), raw_venv)
+        venv.training, venv.norm_reward = True, True
 
     eval_env = VecNormalize(
-        DummyVecEnv([make_env(10_000, cfg.seed)]), norm_obs=True, norm_reward=False, training=False
+        DummyVecEnv([make_env(10_000, cfg.seed, None, weights)]), norm_obs=True, norm_reward=False, training=False
     )
     eval_callback = EvalCallback(
         eval_env,
@@ -492,7 +520,13 @@ def train(cfg: TrainConfig) -> Path:
     import torch
 
     torch.set_num_threads(cfg.torch_threads)
-    model = PPO("MlpPolicy", venv, seed=cfg.seed, verbose=1, device="cpu", **ppo_hyperparameters())
+    if cfg.init is None:
+        model = PPO("MlpPolicy", venv, seed=cfg.seed, verbose=1, device="cpu", **ppo_hyperparameters())
+    else:
+        # Mniejszy współczynnik uczenia przy douczaniu: duże kroki na starcie mogą zgubić wyuczony chód.
+        lr = ppo_hyperparameters(initial_lr=1e-4)["learning_rate"]
+        model = PPO.load(str(cfg.init), env=venv, device="cpu", custom_objects={"learning_rate": lr})
+        model.set_random_seed(cfg.seed)
     try:
         model.learn(total_timesteps=cfg.timesteps, callback=eval_callback, progress_bar=False)
     except KeyboardInterrupt:
@@ -869,6 +903,9 @@ def main(argv: list[str] | None = None) -> int:
     t.add_argument("--out", type=Path, default=DEFAULT_MODEL_DIR)
     t.add_argument("--eval-every", type=int, default=20_000)
     t.add_argument("--render", action="store_true", help="trening z oknem 3D (jedno środowisko, wolno)")
+    t.add_argument("--reward", choices=sorted(REWARD_PRESETS), default="humanlike",
+                   help="wagi nagrody: basic (etap 1, nauka chodu) albo humanlike (etap 2, styl chodu)")
+    t.add_argument("--init", type=Path, default=None, help="douczanie zapisanego modelu, np. models/best_model.zip")
 
     e = sub.add_parser("eval", help="pokaz wyuczonej polityki")
     e.add_argument("--policy", type=Path, default=DEFAULT_MODEL_DIR / "best_model.zip")
@@ -887,7 +924,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         if args.mode == "train":
-            train(TrainConfig(args.timesteps, args.n_envs, args.seed, args.out, args.eval_every, render=args.render))
+            train(TrainConfig(args.timesteps, args.n_envs, args.seed, args.out, args.eval_every,
+                              render=args.render, reward=args.reward, init=args.init))
         elif args.mode == "eval":
             if not args.policy.exists():
                 print(f"Brak {args.policy}. Najpierw: python main.py train", file=sys.stderr)

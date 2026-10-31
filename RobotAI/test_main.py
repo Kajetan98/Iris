@@ -235,3 +235,24 @@ def test_short_training_saves_the_best_model(tmp_path):
     assert best.exists() and (tmp_path / "vecnormalize_best.pkl").exists()
     returns = m.evaluate(best, episodes=1, headless=True, seed=1)
     assert len(returns) == 1
+
+
+def test_two_stage_training_continues_from_the_first_stage(tmp_path):
+    pytest.importorskip("stable_baselines3")
+    stage1 = m.train(m.TrainConfig(timesteps=1024, n_envs=1, out_dir=tmp_path / "s1", eval_every=1024,
+                                   eval_episodes=1, reward="basic"))
+    stage2 = m.train(m.TrainConfig(timesteps=1024, n_envs=1, out_dir=tmp_path / "s2", eval_every=1024,
+                                   eval_episodes=1, reward="humanlike", init=stage1))
+    assert stage2.exists() and (tmp_path / "s2" / "vecnormalize_best.pkl").exists()
+    with pytest.raises(FileNotFoundError):
+        m.train(m.TrainConfig(timesteps=1024, n_envs=1, out_dir=tmp_path / "s3", init=tmp_path / "brak.zip"))
+    with pytest.raises(ValueError):
+        m.train(m.TrainConfig(timesteps=1024, n_envs=1, out_dir=tmp_path / "s4", reward="sprint"))
+
+
+def test_reward_presets_differ_only_where_documented():
+    basic, humanlike = m.REWARD_PRESETS["basic"], m.REWARD_PRESETS["humanlike"]
+    assert humanlike == m.RewardWeights()
+    # Etap 1 jak Walker2d-v4: prędkość i przeżycie po 1, koszt sterowania 1e-3·Σa² dla 6 stawów.
+    assert (basic.forward, basic.alive, basic.energy) == (1.0, 1.0, pytest.approx(6e-3))
+    assert basic.fall == basic.tilt == basic.height == basic.smoothness == 0.0
