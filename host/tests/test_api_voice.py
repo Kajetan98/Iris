@@ -14,7 +14,7 @@ from host.core.config import Config, LLMConfig
 from host.store import Store
 from host.tests.audio_helpers import dominant_hz, header, opus_packets
 from host.tests.brain_helpers import ScriptedEngine
-from host.tests.helpers import heartbeat
+from host.tests.helpers import heartbeat, local_client
 from host.tests.test_api_service import FakeWS, frame, settle
 from host.tests.test_brain_voice import TTS_HZ, FakeSTT, FakeTTS
 
@@ -430,7 +430,6 @@ def test_conversation_never_reaches_logs_or_the_database(caplog):
 
 # --- cykl życia aplikacji ---
 
-from fastapi.testclient import TestClient  # noqa: E402
 
 from host.api.main import create_app  # noqa: E402
 
@@ -477,7 +476,7 @@ VOICE_CFG = {
 def test_injected_engines_are_loaded_but_not_closed_by_the_app():
     stt, tts = TrackedSTT(), TrackedTTS()
     app = create_app(llm_config(), ManualClock(), assistant=Assistant(ScriptedEngine(), LLM_CFG), stt=stt, tts=tts, run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         assert c.get("/health").json()["voice"] == "ready"
         assert (stt.loaded, tts.loaded) == (1, 1)
     assert not stt.closed and not tts.closed
@@ -489,7 +488,7 @@ def test_engines_built_from_config_are_loaded_and_closed(monkeypatch):
     monkeypatch.setattr("host.brain.build_tts", lambda cfg: tts)
     monkeypatch.setattr("host.brain.build_assistant", lambda cfg: Assistant(ScriptedEngine(), cfg))
     app = create_app(llm_config(VOICE_CFG), ManualClock(), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         assert c.get("/health").json()["voice"] == "ready"
         assert (stt.loaded, tts.loaded) == (1, 1) and not stt.closed
     assert stt.closed and tts.closed
@@ -505,7 +504,7 @@ def test_model_load_failure_disables_voice_but_not_the_host(monkeypatch, caplog)
     monkeypatch.setattr("host.brain.build_assistant", lambda cfg: Assistant(ScriptedEngine(["Tekstowo działa."]), cfg))
     app = create_app(llm_config(VOICE_CFG), ManualClock(), run_tick_loop=False)
     with caplog.at_level(logging.ERROR):
-        with TestClient(app) as c:
+        with local_client(app) as c:
             assert c.get("/health").json()["voice"] == "error"
             assert c.get("/self").status_code == 200  # warstwa stanu działa
             assert c.post("/chat", json={"text": "Cześć"}).json()["text"] == "Tekstowo działa."
@@ -516,12 +515,12 @@ def test_model_load_failure_disables_voice_but_not_the_host(monkeypatch, caplog)
 def test_voice_configured_without_llm_is_an_error_not_a_crash():
     cfg = Config.model_validate({"brain": VOICE_CFG, "store": {"path": ":memory:"}})
     app = create_app(cfg, ManualClock(), stt=TrackedSTT(), tts=TrackedTTS(), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         assert c.get("/health").json()["voice"] == "error"
         assert c.get("/self").status_code == 200
 
 
 def test_health_reports_disabled_voice_by_default():
     app = create_app(Config.model_validate({"store": {"path": ":memory:"}}), ManualClock(), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         assert c.get("/health").json()["voice"] == "disabled"

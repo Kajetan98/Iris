@@ -8,14 +8,14 @@ from pathlib import Path
 
 import httpx
 import pytest
-from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
-from host.api.auth import AuthConfigError, bearer_ok, token_from_env, ws_token_ok
+from host.api.auth import AuthConfigError, bearer_ok, is_loopback_host, local_refusal, token_from_env, ws_token_ok
 from host.api.main import create_app
 from host.core.clock import ManualClock
 from host.core.config import Config
 from host.store import Store
+from host.tests.helpers import local_client
 from host.tests.servers import free_port, start, stop, until
 from host.tests.test_api_service import hb
 from sim.body import SimRunner
@@ -55,7 +55,7 @@ def test_header_and_subprotocol_checks():
 def client():
     clock = ManualClock()
     app = create_app(Config(), clock=clock, store=Store(clock=clock), run_tick_loop=False, token=TOKEN)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         yield c
 
 
@@ -88,7 +88,7 @@ def test_websocket_requires_the_token_in_a_subprotocol(client, caplog):
 def test_without_a_token_the_iris_subprotocol_is_still_selected():
     clock = ManualClock()
     app = create_app(Config(), clock=clock, store=Store(clock=clock), run_tick_loop=False, token=None)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         assert c.get("/health").status_code == 200
         with c.websocket_connect("/ws", subprotocols=["iris"]) as ws:
             assert ws.accepted_subprotocol == "iris"
@@ -99,7 +99,7 @@ def test_without_a_token_the_iris_subprotocol_is_still_selected():
 def test_without_a_token_requests_through_a_proxy_are_refused(caplog):
     clock = ManualClock()
     app = create_app(Config(), clock=clock, store=Store(clock=clock), run_tick_loop=False, token=None)
-    with TestClient(app) as c, caplog.at_level(logging.WARNING):
+    with local_client(app) as c, caplog.at_level(logging.WARNING):
         for header in ("Forwarded", "X-Forwarded-For", "X-Real-IP", "CF-Connecting-IP", "True-Client-IP"):
             proxied = {header: "203.0.113.7"}
             assert c.get("/health", headers=proxied).status_code == 401, header
@@ -173,3 +173,106 @@ def _run_hermes(exe, url, token):
         out, err = proc.communicate(timeout=5)
     assert "token: tak" in err
     return out
+
+
+# --- host bez tokenu: tylko połączenia z tego komputera (spec, sekcje 1 i 10) ---
+
+
+def test_loopback_names_and_addresses():
+    for host in ("localhost", "LOCALHOST:8000", "localhost.", "127.0.0.1", "127.0.0.1:8443", "127.8.9.10",
+                 "[::1]", "[::1]:8000", "::1"):
+        assert is_loopback_host(host), host
+    for host in ("", "0.0.0.0", "192.168.1.5", "192.168.1.5:8000", "iris.example.ts.net", "localhost.evil.example",
+                 "127.0.0.1.evil.example", "[::1", "[2001:db8::1]:80", "evil.localhost"):
+        assert not is_loopback_host(host), host
+
+
+def test_local_refusal_rules():
+    local = {"host": "127.0.0.1:8000"}
+    assert local_refusal("127.0.0.1", local) is None
+    assert local_refusal("::1", {"host": "[::1]:8000"}) is None
+    assert local_refusal("::ffff:127.0.0.1", local) is None
+    assert local_refusal(None, local) is None  # gniazdo uniksowe
+    assert local_refusal("127.0.0.1", {**local, "x-forwarded-for": "203.0.113.7"})[0] == 401
+    assert local_refusal("192.168.1.20", local)[0] == 403
+    assert local_refusal("testclient", local)[0] == 403
+    assert local_refusal("127.0.0.1", {"host": "rebind.attacker.example"})[0] == 403
+    assert local_refusal("127.0.0.1", {})[0] == 403
+    for origin in ("http://127.0.0.1:8000", "http://localhost:5173", "https://[::1]:8443"):
+        assert local_refusal("127.0.0.1", {**local, "origin": origin}) is None, origin
+    for origin in ("https://evil.example", "null", "http://127.0.0.1.evil.example", "nie-adres"):
+        assert local_refusal("127.0.0.1", {**local, "origin": origin})[0] == 403, origin
+    site = "https://iris-asystent.vercel.app"
+    assert local_refusal("127.0.0.1", {**local, "origin": site}, [site]) is None
+    assert local_refusal("127.0.0.1", {**local, "origin": site + "."}, [site])[0] == 403
+
+
+def _tokenless_app(**api):
+    clock = ManualClock()
+    cfg = Config.model_validate({"api": api}) if api else Config()
+    return create_app(cfg, clock=clock, store=Store(clock=clock), run_tick_loop=False, token=None)
+
+
+def _refused_ws(c, url="/ws?device=hermes", **kwargs):
+    with c.websocket_connect(url, subprotocols=["iris"], **kwargs) as ws:
+        with pytest.raises(WebSocketDisconnect) as e:
+            ws.receive_text()
+        return e.value.code
+
+
+def test_without_a_token_dns_rebinding_and_foreign_pages_are_refused(caplog):
+    with local_client(_tokenless_app()) as c, caplog.at_level(logging.WARNING):
+        foreign_host = {"Host": "rebind.attacker.example"}
+        assert c.get("/facts", headers=foreign_host).status_code == 403
+        assert _refused_ws(c, headers=foreign_host) == 4003
+        evil = {"Origin": "https://evil.example"}
+        assert c.post("/devices/hermes/activate", headers=evil).status_code == 403
+        assert c.get("/facts", headers=evil).status_code == 403
+        assert _refused_ws(c, headers=evil) == 4003
+        assert c.get("/devices").json()["devices"] == []  # obca strona nie została urządzeniem
+        assert c.get("/app/", headers=foreign_host).status_code == 200  # pliki klienta są publiczne
+        # klient z tego komputera: przeglądarka z Origin pętli zwrotnej i urządzenie bez Origin
+        assert c.get("/facts", headers={"Origin": "http://127.0.0.1:8000"}).status_code == 200
+        with c.websocket_connect("/ws?device=laptop", subprotocols=["iris"],
+                                 headers={"Origin": "http://localhost:8000"}) as ws:
+            ws.send_text(hb(50))
+        with c.websocket_connect("/ws", subprotocols=["iris"]) as ws:
+            ws.send_text(hb(60))
+        assert {d["id"] for d in c.get("/devices").json()["devices"]} == {"laptop", "hermes"}
+    assert "DNS rebinding" in caplog.text and "rebind.attacker" not in caplog.text and "evil.example" not in caplog.text
+
+
+def test_without_a_token_other_computers_are_refused():
+    with local_client(_tokenless_app(), client=("192.168.1.20", 40000)) as c:
+        assert c.get("/health").status_code == 403
+        assert _refused_ws(c) == 4003
+
+
+def test_without_a_token_the_listed_site_is_allowed():
+    site = "https://iris-asystent.vercel.app"
+    with local_client(_tokenless_app(cors_origins=[site])) as c:
+        assert c.get("/facts", headers={"Origin": site}).status_code == 200
+        with c.websocket_connect("/ws", subprotocols=["iris"], headers={"Origin": site}) as ws:
+            assert ws.accepted_subprotocol == "iris"
+        assert c.get("/facts", headers={"Origin": "https://inna.vercel.app"}).status_code == 403
+
+
+def test_with_a_token_foreign_host_origin_and_address_need_only_the_token():
+    clock = ManualClock()
+    app = create_app(Config(), clock=clock, store=Store(clock=clock), run_tick_loop=False, token=TOKEN)
+    auth = {"Authorization": f"Bearer {TOKEN}"}
+    with local_client(app, client=("192.168.1.20", 40000), base_url="https://iris.example.ts.net") as remote:
+        assert remote.get("/facts", headers={**auth, "Origin": "https://evil.example"}).status_code == 200
+        with remote.websocket_connect("/ws", subprotocols=["iris", f"token.{TOKEN}"]) as ws:
+            assert ws.accepted_subprotocol == "iris"
+
+
+def test_serve_refuses_a_public_address_without_a_token(monkeypatch, capsys):
+    from host.api import serve
+
+    monkeypatch.delenv("IRIS_TOKEN", raising=False)
+    assert serve.main(["--host", "0.0.0.0", "--port", "1"]) == 2
+    assert "wymaga IRIS_TOKEN" in capsys.readouterr().err
+    monkeypatch.setenv("IRIS_TOKEN", "krotki")
+    assert serve.main(["--host", "0.0.0.0"]) == 2
+

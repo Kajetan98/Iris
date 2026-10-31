@@ -5,7 +5,6 @@ import json
 import logging
 
 import pytest
-from fastapi.testclient import TestClient
 
 from host.api.main import create_app
 from host.api.service import HostService
@@ -15,6 +14,7 @@ from host.core.clock import ManualClock
 from host.core.config import Config, LLMConfig
 from host.store import Store
 from host.tests.brain_helpers import ScriptedEngine
+from host.tests.helpers import local_client
 
 LLM_CFG = LLMConfig.model_validate({"engine": "ollama", "model": "m"})
 BUREK = json.dumps([{"fakt": "Masz psa o imieniu Burek.", "pewnosc": 0.9}])
@@ -252,7 +252,7 @@ def test_rest_delete_records_the_forget_event():
     clock = ManualClock()
     store = Store(clock=clock)
     app = create_app(Config(), clock=clock, store=store, run_tick_loop=False, token=None)
-    with TestClient(app) as client:
+    with local_client(app) as client:
         f = store.add_fact("mam psa", "stated")
         assert client.delete(f"/facts/{f.id}").status_code == 204
         assert client.delete(f"/facts/{f.id}").status_code == 404
@@ -280,7 +280,7 @@ def test_rest_facts_say_which_reach_the_llm():
         cfg = LLMConfig.model_validate({"engine": "ollama", "model": "m", "send_facts": send_facts})
         app = create_app(Config(), clock=clock, store=store, run_tick_loop=False, token=None,
                          assistant=Assistant(engine, cfg))
-        with TestClient(app) as client:
+        with local_client(app) as client:
             store.add_fact("mam psa", "stated")
             store.add_fact("Lubisz jazz", "inferred", 0.6)
             store.add_fact("Grasz w szachy", "inferred", 0.45)

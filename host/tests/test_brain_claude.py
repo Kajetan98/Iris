@@ -290,14 +290,13 @@ def test_client_options_exist_in_the_installed_sdk():
 
 # --- polityka faktów i cała ścieżka ---
 
-from fastapi.testclient import TestClient  # noqa: E402
-
 from host.api.main import create_app  # noqa: E402
 from host.brain import build_assistant, build_engine  # noqa: E402
 from host.core.clock import ManualClock  # noqa: E402
 from host.core.config import Config  # noqa: E402
 from host.store import Store  # noqa: E402
 from host.tests.brain_helpers import fact  # noqa: E402
+from host.tests.helpers import local_client  # noqa: E402
 
 STATE = {"mode": "nominal", "drives": []}
 
@@ -362,7 +361,7 @@ def test_post_chat_through_a_config_built_claude_engine(stub):
         {"store": {"path": ":memory:"}, "brain": {"llm": {"engine": "claude", "base_url": stub["url"], "retries": 0}}}
     )
     app = create_app(cfg, ManualClock(), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         r = c.post("/chat", json={"text": "Która godzina?"})
         assert r.status_code == 200 and r.json()["text"] == "Jest południe."
         assert r.json()["model"] == "claude-opus-5-5" and r.json()["usage"] == {"input_tokens": 120, "output_tokens": 9}
@@ -378,6 +377,6 @@ def test_missing_key_gives_a_clear_http_error(stub, monkeypatch):
     cfg = Config.model_validate(
         {"store": {"path": ":memory:"}, "brain": {"llm": {"engine": "claude", "base_url": stub["url"]}}}
     )
-    with TestClient(create_app(cfg, ManualClock(), run_tick_loop=False)) as c:
+    with local_client(create_app(cfg, ManualClock(), run_tick_loop=False)) as c:
         r = c.post("/chat", json={"text": "Cześć"})
     assert r.status_code == 502 and "ANTHROPIC_API_KEY" in r.json()["detail"]

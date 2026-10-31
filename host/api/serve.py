@@ -18,7 +18,7 @@ from collections.abc import Iterator
 
 import uvicorn
 
-from host.api.auth import AuthConfigError
+from host.api.auth import AuthConfigError, is_loopback_host, token_from_env
 
 log = logging.getLogger("host.api.serve")
 
@@ -83,6 +83,15 @@ async def serve(args: argparse.Namespace) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    try:
+        token = token_from_env()
+    except AuthConfigError as e:
+        print(e, file=sys.stderr)
+        return 2
+    if token is None and not is_loopback_host(args.host):
+        # Bez tokenu host odrzuca połączenia z innych komputerów, więc taki start byłby pomyłką (spec, sekcja 10).
+        print(f"--host {args.host} wymaga IRIS_TOKEN; bez tokenu host działa tylko na 127.0.0.1", file=sys.stderr)
+        return 2
     logging.basicConfig(level=args.log_level.upper(), format="%(asctime)s %(name)s %(message)s")
     try:
         asyncio.run(serve(args))

@@ -1,13 +1,13 @@
 """CORS dla klienta z innego adresu (docs/spec.md, sekcja 10)."""
 
 import pytest
-from fastapi.testclient import TestClient
 from pydantic import ValidationError
 
 from host.api.main import create_app
 from host.core.clock import ManualClock
 from host.core.config import Config
 from host.store import Store
+from host.tests.helpers import local_client
 
 SITE = "https://iris-asystent.vercel.app"
 TOKEN = "cors_Token-1234567890abcd"
@@ -17,7 +17,7 @@ def client(origins, token=TOKEN):
     clock = ManualClock()
     app = create_app(Config.model_validate({"api": {"cors_origins": origins}}), clock=clock,
                      store=Store(clock=clock), run_tick_loop=False, token=token)
-    return TestClient(app)
+    return local_client(app)
 
 
 def test_preflight_from_a_listed_origin_is_allowed():

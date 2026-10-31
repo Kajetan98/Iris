@@ -74,7 +74,7 @@ def create_app(
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         if token is None:
-            log.warning("brak IRIS_TOKEN: API i /ws bez uwierzytelniania, nasłuchuj tylko na 127.0.0.1")
+            log.warning("brak IRIS_TOKEN: API i /ws bez uwierzytelniania, tylko dla połączeń z tego komputera")
         cfg = config
         clk = clock or SystemClock()
         owned_store = store is None
@@ -122,6 +122,7 @@ def create_app(
 
     app = FastAPI(title="IRIS host", lifespan=lifespan)
     app.state.token = token
+    app.state.allowed_origins = tuple(config.api.cors_origins)  # Origin dopuszczony bez tokenu (spec, sekcja 1)
     if config.api.cors_origins:
         # Klient z innego adresu (np. Vercel); token nadal obowiązuje, ciasteczek nie ma (spec, sekcja 10).
         app.add_middleware(

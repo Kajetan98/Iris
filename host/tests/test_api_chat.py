@@ -7,7 +7,6 @@ import sys
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
 from host.api.main import create_app
 from host.api.service import ChatDisabled, ChatError, HostService
@@ -16,7 +15,7 @@ from host.core.clock import ManualClock
 from host.core.config import Config, LLMConfig
 from host.store import Store
 from host.tests.brain_helpers import ScriptedEngine
-from host.tests.helpers import heartbeat, make_event
+from host.tests.helpers import heartbeat, make_event, local_client
 
 LLM_CFG = LLMConfig.model_validate({"engine": "ollama", "model": "m"})
 
@@ -237,7 +236,7 @@ def chat_client():
     clock = ManualClock()
     engine = ScriptedEngine(["Pierwsza.", "Druga."])
     app = create_app(Config(), clock, Store(clock=clock), Assistant(engine, LLM_CFG), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         c.engine = engine
         yield c
 
@@ -270,7 +269,7 @@ def test_post_chat_accepts_max_length(chat_client):
 
 def test_post_chat_501_when_llm_disabled():
     app = create_app(Config(), ManualClock(), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         r = c.post("/chat", json={"text": "Cześć"})
     assert r.status_code == 501 and "wyłączony" in r.json()["detail"]
 
@@ -287,7 +286,7 @@ def test_post_chat_501_when_llm_disabled():
 def test_post_chat_error_statuses(error, status):
     clock = ManualClock()
     app = create_app(Config(), clock, Store(clock=clock), Assistant(ScriptedEngine([error]), LLM_CFG), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         r = c.post("/chat", json={"text": "q"})
     assert r.status_code == status and "silnik LLM" in r.json()["detail"]
 
@@ -303,7 +302,7 @@ def test_app_builds_and_closes_assistant_from_config(monkeypatch):
     monkeypatch.setattr("host.brain.build_assistant", fake_build)
     cfg = Config.model_validate({"brain": {"llm": {"engine": "ollama", "model": "bielik"}}})
     app = create_app(cfg, ManualClock(), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         assert c.post("/chat", json={"text": "q"}).json()["text"] == "Z konfiguracji."
     assert built[0].model == "bielik" and engine.closed
 
@@ -312,7 +311,7 @@ def test_injected_assistant_is_not_closed_by_the_app():
     clock = ManualClock()
     engine = ScriptedEngine()
     app = create_app(Config(), clock, Store(clock=clock), Assistant(engine, LLM_CFG), run_tick_loop=False)
-    with TestClient(app):
+    with local_client(app):
         pass
     assert not engine.closed
 
@@ -325,7 +324,7 @@ def test_disabled_llm_never_loads_brain_modules():
         "from host.core.config import Config\n"
         "from host.store import Store\n"
         "app = create_app(Config.model_validate({'store': {'path': ':memory:'}}), run_tick_loop=False)\n"
-        "with TestClient(app) as c:\n"
+        "with TestClient(app, base_url='http://127.0.0.1:8000', client=('127.0.0.1', 50000)) as c:\n"
         "    assert c.post('/chat', json={'text': 'Cześć'}).status_code == 501\n"
         "loaded = sorted(m for m in sys.modules if m.startswith('host.brain'))\n"
         "assert not loaded, loaded\n"

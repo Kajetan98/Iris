@@ -6,7 +6,6 @@ import logging
 import struct
 
 import pytest
-from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from host.api.main import create_app
@@ -17,6 +16,7 @@ from host.core.config import Config
 from host.store import Store
 from host.tests.audio_helpers import opus_packets
 from host.tests.brain_helpers import ScriptedEngine
+from host.tests.helpers import local_client
 from host.tests.test_api_service import FakeWS, frame, hb, settle
 from host.tests.test_api_voice import LLM_CFG, say, until
 from host.tests.test_brain_voice import FakeSTT, FakeTTS
@@ -287,7 +287,7 @@ def test_reply_is_dropped_when_device_switches_during_the_turn(caplog):
 def client():
     clock = ManualClock()
     app = create_app(Config(), clock=clock, store=Store(clock=clock), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         yield c
 
 

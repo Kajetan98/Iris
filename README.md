@@ -53,7 +53,7 @@ Aplikacja ma stały adres, niezależny od hosta: **https://iris-asystent.vercel.
 
 Przeglądarka daje mikrofon tylko przez HTTPS, więc host też potrzebuje adresu HTTPS. Najprościej przez tunel: host działa na `127.0.0.1:8000`, a tunel wystawia go pod adresem https.
 
-Przy tunelu ustaw `IRIS_TOKEN`. Bez tokenu host odrzuca połączenia z nagłówkami dodawanymi przez proxy i tunele (spec, sekcja 1).
+Przy tunelu ustaw `IRIS_TOKEN`. Bez tokenu host przyjmuje tylko połączenia z tego samego komputera: odrzuca nagłówki dodawane przez proxy i tunele, połączenia z innych adresów, obcy nagłówek `Host` (DNS rebinding) i żądania otwarte przez obce strony w przeglądarce (spec, sekcje 1 i 10). `python -m host.api.serve --host 0.0.0.0` bez tokenu nie wystartuje.
 
 ### Tailscale (stały adres, dostęp tylko z Twoich urządzeń)
 

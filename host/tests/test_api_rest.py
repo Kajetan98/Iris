@@ -3,13 +3,13 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 
 import pytest
-from fastapi.testclient import TestClient
 from starlette.websockets import WebSocketDisconnect
 
 from host.api.main import create_app
 from host.core.clock import ManualClock
 from host.core.config import Config
 from host.store import Store
+from host.tests.helpers import local_client
 
 
 def frame(type_, body, t="event", id_="1", ts=500):
@@ -39,7 +39,7 @@ def clock():
 def client(clock):
     cfg = Config.model_validate({"api": {"ack_timeout_s": 0.3}})
     app = create_app(cfg, clock, Store(clock=clock), run_tick_loop=False)
-    with TestClient(app) as c:
+    with local_client(app) as c:
         yield c
 
 
@@ -280,7 +280,7 @@ def test_action_ack_timeout_is_504(client):
 def test_shutdown_closes_the_session(clock):
     store = Store(clock=clock)
     app = create_app(Config(), clock, store, run_tick_loop=False)
-    with TestClient(app):
+    with local_client(app):
         pass
     assert store.sessions()[0].ended_at is not None
     assert [e.type for e in store.events()][-1] == "host.stop"
