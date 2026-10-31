@@ -113,7 +113,14 @@ Przy silniku Claude wychodzi z telefonu: wypowiedź, kilka ostatnich wymian i cz
 
 Wymagania i ograniczenia: Android 8.0 lub nowszy, polski głos w systemie do czytania odpowiedzi (bez niego są tylko napisy). Fala podczas mowy porusza się według stałego wzoru, bo synteza systemowa nie udostępnia dźwięku. Aplikacja nie była uruchamiana na prawdziwym telefonie przez autora kodu: pierwsza wersja może wymagać poprawek.
 
-Podpis: klucz debug jest publiczny, więc po dodaniu w ustawieniach repozytorium sekretów `IRIS_RELEASE_KEYSTORE` i `IRIS_RELEASE_PASSWORD` CI podpisuje APK też kluczem prywatnym, z rotacją klucza (Android 9+ instaluje taką wersję na starą bez utraty danych). Instrukcja tworzenia klucza i zasady: [docs/spec.md](docs/spec.md), sekcja 14, "Podpis". Kopię pliku klucza i hasła trzymaj poza repozytorium; bez nich kolejnych wersji nie da się zainstalować na starą.
+Podpis: klucz debug jest publiczny, więc po dodaniu w ustawieniach repozytorium sekretów `IRIS_RELEASE_KEYSTORE` i `IRIS_RELEASE_PASSWORD` CI podpisuje APK też kluczem prywatnym, z rotacją klucza (Android 9+ instaluje taką wersję na starą bez utraty danych). Zasady: [docs/spec.md](docs/spec.md), sekcja 14, "Podpis". Klucz tworzy się raz, na własnym komputerze:
+
+1. `keytool` jest w każdym JDK (np. Eclipse Temurin) i w Android Studio (`jbr\bin\keytool.exe`).
+2. `keytool -genkeypair -v -keystore iris-release.jks -storetype PKCS12 -alias iris -keyalg RSA -keysize 4096 -validity 10000 -dname "CN=IRIS"` (program pyta o hasło).
+3. Zawartość pliku jako base64 do schowka: w PowerShell `[Convert]::ToBase64String([IO.File]::ReadAllBytes("$PWD\iris-release.jks")) | Set-Clipboard`, w Linuksie `base64 -w0 iris-release.jks`.
+4. GitHub, repozytorium: Settings, Secrets and variables, Actions, New repository secret: `IRIS_RELEASE_KEYSTORE` (wklejony base64) i `IRIS_RELEASE_PASSWORD` (hasło).
+
+Kopię pliku `iris-release.jks` i hasła trzymaj poza repozytorium (np. w menedżerze haseł). Bez nich kolejnych wersji nie da się zainstalować na starą.
 
 Budowanie: APK buduje CI (workflow `android`) i publikuje w wydaniu `android-latest`. Plik jest podpisany kluczem debug z repozytorium (`android/app/debug.keystore`), więc każda nowa wersja instaluje się na poprzednią bez utraty faktów. To klucz do testów, nie wydawniczy. Testy rdzenia lokalnie: `cd android && ./gradlew :core:test` (JDK 17). Moduł `app` wymaga Android SDK i bez niego jest pomijany.
 
