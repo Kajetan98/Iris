@@ -22,3 +22,6 @@ public/
 .kotlin/
 local.properties
 *.apk
+# RobotAI: model Gemma (kilka GB, kopiowany ręcznie) i wyniki treningu
+*.litertlm
+RobotAI/models/
