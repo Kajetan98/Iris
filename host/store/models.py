@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any
 
@@ -54,3 +54,26 @@ class Fact:
     session_id: int | None
     reinforced: int = 0  # ile razy wniosek się powtórzył (spec, sekcja 9)
     asked_at: datetime | None = None  # kiedy host ostatnio o niego pytał
+
+
+@dataclass(frozen=True)
+class Concept:
+    """Pojęcie w grafie pamięci (spec, sekcja 9). `strength` to siła w chwili `last_used`."""
+
+    key: str
+    label: str
+    strength: float
+    last_used: datetime
+    hits: int
+    created_at: datetime
+    domains: dict[str, int] = field(default_factory=dict)  # ile razy pojęcie padło w każdej domenie
+
+
+@dataclass(frozen=True)
+class Link:
+    """Połączenie pojęć z jednej wypowiedzi; `a` < `b`."""
+
+    a: str
+    b: str
+    strength: float
+    last_used: datetime

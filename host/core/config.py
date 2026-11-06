@@ -125,6 +125,80 @@ class LearningConfig(_Model):
         return self
 
 
+# Domeny pamięci (spec, sekcja 9): kontekst, w którym pojęcie padło. Kolory z logo IRIS.
+MEMORY_DOMAINS: list[dict] = [
+    {"id": "dom", "name": "Dom", "info": "dom i sterowanie urządzeniami", "rgb": [255, 138, 31]},
+    {"id": "czas", "name": "Czas", "info": "przypomnienia, kalendarz, plany", "rgb": [255, 61, 154]},
+    {"id": "ty", "name": "Ty", "info": "ludzie, upodobania, praca, zajęcia", "rgb": [42, 212, 255]},
+    {"id": "rozmowa", "name": "Rozmowa", "info": "wszystko inne", "rgb": [143, 91, 255]},
+]
+MEMORY_DOMAIN_IDS = [d["id"] for d in MEMORY_DOMAINS]
+DEFAULT_MEMORY_DOMAIN = "rozmowa"
+
+# Rdzenie słów wskazujące domenę (dopasowanie do początku słowa). "rozmowa" nie ma listy: to domena domyślna.
+DOMAIN_WORDS: dict[str, list[str]] = {
+    "dom": [
+        "świat", "swiat", "lamp", "gniazd", "salon", "kuchni", "sypialn", "łazien", "ogrzew", "termostat",
+        "rolet", "zapal", "zgaś", "zgas", "włącz", "wlacz", "wyłącz", "wylacz", "przekaźn", "drzwi",
+        "zamek", "wentyl", "klimaty", "pokój", "pokoj", "przygaś", "jasnoś", "telewiz", "głośnik",
+    ],
+    "czas": [
+        "przypom", "jutro", "dziś", "dzis", "godzin", "minut", "kalendar", "spotkan", "termin", "notat",
+        "plan", "poniedz", "wtor", "środ", "czwart", "piąt", "sobot", "niedziel", "rano", "wieczor",
+        "tydzie", "tygodn", "urodzin", "rocznic", "budzik",
+    ],
+    "ty": [
+        "lubi", "uwielbi", "kocha", "prac", "zawod", "zawód", "rodzin", "żon", "mąż", "męż",
+        "dzieci", "dzieck", "córk", "syn", "brat", "siostr", "przyjaci", "koleg", "koleżank", "pies", "psa",
+        "psem", "kot", "hobby", "imię", "imie", "nazyw", "zainteres", "sport", "muzyk", "książ", "film",
+        "studi", "szkoł", "ulubion",
+    ],
+}
+
+# Słowa pomocnicze pomijane przez heurystykę wyciągania pojęć.
+MEMORY_STOP_WORDS = sorted(set(
+    "oraz albo lub czy ale jest są był była było będzie żeby aby gdy jak który która które tego tych tym "
+    "tej ten ona oni nie się też już tylko bardzo przez pod nad bez dla jako więc bo jestem jesteś mam masz "
+    "mój moja moje twój twoja twoje mnie ciebie także proszę możesz można chcę chciałbym chciałabym "
+    "the and for with from that this".split()
+))
+
+
+class MemoryConfig(_Model):
+    """Pamięć IRIS: graf pojęć (spec, sekcja 9, "Pamięć: graf pojęć")."""
+
+    enabled: bool = True
+    infer: Literal["local_only", "always", "never"] = "local_only"
+    half_life_days: float = Field(14.0, gt=0)
+    initial: float = Field(0.35, gt=0, le=1)
+    gain_concept: float = Field(0.4, gt=0, le=1)
+    gain_link: float = Field(0.3, gt=0, le=1)
+    gain_recall: float = Field(0.15, gt=0, le=1)
+    forget_below: float = Field(0.03, ge=0, lt=1)
+    prune_every_s: float = Field(600.0, gt=0)
+    max_concepts: int = Field(8, ge=1, le=32)
+    recall_k: int = Field(8, ge=1, le=50)
+    queue_size: int = Field(64, ge=1)
+    answer_window_s: float = Field(120.0, gt=0)
+    feedback: bool = True  # pochwała i krytyka ostatniej odpowiedzi zmieniają siłę przypomnianych pojęć
+    feedback_down: float = Field(0.2, gt=0, le=1)
+    sensitive_words: list[str] = SENSITIVE_STEMS
+    domain_words: dict[str, list[str]] = DOMAIN_WORDS
+    stop_words: list[str] = MEMORY_STOP_WORDS
+    stream_keepalive_s: float = Field(30.0, gt=0)
+    stream_min_interval_s: float = Field(0.5, ge=0)
+    stream_max_clients: int = Field(8, ge=1)
+
+    @model_validator(mode="after")
+    def _consistent(self) -> "MemoryConfig":
+        if not self.forget_below < self.initial:
+            raise ValueError("wymagane forget_below < initial (nowe pojęcie nie może od razu zniknąć)")
+        unknown = set(self.domain_words) - (set(MEMORY_DOMAIN_IDS) - {DEFAULT_MEMORY_DOMAIN})
+        if unknown:
+            raise ValueError(f"memory.domain_words: nieznane domeny {sorted(unknown)}")
+        return self
+
+
 class DevicesConfig(_Model):
     max_connected: int = Field(8, ge=1)  # spec, sekcja 1
     # Nazwy urządzeń w komendzie "przełącz na X", np. {"laptop": ["komputer", "laptopa"]}.
@@ -294,6 +368,7 @@ class Config(_Model):
     api: ApiConfig = ApiConfig()
     brain: BrainConfig = BrainConfig()
     learning: LearningConfig = LearningConfig()
+    memory: MemoryConfig = MemoryConfig()
 
     @model_validator(mode="after")
     def _voice_engines_together(self) -> "Config":
