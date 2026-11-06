@@ -108,7 +108,8 @@ def test_after_the_last_round_the_model_gets_no_tools(stub):
     assistant = claude_assistant(stub, max_tool_rounds=2)
     answer = run(assistant.ask("x", state=STATE, tools=FakeTools()))
     assert answer.text == "Koniec." and answer.tool_rounds == 2
-    assert ["tools" in r["body"] for r in stub["requests"]] == [True, True, False]
+    assert ["tools" in r["body"] for r in stub["requests"]] == [True, True, True]
+    assert [r["body"].get("tool_choice") for r in stub["requests"]] == [None, None, {"type": "none"}]
 
 
 def test_tools_disabled_in_config_put_recalled_concepts_into_the_context(stub):

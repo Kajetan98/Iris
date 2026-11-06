@@ -101,7 +101,8 @@ class ClaudeEngine:
             self._client = None
 
     async def complete(
-        self, system: str, messages: Sequence[Message], *, max_tokens: int, tools: Sequence[ToolSpec] = ()
+        self, system: str, messages: Sequence[Message], *, max_tokens: int, tools: Sequence[ToolSpec] = (),
+        allow_calls: bool = True,
     ) -> LLMReply:
         # Tokeny myślenia liczą się do max_tokens, więc odpowiedź dostaje zapas ponad swój limit.
         request: dict[str, Any] = {
@@ -115,6 +116,8 @@ class ClaudeEngine:
             request["tools"] = [
                 {"name": t.name, "description": t.description, "input_schema": t.parameters} for t in tools
             ]
+            if not allow_calls:
+                request["tool_choice"] = {"type": "none"}
         if self._effort != "off":
             request["output_config"] = {"effort": self._effort}
         client = self._get_client()

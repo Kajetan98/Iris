@@ -136,7 +136,9 @@ def parse_llm(raw: str, cfg: MemoryConfig) -> Extraction | None:
     out: list[tuple[str, str]] = []
     seen: set[str] = set()
     for item in data.get("concepts", []):
-        label = re.sub(r"\s+", " ", str(item)).strip()[:MAX_LABEL_CHARS].strip()
+        if not isinstance(item, str):
+            continue
+        label = re.sub(r"\s+", " ", item).strip()[:MAX_LABEL_CHARS].strip()
         key = concept_key(label)
         if not key or key in seen:
             continue

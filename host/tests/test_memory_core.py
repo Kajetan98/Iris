@@ -80,6 +80,11 @@ def test_parse_llm_reply():
     assert len(long.concepts[0][1]) == m.MAX_LABEL_CHARS
 
 
+def test_parse_llm_skips_non_text_items():
+    ext = m.parse_llm('{"concepts": [{"name": "lampa"}, 0.5, "salon"]}', CFG)
+    assert ext.concepts == (("salon", "salon"),)
+
+
 @pytest.mark.parametrize("raw", ["", "brak", "{nie json}", '["lampa"]', '{"concepts": "lampa"}'])
 def test_parse_llm_rejects_bad_replies(raw):
     assert m.parse_llm(raw, CFG) is None

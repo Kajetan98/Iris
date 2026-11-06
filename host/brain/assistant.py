@@ -85,7 +85,9 @@ class Assistant:
             while True:
                 offer = specs if rounds < self.cfg.max_tool_rounds else []
                 try:
-                    reply = await self._complete(messages, offer)
+                    # Po ostatniej rundzie definicje zostają (API wymaga ich przy blokach narzędzi
+                    # w historii), ale silnik dostaje zakaz wywołań.
+                    reply = await self._complete(messages, offer or (specs if rounds else []), final=not offer)
                 except LLMToolsUnsupported:
                     log.info("model nie obsługuje narzędzi, pamięć trafi do bloku kontekstu")
                     self._tools_ok = False
@@ -125,10 +127,10 @@ class Assistant:
             return ()
         return await tools.context(text, remote=remote)
 
-    async def _complete(self, messages: list[Message], tools: Sequence[ToolSpec]) -> LLMReply:
+    async def _complete(self, messages: list[Message], tools: Sequence[ToolSpec], *, final: bool = False) -> LLMReply:
         if tools:
             return await self.engine.complete(  # type: ignore[call-arg]
-                SYSTEM_PROMPT, messages, max_tokens=self.cfg.max_tokens, tools=tools
+                SYSTEM_PROMPT, messages, max_tokens=self.cfg.max_tokens, tools=tools, allow_calls=not final
             )
         return await self.engine.complete(SYSTEM_PROMPT, messages, max_tokens=self.cfg.max_tokens)
 

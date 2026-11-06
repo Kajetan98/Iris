@@ -65,7 +65,8 @@ class OllamaEngine:
             self._client = None
 
     async def complete(
-        self, system: str, messages: Sequence[Message], *, max_tokens: int, tools: Sequence[ToolSpec] = ()
+        self, system: str, messages: Sequence[Message], *, max_tokens: int, tools: Sequence[ToolSpec] = (),
+        allow_calls: bool = True,
     ) -> LLMReply:
         options: dict[str, Any] = {"num_predict": max_tokens}
         if self._temperature is not None:
@@ -79,7 +80,7 @@ class OllamaEngine:
             "stream": False,
             "options": options,
         }
-        if tools:
+        if tools and allow_calls:  # Ollama nie wymaga definicji przy wiadomościach `tool` w historii
             payload["tools"] = [
                 {"type": "function",
                  "function": {"name": t.name, "description": t.description, "parameters": t.parameters}}
