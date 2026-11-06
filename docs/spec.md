@@ -1,5 +1,13 @@
 # IRIS: specyfikacja protokołu i modelu stanu (v0.1, szkic)
 
+## 0. Założenie
+
+IRIS to osobny program: asystent działający na hoście, z własną pamięcią (sekcja 9) i stanem (sekcja 7). Urządzenia (HERMES, przeglądarka, program na komputer, Raspberry Pi) łączą się z nim jako wejście i wyjście: mikrofon, głośnik, napisy, czujniki. Żadne z nich nie jest ciałem IRIS ani IRIS nie jest modelem żadnego z nich; HERMES to jedno z urządzeń, które mogą się połączyć. Aplikacja Android (sekcja 14) to IRIS działający na telefonie bez hosta.
+
+- W protokole zostają historyczne nazwy strony urządzenia: "ciało", `body`, `body.heartbeat`, `body.sensor`. Oznaczają aktywne urządzenie, nie IRIS. Zmiana nazw na łączu wymagałaby nowej wersji `v`.
+- Prompt i odpowiedzi opisują stan urządzenia jako stan urządzenia ("bateria urządzenia hermes: 15%"), a nie jako stan IRIS (sekcja 12).
+- Zdarzenia z czujników urządzeń nie trafiają do pamięci IRIS (sekcja 9). Pamięć uczy się tylko z rozmowy.
+
 ## 1. Transport
 
 - WebSocket, endpoint `/ws?device=<id>`. Jedno połączenie na urządzenie (ciało); urządzeń może być kilka (niżej, "Urządzenia").
@@ -38,9 +46,9 @@ Host serwuje klienta pod `/app/` (pliki publiczne, sekcja 10). Ten sam klient dz
 - `device.caps`: `mic`, `speaker`, `display`, `haptic` (gdy przeglądarka ma wibracje), `battery` (gdy podaje poziom baterii), bez klipów. Napisy (sekcja 6) pokazuje pod falą głosu: rozpoznaną wypowiedź i słowa IRIS odsłaniane w tempie odtwarzania (według liczby znaków, więc w przybliżeniu). `gpio.set` i `haptic` bez wibracji dają `unsupported`, `speak.clip` daje `unknown_clip`. Pozostałe reguły `ack` jak w firmware.
 - Heartbeat bez `link_rssi`. Przeglądarka nie może wysyłać pingów WebSocket, więc zerwane łącze wykrywa dopiero przy błędzie wysyłki albo po pingu hosta. Dlatego strona, która wraca na ekran po co najmniej 20 s w tle, łączy się od nowa: telefon mógł w tym czasie zerwać połączenie bez zdarzenia zamknięcia. Nowe połączenie zastępuje stare (4000).
 - Nazwę urządzenia i token klient trzyma w pamięci przeglądarki (`localStorage`) na tym urządzeniu.
-- Adres hosta: pole "Adres hosta" w ustawieniach. Puste oznacza host, z którego klient został pobrany (ten sam adres). Wypełnione (np. `https://iris.example.ts.net`) kieruje na ten host wszystkie połączenia klienta: `/ws` (`wss://`), `/health` i `/facts`. Adres musi być `https://` (bez ścieżki, zapytania i danych logowania); `http://` jest przyjmowany tylko dla `localhost`, `127.0.0.1` i `[::1]`, a gdy klient sam jest pobrany przez HTTPS, tylko adres `https://`, bo przeglądarka blokuje połączenia niezaszyfrowane ze strony HTTPS. Adres trafia do `localStorage` obok nazwy urządzenia i tokenu.
+- Adres hosta: pole "Adres hosta" w ustawieniach. Puste oznacza host, z którego klient został pobrany (ten sam adres). Wypełnione (np. `https://iris.example.ts.net`) kieruje na ten host wszystkie połączenia klienta: `/ws` (`wss://`), `/health` i `/memory` (także strumień `/memory/stream`). Adres musi być `https://` (bez ścieżki, zapytania i danych logowania); `http://` jest przyjmowany tylko dla `localhost`, `127.0.0.1` i `[::1]`, a gdy klient sam jest pobrany przez HTTPS, tylko adres `https://`, bo przeglądarka blokuje połączenia niezaszyfrowane ze strony HTTPS. Adres trafia do `localStorage` obok nazwy urządzenia i tokenu.
 - Klient to zwykłe pliki statyczne (`host/api/static`) i można go serwować spoza hosta, np. z Vercel, dzięki czemu adres do instalacji jako aplikacja jest stały, niezależnie od adresu tunelu do hosta. Manifest i service worker używają adresów względnych, więc działają pod `/app/` hosta i pod głównym adresem takiej strony. Host odpowiada klientowi z innego adresu tylko przy `api.cors_origins` (sekcja 10).
-- Okno "Co IRIS o mnie wie" pokazuje fakty z `GET /facts` (tekst, "od ciebie" albo przypuszczenie z pewnością w procentach, fakty, które nie trafiają do kontekstu LLM, oznaczone jako jeszcze nieużywane w rozmowie) i usuwa je przez `DELETE /facts/{id}`, z tokenem w nagłówku. Lista nie jest zapisywana w przeglądarce.
+- Widok "Pamięć IRIS" pokazuje graf pojęć jako obracaną kulę: pojęcie to punkt, którego jasność i odległość od środka zależą od siły bieżącej, a kolor od domen (sekcja 9); połączenia to linie. Obok lista najsilniejszych pojęć z siłą i liczbą użyć, legenda domen z liczbą pojęć i pole "Naucz IRIS" (`POST /memory/learn`). Klient pobiera `GET /memory`, a potem słucha `/memory/stream` (te same podprotokoły z tokenem co `/ws`) i odświeża kulę bez przeładowania. Pojęcie można usunąć (`DELETE /memory/concepts/{key}`), a całą pamięć wyczyścić po potwierdzeniu w oknie dialogowym (`DELETE /memory?confirm=true`). Etykiety pojęć trafiają na stronę jako tekst, nigdy jako HTML. Graf nie jest zapisywany w przeglądarce.
 - HTTPS: `python -m host.api.serve` uruchamia host na zwykłym porcie (dla HERMES) i drugim porcie z TLS (dla przeglądarek), z tym samym stanem. Instalacja jako aplikacja wymaga certyfikatu, któremu telefon ufa; z samopodpisanym klient działa w karcie po akceptacji ostrzeżenia.
 
 ### Program na komputer i Raspberry Pi
@@ -81,14 +89,14 @@ Host serwuje klienta pod `/app/` (pliki publiczne, sekcja 10). Ten sam klient dz
 
 ## 4. Zdarzenia hosta (wewnętrzne, widoczne w `/events`)
 
-`link.lost`, `link.restored`, `drive.enter`, `drive.exit`, `host.start`, `host.stop`, `action.sent`, `action.ack`, `device.switch`, `fact.learn`, `fact.confirm`, `fact.forget`, `fact.ask`.
+`link.lost`, `link.restored`, `drive.enter`, `drive.exit`, `host.start`, `host.stop`, `action.sent`, `action.ack`, `device.switch`, `memory.learn`, `memory.forget`, `memory.recall`.
 
 - `device.switch`: `from` (poprzednie aktywne urządzenie albo `null`), `to`, `by` (`first`: pierwsze połączone urządzenie, `rest`, `device`: zdarzenie `device.activate`, `voice`: komenda przełączenia, sekcja 1).
 - Zdarzenia hosta mają w zapisie `device_id` urządzenia, którego dotyczą: `link.*` i `action.*` urządzenia, które je wywołało, `drive.*` (poza `long_silence`) aktywnego urządzenia. Pozostałe mają `null`.
 
 - `action.sent`: `id`, `type`, `body`. Zapisywane po wysłaniu akcji do ciała.
 - `action.ack`: `ref`, `ok`, `err`. Zapisywane po odebraniu `ack` od ciała.
-- `fact.learn`: `id`, `source`, `confidence`, `how` (`told`: polecenie "zapamiętaj", `corrected`: poprawka po "nie, ...", `inferred`: nowy wniosek z rozmowy, `reinforced`: powtórzony wniosek, `praised`: pochwała użytej odpowiedzi, `criticized`: krytyka, pewność obniżona). `fact.confirm`: `id` (odpowiedź "tak" na pytanie IRIS). `fact.forget`: `id` (albo `null` i `count` przy `why: "all"`), `why` (`user`: polecenie "zapomnij" lub `DELETE /facts`, `denied`: odpowiedź "nie", `decay`: zanik, `all`: "zapomnij wszystko" po potwierdzeniu, `criticized`: krytyka obniżyła pewność poniżej `forget_below`). `fact.ask`: `id`. Zdarzenia `fact.*` nie zawierają treści faktu (sekcja 9).
+- `memory.learn`: `how` (`told`: polecenie "zapamiętaj" albo `POST /memory/learn`, `conversation`: nauka z tury rozmowy, `tool`: narzędzie `iris_remember`, `praised`: pochwała, `criticized`: krytyka, `migrated`: migracja faktów z wersji 3), `fresh` i `reinforced` (liczby pojęć), `domain`, `source` (`llm` albo `heuristic`, tylko przy `conversation`). `memory.forget`: `count`, `why` (`user`: polecenie "zapomnij" lub `DELETE /memory/concepts/{key}`, `decay`: zanik, `all`: "zapomnij wszystko" po potwierdzeniu albo `DELETE /memory`, `criticized`: krytyka osłabiła pojęcie poniżej progu). `memory.recall`: `by` (`tool`, `context`, `api`), `count` (liczba zwróconych pojęć). Zdarzenia `memory.*` nie zawierają pojęć ani tekstu wypowiedzi (sekcja 9).
 
 ## 5. Akcje (host → ciało)
 
@@ -165,7 +173,7 @@ Napisy (urządzenia z `display` w `device.caps`, np. przeglądarka):
 
 ## 7. Model stanu na hoście
 
-`body` to stan aktywnego urządzenia, budowany z jego ostatnich zdarzeń:
+`body` to stan aktywnego urządzenia (nie IRIS, sekcja 0), budowany z jego ostatnich zdarzeń:
 ```
 {"batt_pct":71,"link":"ok","rssi":-58,"temp_c":24.1,
  "sensors_ok":["mic","imu","temp","presence"],"sensors_down":["gps"],"last_seen_ms":0}
@@ -183,7 +191,7 @@ Napisy (urządzenia z `display` w `device.caps`, np. przeglądarka):
 ```
 {"name":"IRIS","version":"0.1.0","host":"<nazwa>","mode":"nominal|saving|offline",
  "uptime_s":0,"last_restart":"<ISO 8601>","last_downtime_s":0,
- "drives":["battery_low"],"continuity":{"sessions":0,"known_facts":0},"device":"hermes"}
+ "drives":["battery_low"],"continuity":{"sessions":0,"known_concepts":0},"device":"hermes"}
 ```
 
 `device`: aktywne urządzenie albo `null`.
@@ -230,7 +238,7 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 ## 9. Ciągłość
 
 - Przy starcie host wyznacza `last_downtime_s` jako różnicę między czasem startu a ostatnią aktywnością poprzedniej sesji (`sessions.last_seen_at`). Przy pierwszym uruchomieniu `last_downtime_s` wynosi 0.
-- Zdarzenia i stany zapisywane w SQLite (tabele: `sessions`, `events`, `state_snapshots`, `facts`, `devices`). Wersja schematu w `PRAGMA user_version` (3); baza z nowszą wersją niż obsługiwana nie jest otwierana, starsza jest migrowana przy otwarciu.
+- Zdarzenia i stany zapisywane w SQLite (tabele: `sessions`, `events`, `state_snapshots`, `devices` i tabele pamięci: `concepts`, `concept_domains`, `concept_links`, `memory_meta`). Wersja schematu w `PRAGMA user_version` (4); baza z nowszą wersją niż obsługiwana nie jest otwierana, starsza jest migrowana przy otwarciu.
 - Czas w bazie: UTC, ISO 8601 ze stałą szerokością (`2026-03-01T12:00:00.000+00:00`), co pozwala porównywać go jako tekst. Czas bez strefy jest odrzucany.
 
 `sessions`: `id`, `started_at`, `ended_at` (ustawiane przy czystym zamknięciu), `last_seen_at`. `last_seen_at` odświeża się przy każdym zapisanym zdarzeniu i przez jawne `touch`, więc przerwa jest poprawna także wtedy, gdy nie zapisujemy heartbeatów. Sesja bez aktywności ma `last_seen_at` równe `started_at`.
@@ -243,43 +251,62 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 
 `state_snapshots`: `id`, `session_id`, `at`, `self_json`, `body_json`. Moment zapisu wybiera warstwa api.
 
-`facts`: `id`, `text`, `source` (`stated` lub `inferred`), `confidence` (0 do 1), `created_at`, `updated_at`, `session_id` (sesja, w której fakt powstał), `reinforced` (ile razy wniosek się powtórzył), `asked_at` (kiedy host ostatnio o niego pytał, `null` gdy nigdy). Migracja z wersji 2 dodaje dwie ostatnie kolumny (`0` i `null`).
+`concepts`: `key` (klucz główny), `label`, `strength`, `last_used`, `hits`, `created_at`. `concept_domains`: `key`, `domain`, `count`. `concept_links`: `a`, `b` (klucze pojęć, `a` < `b`), `strength`, `last_used`. `memory_meta`: `k`, `v` (licznik `forgotten`). Usunięcie pojęcia usuwa jego wiersze w `concept_domains` i `concept_links`.
 
-- Fakt `stated` ma domyślnie `confidence` 1. Fakt `inferred` wymaga podania `confidence`.
-- Użytkownik może wyświetlić, poprawić i usunąć fakty. Poprawa tekstu przez użytkownika zmienia `source` na `stated` i `confidence` na 1, chyba że podano inaczej. Usunięcie jest trwałe.
-- `continuity.known_facts` to liczba wierszy w `facts`.
+- Migracja z wersji 3: każdy fakt z tabeli `facts` uczy graf heurystyką (bez filtra danych wrażliwych, bo fakty trafiły tam za zgodą użytkownika albo przez ten filtr; z filtrem liczb), w kolejności i w chwili `updated_at`. Tabela `facts` dostaje nazwę `facts_v3` i nie jest już używana. Usuwa ją "zapomnij wszystko" i `DELETE /memory`.
+- `continuity.known_concepts` to liczba wierszy w `concepts`.
 
-### Uczenie się
+### Pamięć: graf pojęć
 
-IRIS uczy się faktów o użytkowniku jak program, przez zapis w tabeli `facts`; model językowy się nie zmienia. Fakt podany wprost jest pewny (`stated`, `confidence` 1). Wniosek z rozmowy jest przypuszczeniem (`inferred`): zaczyna z niską pewnością, rośnie, gdy się powtarza, maleje, gdy się nie powtarza, a IRIS pyta o niego użytkownika. Reguły są deterministyczne; LLM tylko proponuje wnioski. Wartości początkowe w konfiguracji `learning`; `enabled = false` wyłącza naukę: polecenia pamięci (trafiają wtedy do LLM jak zwykła wypowiedź), wnioski, pytania i zanikanie. Fakty już zapisane zostają.
+IRIS pamięta pojęcia z rozmów w grafie. Węzłem jest pojęcie (np. "lampa", "Burek", "spotkanie"), a krawędź łączy pojęcia, które padły w tej samej wypowiedzi. Pojęcie rośnie przy każdym użyciu i słabnie bez niego, aż zostaje zapomniane. IRIS uczy się jak program, przez zapis w bazie; model językowy się nie zmienia. Reguły są deterministyczne: LLM tylko proponuje pojęcia z wypowiedzi i prosi o przypomnienie (sekcja 12). Wartości początkowe w konfiguracji `memory`; `enabled = false` wyłącza naukę, polecenia pamięci (trafiają wtedy do LLM jak zwykła wypowiedź), narzędzia pamięci i zanik. Zapisane pojęcia zostają. Sekcja `[learning]` z wersji z faktami zatrzymuje start hosta z komunikatem, że zastąpiła ją `[memory]`, a `brain.llm.send_facts` zastępuje `send_memory`.
 
-Polecenia rozpoznaje host przed LLM i bez niego, jak komendę przełączenia (sekcja 1), w mowie i w `POST /chat` (odpowiedź z `model` równym `null`). Kolejność: odpowiedź na otwarte pytanie (niżej), komenda przełączenia, polecenia pamięci, LLM. Wielkość liter, interpunkcja na końcu i słowo "IRIS" na początku nie mają znaczenia:
+Pojęcie:
 
-- "zapamiętaj (, że) X", "zapisz (, że) X", "pamiętaj (, że) X": X (3-300 znaków) trafia do `facts` jako `stated` dosłownie, w słowach użytkownika. Jeśli podobny fakt już jest (podobieństwo niżej), zostaje zastąpiony nowym tekstem. Odpowiedź: `Zapamiętane: "X".` Zdarzenie `fact.learn` z `how: "told"`.
-- "zapomnij (, że | o) X": usuwa najbardziej podobny fakt, jeśli podobieństwo wynosi co najmniej `forget_match` (0,5). Odpowiedź `Zapomniane: "<tekst faktu>".` albo `Nie znam takiej informacji.`
-- "zapomnij wszystko": IRIS pyta `Na pewno usunąć wszystko, co o tobie wiem (N informacji)? Powiedz tak albo nie.` (z odmianą liczebnika) i usuwa wszystkie fakty dopiero po odpowiedzi "tak" (jak przy pytaniu niżej, w ciągu `answer_window_s`). Bez faktów: `Nic o tobie nie wiem, nie ma czego usuwać.`
-- "co o mnie wiesz", "co wiesz o mnie", "czego się o mnie nauczyłaś" (także "nauczyłeś"): najwyżej 5 faktów `stated` (w cudzysłowie) i 3 przypuszczenia o pewności co najmniej `min_inferred_confidence` (z pewnością w procentach), potem liczba pozostałych. Bez faktów: `Jeszcze nic o tobie nie wiem. Możesz powiedzieć: zapamiętaj, że ...`
+- `key`: klucz porównania, czyli słowa pojęcia małymi literami, każde skrócone regułą `stem` (niżej), połączone spacją. Pojęcia o tym samym kluczu to jedno pojęcie ("lampa", "lampę", "lampie": `lamp`).
+- `label`: forma do pokazania, ta z pierwszego zapisu (LLM podaje formę podstawową, heurystyka słowo z wypowiedzi), najwyżej 40 znaków.
+- `strength` (0-1, wartość w chwili `last_used`), `hits` (liczba użyć), `created_at` i liczniki domen: ile razy pojęcie padło w każdej domenie.
 
-Podobieństwo dwóch tekstów to indeks Jaccarda zbiorów rdzeni słów: słowa małymi literami, bez interpunkcji, słów krótszych niż 3 znaki i słów pomocniczych ("mam", "masz", "jest", zaimki), skrócone do 4 pierwszych liter (słowa 3-4-literowe do 3), bo odmiana zmienia końcówki ("pracuję" i "pracujesz", "kawa" i "kawę"). Liczby porównywane są w całości.
+Domeny to kontekst, w którym pojęcie padło (kolor w wizualizacji): `dom` (dom i sterowanie urządzeniami), `czas` (przypomnienia, kalendarz, plany), `ty` (użytkownik: ludzie, upodobania, praca, zajęcia), `rozmowa` (wszystko inne). Heurystyka wybiera domenę z największą liczbą słów zaczynających się od rdzeni z `memory.domain_words`; bez trafień `rozmowa`.
 
-Wnioski z rozmowy (`infer`: `local_only`, wartość początkowa, tylko przy silniku lokalnym; `always`; `never`):
+Siła (`h` = `half_life_days`, 14 dni):
 
-- Po każdej turze rozmowy z LLM (nie po poleceniach) host w tle wysyła do tego samego silnika osobne zapytanie: prompt wyciągania faktów i sama wypowiedź użytkownika, bez historii, stanu i znanych faktów. Silnik zwraca listę JSON `[{"fakt": "...", "pewnosc": 0.0-1.0}]` ze zdaniami w drugiej osobie ("Masz psa o imieniu Burek."). Błąd silnika albo niepoprawna odpowiedź są logowane bez treści i pomijane; tura rozmowy na nie nie czeka.
-- Host bierze najwyżej `max_per_turn` (3) wniosków o długości 3-300 znaków. Odrzuca wnioski o pewności poniżej `forget_below` (silnik sam nie jest ich pewien) i wnioski z danymi wrażliwymi: tekst zawiera jeden z rdzeni `sensitive_words` (zdrowie, leki, tętno, położenie i adres, pieniądze, wyznanie, poglądy, orientacja). Takie fakty IRIS zapisuje tylko z polecenia "zapamiętaj".
-- Wniosek podobny (co najmniej `similar` 0,6) do faktu `stated` jest pomijany. Podobny do przypuszczenia wzmacnia je: `confidence` rośnie o `reinforce_step` (0,2), najwyżej do `max_inferred` (0,9), `reinforced` rośnie o 1, `updated_at` się odświeża (`how: "reinforced"`). Nowy wniosek trafia do `facts` jako `inferred` z pewnością podaną przez silnik, ale najwyżej `start_max` (0,45), czyli poniżej progu użycia w kontekście (sekcja 12): pojedyncza obserwacja nie wystarcza, potrzebne jest powtórzenie albo potwierdzenie (`how: "inferred"`).
+- Siła bieżąca: `e = s · 0,5^((teraz − last_used) / h)`. Zapisana `s` zmienia się dopiero przy użyciu.
+- Nowe pojęcie: `s = initial` (0,35), `hits` 1.
+- Ponowne użycie przy nauce: `s = e + (1 − e) · gain_concept` (0,4), `last_used` = teraz, `hits` + 1.
+- Każda para pojęć z jednej nauki dostaje połączenie: nowe ma `s = gain_link` (0,3), istniejące `e + (1 − e) · gain_link`. Połączenie zanika tak samo jak pojęcie.
+- Przypomnienie (niżej) wzmacnia pasujące pojęcia: `e + (1 − e) · gain_recall` (0,15).
+- Zapominanie: przy starcie i co `prune_every_s` (600 s) host usuwa pojęcia i połączenia o sile bieżącej poniżej `forget_below` (0,03). Usunięcie pojęcia usuwa jego połączenia i liczniki domen. Licznik `forgotten` rośnie o liczbę usuniętych pojęć (`memory.forget`, `why: "decay"`).
+- Pojęcie użyte raz (0,35) spada poniżej 0,03 po ok. 50 dniach bez użycia.
 
-Pytania (`ask`, domyślnie włączone; wyłączone także przy `initiative.quiet`):
+Wyciąganie pojęć:
 
-- Po odpowiedzi LLM w turze rozmowy host może dopisać do niej jedno pytanie: ` Czy dobrze rozumiem: <przypuszczenie>?` (pierwsza litera mała, bez kropki na końcu). Wybiera przypuszczenie o pewności co najmniej `ask_min` (0,4), o które nie pytał przez ostatnie `ask_again_days` (7) dni: najwyższa pewność, przy remisie najnowsze. Między pytaniami mija co najmniej `ask_interval_s` (900 s). Host zapisuje `asked_at` i zdarzenie `fact.ask`.
-- Następna wypowiedź w ciągu `answer_window_s` (120 s) to odpowiedź, jeśli zaczyna się od "tak" ("tak", "zgadza się", "dokładnie", "owszem") albo "nie" ("nie", "nieprawda", "nie zgadza się"). "Tak": fakt staje się `stated` z `confidence` 1 (`fact.confirm`), odpowiedź `Dobrze, zapamiętane.` "Nie": fakt jest usuwany (`why: "denied"`); jeśli po "nie" jest dalszy tekst (co najmniej 3 znaki), trafia on do `facts` jako `stated` (`how: "corrected"`, odpowiedź `Dobrze, poprawione: "<tekst>".`), inaczej odpowiedź `Dobrze, usuwam to przypuszczenie.` Inna wypowiedź zamyka pytanie bez zmiany faktu i trafia do zwykłej obsługi.
+- Heurystyka (bez LLM): słowa z liter (słowo z cyfrą jest pomijane). Pomijane są słowa krótsze niż 3 litery i słowa pomocnicze (`memory.stop_words`). Skrót (co najmniej 2 litery, wszystkie wielkie) zostaje w oryginalnej pisowni, inne słowa małymi literami. Najwyżej `max_concepts` (8) pojęć z jednego tekstu, w kolejności wystąpienia, bez powtórzeń klucza. `stem(w)`: słowo małymi literami; ze słowa dłuższego niż 4 litery usuwana jest pierwsza pasująca końcówka z listy `owie, ami, ach, ego, emu, ymi, imi, ów, om, iu, ia, ie, ią, ię, ą, ę, y, i, a, e, u, o`, jeśli zostają co najmniej 4 litery.
+- LLM: osobne zapytanie (sekcja 12) z promptem wyciągania i samą wypowiedzią użytkownika. Odpowiedź: `{"domain": "dom|czas|ty|rozmowa", "concepts": ["...", ...]}`, do 8 rzeczowników, nazw lub czasowników w formie podstawowej. Niepoprawna odpowiedź albo błąd silnika: heurystyka. Pojęcie dłuższe niż 40 znaków jest ucinane, a nieznana domena to `rozmowa`.
+- Filtr, dla obu sposobów: pojęcie z cyfrą jest odrzucane, więc graf nie trzyma liczb (wartości z czujników, numery, adresy). Pojęcie ze słowem zaczynającym się od rdzenia z `sensitive_words` (zdrowie, leki, tętno, położenie i adres, pieniądze, wyznanie, poglądy, orientacja) jest odrzucane, chyba że pochodzi z polecenia "zapamiętaj".
 
-Reakcje użytkownika (`feedback`, domyślnie włączone): pochwała lub krytyka ostatniej odpowiedzi jest sygnałem nagrody, który deterministycznie zmienia pewność przypuszczeń użytych w tej odpowiedzi. Host rozpoznaje reakcję przed LLM i bez niego, kolejność po poleceniach pamięci (wyżej).
+Nauka z rozmowy (`infer`: `local_only`, wartość początkowa, czyli LLM tylko przy silniku lokalnym, inaczej heurystyka; `always`: LLM zawsze; `never`: tylko heurystyka):
 
-- Reakcja to cała wypowiedź (po oczyszczeniu: małe litery, bez interpunkcji na końcu, opcjonalnie "iris" na początku), równa jednej z fraz. Pochwała: "dobrze", "świetnie", "dobra odpowiedź", "trafnie", "dokładnie tak", "dzięki", "dziękuję". Krytyka: "źle", "to nie tak", "nie tak", "nie o to pytałem", "nie o to chodziło", "to nieprawda", "mylisz się". Dłuższa wypowiedź z takim słowem na początku ("źle się czuję") to zwykła rozmowa, nie reakcja.
-- Reakcja działa tylko wtedy, gdy do kontekstu ostatniej odpowiedzi LLM trafiły przypuszczenia (`inferred`, sekcja 12). Host zapamiętuje ich identyfikatory po każdej odpowiedzi; bez takich przypuszczeń wypowiedź trafia do LLM jak zwykła. Reakcja dotyczy tylko ostatniej odpowiedzi i zużywa tę listę (druga pochwała pod rząd nic nie zmienia). Fakty `stated` się nie zmieniają.
-- Pochwała: pewność każdego z użytych przypuszczeń rośnie o `feedback_up` (0,1), najwyżej do `max_inferred`, `reinforced` rośnie o 1 (`fact.learn` z `how: "praised"`), odpowiedź `Dobrze, zapisuję, że to było trafne.` Krytyka: pewność maleje o `feedback_down` (0,2); poniżej `forget_below` przypuszczenie jest usuwane (`fact.forget` z `why: "criticized"`), inaczej `fact.learn` z `how: "criticized"`; odpowiedź `Dobrze, osłabiam przypuszczenia użyte w tej odpowiedzi.` Treść faktów nie trafia do odpowiedzi ani zdarzeń.
+- Po każdej turze rozmowy z LLM (mowa i `POST /chat`; nie po poleceniach, reakcjach i komendach) host w tle wyciąga pojęcia z wypowiedzi użytkownika i uczy graf w wybranej domenie (`memory.learn`, `how: "conversation"`). Tura na to nie czeka: odpowiedź jest wysyłana i odtwarzana tak samo jak bez pamięci. Kolejka nauki ma `queue_size` (64) miejsc; nadmiar jest pomijany z wpisem w logu bez treści.
+- Wypowiedź ze słowem zaczynającym się od rdzenia z `sensitive_words` nie uczy grafu wcale: bez wyciągania i bez zapytania do LLM. Dzięki temu po "mieszkam na ulicy Polnej" nie zostaje "Polna".
+- Odpowiedź IRIS nie uczy grafu: pojęcia pochodzą tylko z wypowiedzi użytkownika.
+- Zdarzenia z urządzeń (czujniki, bateria, łącze) nie uczą grafu (sekcja 0).
 
-Zanikanie: raz na dobę i przy starcie host zmniejsza o `decay_step` (0,1) pewność przypuszczeń, które nie zmieniły się przez `decay_after_days` (30) dni (`updated_at` też się odświeża), i usuwa przypuszczenia poniżej `forget_below` (0,2) (`why: "decay"`). Fakty `stated` nie zanikają.
+Przypomnienie: heurystyka wyciąga klucze z zapytania (bez filtra). Wynik to pojęcia o tych kluczach (`via: "match"`, wynik równy sile bieżącej) i ich sąsiedzi (`via: "link"`, wynik równy sile bieżącej połączenia razy sile bieżącej sąsiada; z kilku połączeń liczy się najmocniejsze, a pojęcie pasujące nie staje się sąsiadem), malejąco po wyniku, najwyżej `recall_k` (8). Pasujące pojęcia są wzmacniane (`gain_recall`), sąsiedzi nie. Zdarzenie `memory.recall` z liczbą wyników.
+
+Polecenia rozpoznaje host przed LLM i bez niego, jak komendę przełączenia (sekcja 1), w mowie i w `POST /chat` (odpowiedź z `model` równym `null`). Kolejność: odpowiedź na pytanie z "zapomnij wszystko", komenda przełączenia, polecenia pamięci, reakcje, LLM. Wielkość liter, interpunkcja na końcu i słowo "IRIS" na początku nie mają znaczenia:
+
+- "zapamiętaj (, że) X", "zapisz (, że) X", "pamiętaj (, że) X" (X: 3-300 znaków): heurystyka wyciąga pojęcia z X i uczy graf, bez filtra danych wrażliwych, z filtrem liczb (`how: "told"`). Odpowiedź `Zapamiętane: a, b, c.` (etykiety), a bez pojęć `Nie znalazłem w tym zdaniu niczego do zapamiętania.`
+- "zapomnij (, że | o) X": usuwa pojęcia o kluczach, które heurystyka wyciąga z X (bez filtra). Odpowiedź `Zapomniane: a, b.` albo `Nie pamiętam takiego pojęcia.`
+- "zapomnij wszystko": IRIS pyta `Na pewno usunąć całą pamięć (N pojęć)? Powiedz tak albo nie.` (z odmianą liczebnika). Następna wypowiedź w ciągu `answer_window_s` (120 s) jest odpowiedzią, jeśli zaczyna się od "tak" ("tak", "zgadza się", "dokładnie", "owszem") albo "nie" ("nie", "nieprawda", "nie zgadza się"). "Tak" usuwa wszystkie pojęcia, połączenia i dawne fakty (`facts_v3`, wyżej), odpowiedź `Pamięć wyczyszczona.` "Nie": `Dobrze, niczego nie usuwam.` Inna wypowiedź zamyka pytanie i trafia do zwykłej obsługi. Pusta pamięć: `Nic nie pamiętam, nie ma czego usuwać.`
+- "co o mnie wiesz", "co wiesz o mnie", "czego się o mnie nauczyłaś" (także "nauczyłeś"), "co pamiętasz": najwyżej 8 pojęć o największej sile bieżącej: `Najmocniej kojarzę: a, b, c. Razem pamiętam N pojęć.` Pusta pamięć: `Jeszcze nic nie pamiętam. Możesz powiedzieć: zapamiętaj, że ...`
+
+Reakcje użytkownika (`feedback`, domyślnie włączone): pochwała lub krytyka ostatniej odpowiedzi to sygnał nagrody, który zmienia siłę pojęć przypomnianych do tej odpowiedzi (narzędziem `iris_recall` albo w bloku kontekstu, sekcja 12). Host rozpoznaje reakcję przed LLM i bez niego.
+
+- Reakcja to cała wypowiedź (po oczyszczeniu: małe litery, bez interpunkcji na końcu, opcjonalnie "iris" na początku), równa jednej z fraz. Pochwała: "dobrze", "świetnie", "dobra odpowiedź", "trafnie", "dokładnie tak", "dzięki", "dziękuję". Krytyka: "źle", "to nie tak", "nie tak", "nie o to pytałem", "nie o to chodziło", "to nieprawda", "mylisz się". Dłuższa wypowiedź z takim słowem na początku ("źle się czuję") to zwykła rozmowa.
+- Reakcja działa tylko wtedy, gdy do ostatniej odpowiedzi LLM przypomniano pojęcia; inaczej wypowiedź trafia do LLM jak zwykła. Reakcja dotyczy tylko ostatniej odpowiedzi i zużywa listę.
+- Pochwała: każde z tych pojęć jest wzmacniane jak przy przypomnieniu (`memory.learn`, `how: "praised"`), odpowiedź `Dobrze, wzmacniam pojęcia użyte w tej odpowiedzi.` Krytyka: siła bieżąca każdego z nich jest mnożona przez `1 − feedback_down` (0,2); poniżej `forget_below` pojęcie jest usuwane (`memory.forget`, `why: "criticized"`), inaczej `memory.learn` z `how: "criticized"`. Odpowiedź `Dobrze, osłabiam pojęcia użyte w tej odpowiedzi.`
+
+Treść pamięci (pojęcia) jest tylko w tabelach grafu, nigdy w zdarzeniach ani logach.
 
 Co host zapisuje (wartości początkowe w konfiguracji `api`):
 
@@ -304,7 +331,8 @@ Gdy host ma token (sekcja 1), każde żądanie wymaga nagłówka `Authorization:
 | `GET /devices` | urządzenia i aktywne urządzenie |
 | `POST /devices/{id}/activate` | przełączenie aktywnego urządzenia |
 | `POST /chat` | wypowiedź tekstowa do asystenta (wymaga włączonego LLM) |
-| `GET /facts`, `PATCH /facts/{id}`, `DELETE /facts/{id}` | pamięć o użytkowniku |
+| `GET /memory`, `POST /memory/learn`, `POST /memory/recall`, `DELETE /memory/concepts/{key}`, `DELETE /memory` | pamięć IRIS (graf pojęć, sekcja 9) |
+| `WS /memory/stream` | zmiany pamięci na żywo |
 | `GET /health` | stan hosta i łącza |
 | `GET /app/` | klient w przeglądarce (publiczny; `/` przekierowuje tutaj) |
 
@@ -313,9 +341,13 @@ Gdy host ma token (sekcja 1), każde żądanie wymaga nagłówka `Authorization:
 - `GET /events`: `{"events": [{id, session_id, at, source, type, ts_ms, boot_id, device, data}]}` rosnąco po `id`. `type` można powtórzyć, `device` zawęża do jednego urządzenia. `since` jest włączone, `after_id` wyłączone (stronicowanie). `limit` jak wyżej.
 - `POST /actions`: ciało `{"type": "haptic", "body": {"pattern": "warn"}, "wait_ack": true, "device": "laptop"}` (`device` opcjonalne, domyślnie aktywne urządzenie). Odpowiedź 200: `{"id": "h3", "device": "laptop", "ack": {"ref", "ok", "err"}}` (`ack` jest `null`, gdy `wait_ack` ma wartość `false`). 409, gdy urządzenie nie jest połączone albo nie ma aktywnego. 422 dla nieznanego typu lub niepoprawnego `body`. 504, gdy `ack` nie przyszedł w `ack_timeout_s` (2 s); akcja została wtedy wysłana.
 - `POST /chat`: ciało `{"text": "..."}` (1-4000 znaków po obcięciu białych znaków, brak dodatkowych pól). 200: `{"text", "truncated", "model", "usage": {"input_tokens", "output_tokens"}}`. 501, gdy `brain.llm.engine` ma wartość `none`. 503, gdy silnik jest niedostępny (brak połączenia, limit czasu). 502 przy błędzie silnika (zły model, niepoprawna lub pusta odpowiedź). 422 dla niepoprawnego ciała i dla odmowy silnika. Kontekst jak w sekcji 12. Treść rozmowy nie jest zapisywana w bazie ani logowana. Tury są obsługiwane po kolei. Komenda przełączenia (sekcja 1) nie trafia do LLM i działa także przy `engine = "none"`: odpowiedź ma `model` równe `null` i zerowe `usage`.
-- `GET /facts?source=`: `{"facts": [{id, text, source, confidence, reinforced, asked_at, in_context, created_at, updated_at}]}`. `in_context`: czy fakt trafia teraz do kontekstu LLM według `send_facts` i progu `min_inferred_confidence` (sekcja 12), bez limitu `max_facts`; `false`, gdy LLM jest wyłączony.
-- `PATCH /facts/{id}`: ciało z co najmniej jednym polem z `text`, `source`, `confidence`. 200 z faktem, 404 lub 422. Reguły korekty w sekcji 9.
-- `DELETE /facts/{id}`: 204 lub 404. Usunięcie zapisuje zdarzenie `fact.forget` z `why: "user"`.
+- `GET /memory`: `{"now", "params": {"half_life_days", "gain_concept", "gain_link", "gain_recall", "forget_below"}, "domains": [{id, name, info, rgb}], "nodes": [{key, label, strength, effective, last_used, hits, contexts}], "links": [{a, b, strength, effective, last_used}], "forgotten"}`. `effective` to siła bieżąca w chwili `now`, `contexts` to liczniki domen (`{"dom": 3}`), czasy w ISO 8601. Odczyt nie wzmacnia pojęć.
+- `POST /memory/learn`: ciało `{"text": "...", "domain": "dom|czas|ty|rozmowa"}` (`text` 1-500 znaków, `domain` opcjonalne; bez niego domenę wybiera heurystyka). Uczy graf jak polecenie "zapamiętaj" (heurystyka, filtr liczb, bez filtra danych wrażliwych, `how: "told"`). 200: `{"fresh": [etykiety], "reinforced": [etykiety], "domain"}`. 422 dla niepoprawnego ciała. Działa także przy `brain.llm.engine = "none"`.
+- `POST /memory/recall`: ciało `{"query": "...", "k": 8}` (`query` 1-500 znaków, `k` 1-50). 200: `{"results": [{key, label, score, via}]}` według reguł przypomnienia (sekcja 9), z wzmocnieniem pasujących pojęć i zdarzeniem `memory.recall` z `by: "api"`.
+- `DELETE /memory/concepts/{key}`: 204 albo 404 (klucz w adresie zakodowany procentowo). Zdarzenie `memory.forget` z `why: "user"` i `count` 1.
+- `DELETE /memory?confirm=true`: usuwa wszystkie pojęcia, połączenia i `facts_v3`, 204. Bez `confirm=true` 422. Zdarzenie `memory.forget` z `why: "all"`.
+- `WS /memory/stream`: uwierzytelnianie i odmowy jak `/ws` (sekcja 1: podprotokoły `iris` i `token.<token>`, kod zamknięcia 4003). Po połączeniu host wysyła ramkę tekstową z treścią jak `GET /memory`, potem kolejną po każdej zmianie pamięci (najwyżej jedną na `stream_min_interval_s`, 0,5 s, z ostatnim stanem) i co `stream_keepalive_s` (30 s), żeby było widać zanik. Ramki od klienta host pomija. Najwyżej `stream_max_clients` (8) połączeń naraz; kolejne host zamyka kodem 4001.
+- Przy `memory.enabled = false` trasy `/memory` działają (odczyt, usuwanie), a `POST /memory/learn` daje 409.
 - `GET /devices`: `{"active": "<id>|null", "devices": [{id, active, connected, link, batt_pct, rssi, caps, first_seen_at, last_seen_at}]}` rosnąco po `id`. `link`, `batt_pct` i `rssi` są `null` dla urządzeń bez stanu w bieżącej sesji, `caps` (body ostatniego `device.caps`) przed pierwszym `device.caps` w sesji.
 - `POST /devices/{id}/activate`: 200 `{"active": "<id>"}`, także gdy urządzenie już było aktywne (wtedy bez zdarzenia). 404 dla urządzenia, które nigdy się nie połączyło, 422 dla niepoprawnego `id`.
 - `GET /health`: zawsze 200, `{"status": "ok|degraded", "uptime_s", "session_id", "device", "devices_connected", "link": {"state", "connected", "rssi", "last_seen_ms"}, "store": "ok|error", "voice": "disabled|ready|error"}`. `link` dotyczy aktywnego urządzenia (`device`, albo `null`). `status` to `ok` tylko przy `link.state` = `ok`. `connected` oznacza otwarte połączenie WebSocket aktywnego urządzenia.
@@ -334,19 +366,28 @@ LLM jest opcjonalny (`brain.llm.engine = "none"` wyłącza go bez wpływu na res
 
 - promptu systemowego (stały tekst),
 - historii rozmowy: ostatnie `history_turns` par (wypowiedź, odpowiedź), bez kontekstu z minionych tur,
-- bieżącej wypowiedzi użytkownika z doklejonym blokiem kontekstu: czas lokalny, wycinek stanu z sekcji 7 (tryb, aktywne drives, zmiany `body`, przerwa) i fakty.
+- bieżącej wypowiedzi użytkownika z doklejonym blokiem kontekstu: czas lokalny, wycinek stanu z sekcji 7 (tryb, aktywne drives, zmiany `body` aktywnego urządzenia, przerwa) i, gdy model nie dostaje narzędzi pamięci, pojęcia przypomniane do wypowiedzi (niżej).
 
 Reguły:
 
-- Prompt systemowy mówi, że IRIS jest programem, że opisy stanu pochodzą z danych w bloku kontekstu, a nie z odczuwania, i że nie twierdzi on, iż coś czuje lub jest świadomy. Blok kontekstu jest oznaczony jako dane, nie polecenia. Prompt opisuje pamięć tak, jak działa: fakty podane wprost i przypuszczenia z rozmów (sekcja 9); IRIS nie twierdzi, że zapamiętuje całe rozmowy.
+- Prompt systemowy mówi, że IRIS jest programem, że opisy stanu pochodzą z danych w bloku kontekstu, a nie z odczuwania, i że nie twierdzi on, iż coś czuje lub jest świadomy. Stan urządzenia (bateria, łącze, czujniki) opisuje jako stan urządzenia, z jego nazwą, a nie jako własny (sekcja 0). Blok kontekstu jest oznaczony jako dane, nie polecenia. Prompt opisuje pamięć tak, jak działa: pojęcia z rozmów, które rosną przy użyciu i słabną bez niego (sekcja 9), i narzędzia do przypominania; IRIS nie twierdzi, że pamięta całe rozmowy ani zdania.
 - Wycinek stanu nie zawiera odczytów `gps`, `imu` ani `presence` (sekcja 7), więc nie trafiają one do żadnego silnika.
-- Fakty (sekcja 9) trafiają do kontekstu według `send_facts`: `never` (nigdy), `local_only` (tylko do silnika lokalnego, wartość początkowa), `always`. Fakty `inferred` poniżej `min_inferred_confidence` (0,5) są pomijane, pozostałe oznaczane jako przypuszczenie. W kontekście jest najwyżej `max_facts` (30) faktów, najpierw `stated`.
-- Zapytanie o wnioski z rozmowy (sekcja 9, "Uczenie się") to osobne zapytanie z własnym promptem i samą wypowiedzią użytkownika. Przy `infer = "local_only"` nie trafia do silnika zdalnego.
+- Pamięć (sekcja 9) trafia do silnika według `send_memory`: `never` (nigdy), `local_only` (tylko do silnika lokalnego, wartość początkowa), `always`. Pamięć to wyniki `iris_recall` i pojęcia w bloku kontekstu. Gdy `send_memory` nie pozwala, zapytanie nie zawiera ani narzędzia `iris_recall`, ani pojęć.
+- Zapytanie o pojęcia z wypowiedzi (sekcja 9, "Nauka z rozmowy") to osobne zapytanie z własnym promptem i samą wypowiedzią użytkownika, bez historii, stanu i pamięci. Przy `infer = "local_only"` nie trafia do silnika zdalnego (host używa wtedy heurystyki).
+
+Narzędzia pamięci (`brain.llm.tools`, domyślnie `true`, przy włączonej pamięci):
+
+- `iris_recall`, argument `query` (tekst, 1-500 znaków): przypomnienie z sekcji 9 (`memory.recall`, `by: "tool"`). Wynik dla modelu: jeden wiersz na pojęcie, `<etykieta> (siła 0,62, wprost)` albo `(..., powiązane)`, a bez wyników `Nic na ten temat nie pamiętam.` Oferowane tylko, gdy pozwala `send_memory`.
+- `iris_remember`, argumenty `text` (1-300 znaków) i opcjonalnie `domain` (`dom`, `czas`, `ty`, `rozmowa`): nauka z tekstu heurystyką, z filtrem liczb i danych wrażliwych (`memory.learn`, `how: "tool"`). Wynik: `nowe: a, b; wzmocnione: c` albo `Nic do zapamiętania.` Opis narzędzia mówi, żeby używać go tylko na wyraźną prośbę użytkownika, bo rozmowa uczy pamięć sama. Polecenia "zapamiętaj ..." z sekcji 9 host obsługuje sam, przed LLM. Narzędzie zapisuje tylko lokalnie, więc jest oferowane niezależnie od `send_memory`.
+- Pętla: model może wywołać narzędzia w najwyżej `max_tool_rounds` (2) kolejnych zapytaniach; następne zapytanie idzie bez narzędzi, żeby model odpowiedział tekstem. Każda runda to dodatkowe zapytanie do silnika, więc wydłuża czas odpowiedzi. Nieznane narzędzie albo złe argumenty dają wynik z opisem błędu, bez przerywania tury. Do historii rozmowy trafia tylko wypowiedź użytkownika i końcowa odpowiedź; wywołania i wyniki narzędzi nie są zapisywane ani logowane.
+- Gdy narzędzia są wyłączone, silnik ich nie obsługuje albo `send_memory` nie pozwala na `iris_recall`, a pozwala na pamięć w ogóle, host przypomina pojęcia do wypowiedzi użytkownika (`by: "context"`, najwyżej `recall_k`) i dokleja je do bloku kontekstu. Model Ollama bez obsługi narzędzi zwraca błąd 400 z informacją o narzędziach; host powtarza wtedy zapytanie bez nich i do końca sesji nie wysyła narzędzi temu modelowi.
+- Pojęcia przypomniane do odpowiedzi (narzędziem albo w kontekście) host zapamiętuje do reakcji użytkownika (sekcja 9).
+
 - Silnik jest lokalny, gdy jego adres wskazuje na pętlę zwrotną (`localhost`, `127.0.0.1`, `::1`). Każdy inny adres, w tym sieć lokalna, liczy się jako zdalny.
 
 Silnik Claude API (`brain.llm.engine = "claude"`):
 
-- Dane trafiają do chmury Anthropic, więc silnik jest zdalny: fakty obowiązują według `send_facts`, a do żądania trafia dokładnie to, co wymienia ta sekcja (prompt, historia, blok kontekstu, wypowiedź). Odczyty `gps`, `imu` i `presence` nigdy nie opuszczają hosta.
+- Dane trafiają do chmury Anthropic, więc silnik jest zdalny: pamięć obowiązuje według `send_memory`, a do żądania trafia dokładnie to, co wymienia ta sekcja (prompt, historia, blok kontekstu, wypowiedź, definicje i wyniki narzędzi). Narzędzia to pole `tools` żądania; wywołania przychodzą jako bloki `tool_use`, a host odsyła wyniki jako `tool_result` w kolejnej wiadomości użytkownika. Odczyty `gps`, `imu` i `presence` nigdy nie opuszczają hosta.
 - Klucz API pochodzi ze zmiennych środowiskowych SDK (`ANTHROPIC_API_KEY`) i nie jest zapisywany w konfiguracji ani w logach. Brak klucza to błąd konfiguracji silnika. Logger SDK jest ograniczony do poziomu INFO (także przy `ANTHROPIC_LOG=debug`), bo na poziomie DEBUG wypisuje całe żądanie z treścią rozmowy.
 - Model domyślny to `claude-opus-5-5`; można go zmienić w `model`. Żądanie nie zawiera `temperature`, `top_p` ani `top_k` (API od 2026-10-21 je odrzuca), dlatego `temperature` w konfiguracji tego silnika jest błędem.
 - `effort` (domyślnie `low`, wartość `off` pomija parametr) steruje głębokością myślenia i opóźnieniem odpowiedzi. Tokeny myślenia liczą się do limitu odpowiedzi, więc do `max_tokens` dodawany jest zapas `thinking_headroom_tokens` (2000).
@@ -354,6 +395,8 @@ Silnik Claude API (`brain.llm.engine = "claude"`):
 - Ponowienia i limity czasu obsługuje SDK (`retries`, `timeout_s`). Błędy 429, 5xx, przeciążenie, brak połączenia i przekroczony czas to silnik niedostępny. Błędy klucza, uprawnień i nieznanego modelu to błąd konfiguracji silnika, a pozostałe odpowiedzi 4xx to zwykły błąd silnika.
 - Odpowiedź jest czytana na głos, więc z tekstu usuwane są znaczniki markdown i podziały wierszy.
 - Błąd silnika (brak połączenia, limit czasu, odmowa) jest zgłaszany wywołującemu, a historia rozmowy pozostaje bez zmian. Rdzeń, API i baza działają dalej.
+
+Silnik Ollama (`brain.llm.engine = "ollama"`): narzędzia to pole `tools` w `POST /api/chat`; wywołania przychodzą w `message.tool_calls`, a host odsyła wyniki jako wiadomości z rolą `tool` (z `tool_name`).
 
 ## 13. Otwarte kwestie
 
@@ -371,9 +414,9 @@ Silnik Claude API (`brain.llm.engine = "claude"`):
 
 ## 14. Aplikacja Android (tryb bez hosta)
 
-`android/` to osobny program, który rozmawia z użytkownikiem bez hosta: nie używa `/ws`, REST ani protokołu z sekcji 2-6. Dzieli z hostem reguły uczenia się (sekcja 9) i politykę kontekstu LLM (sekcja 12). To wyjątek od zasady, że pełny model `self` istnieje tylko na hoście: aplikacja ma wyłącznie pamięć faktów, bez `body`, potrzeb (drives), urządzeń i zdarzeń. Prompt i kontekst nie opisują stanu ciała.
+`android/` to osobny program, który rozmawia z użytkownikiem bez hosta: nie używa `/ws`, REST ani protokołu z sekcji 2-6. Dzieli z hostem reguły pamięci (sekcja 9) i politykę kontekstu LLM (sekcja 12). To wyjątek od zasady, że pełny model `self` istnieje tylko na hoście: aplikacja ma wyłącznie pamięć (graf pojęć), bez `body`, potrzeb (drives), urządzeń i zdarzeń. Prompt i kontekst nie opisują stanu urządzeń.
 
-Zakres wersji 1: rozmowa głosowa i tekstowa, polecenia pamięci, wnioski z rozmów, pytania, zanikanie, lista faktów z usuwaniem. Poza zakresem: HERMES, przełączanie urządzeń, inicjatywa, tryb ciszy, zapis zdarzeń.
+Zakres: rozmowa głosowa i tekstowa, polecenia pamięci, nauka pojęć z rozmów, zanik, reakcje, narzędzia pamięci przy silniku Claude, lista pojęć z usuwaniem. Poza zakresem: HERMES, przełączanie urządzeń, inicjatywa, tryb ciszy, zapis zdarzeń.
 
 Silniki:
 
@@ -383,44 +426,44 @@ Silniki:
 
 Klucz API:
 
-- Użytkownik wpisuje go w ustawieniach (klucz z Claude Console, `platform.claude.com/settings/keys`; zalecany klucz przypisany do workspace z ustawionym limitem wydatków, bo wtedy identyfikator workspace nie jest potrzebny). Aplikacja zapisuje go zaszyfrowanego kluczem z Android Keystore; klucz nie trafia do logów, kopii zapasowej (`allowBackup=false`) ani do bazy faktów. Aplikacja nie ma własnego serwera ani własnego klucza.
+- Użytkownik wpisuje go w ustawieniach (klucz z Claude Console, `platform.claude.com/settings/keys`; zalecany klucz przypisany do workspace z ustawionym limitem wydatków, bo wtedy identyfikator workspace nie jest potrzebny). Aplikacja zapisuje go zaszyfrowanego kluczem z Android Keystore; klucz nie trafia do logów, kopii zapasowej (`allowBackup=false`) ani do bazy pamięci. Aplikacja nie ma własnego serwera ani własnego klucza.
 - Klucz zapisany w telefonie odczyta ktoś, kto ma dostęp do odblokowanego urządzenia, więc warto użyć klucza z limitem wydatków.
 
 Silnik lokalny. Zamiast Claude API aplikacja może uruchamiać model językowy na telefonie, bez konta, klucza i opłat za tokeny:
 
 - Środowisko: LiteRT-LM (`com.google.ai.edge.litertlm:litertlm-android`, Kotlin API: `Engine`, `Conversation`), procesor (CPU), tylko `arm64-v8a`. Środowisko MediaPipe LLM Inference jest dla Androida oznaczone jako wycofywane, więc nie jest używane.
 - Model to pojedynczy plik `.litertlm`. Aplikacja go nie pobiera: użytkownik wskazuje plik systemowym wyborem plików, a aplikacja kopiuje go do pamięci prywatnej (jeden model naraz, nowy zastępuje stary; można go usunąć w ustawieniach). W ustawieniach zapisana jest tylko nazwa pliku.
-- Silnik jest lokalny (`remote = false`): wypowiedzi, fakty i wnioski z rozmów nie opuszczają telefonu. Przełączniki pamięci z powyższego akapitu działają tak samo, ale ich opisy mówią o tym, że dane zostają na telefonie.
+- Silnik jest lokalny (`remote = false`): wypowiedzi i pamięć nie opuszczają telefonu. LiteRT-LM nie dostaje narzędzi pamięci, więc przypomniane pojęcia trafiają do bloku kontekstu (sekcja 12). Przełączniki pamięci z powyższego akapitu działają tak samo, ale ich opisy mówią o tym, że dane zostają na telefonie.
 - Model ładuje się przy pierwszej rozmowie po wyborze (kilka do kilkudziesięciu sekund); w tym czasie stan to "Przygotowuję odpowiedź". Plik, którego nie da się wczytać (zły format, za mało pamięci), daje błąd konfiguracji z opisem, bez awarii aplikacji.
 - Prompt: `system` jest instrukcją systemową rozmowy, a historia i bieżąca wypowiedź (z blokiem kontekstu) są jedną wiadomością użytkownika w postaci zapisu rozmowy ("Użytkownik: ...", "IRIS: ..."), bo każde wywołanie tworzy nową rozmowę. Zapis jest przycinany od najstarszych tur do 6000 znaków; ostatnia wiadomość zostaje zawsze. Z odpowiedzi usuwane są bloki `<think>...</think>`. Liczba tokenów odpowiedzi nie jest ograniczana przez `max_tokens` (środowisko tego nie udostępnia); odpowiedź kończy model.
-- Model małego rozmiaru (do ok. 2 mld parametrów) odpowiada gorzej niż Claude, zwłaszcza po polsku, i może się mylić w wyciąganiu faktów. Przypuszczenia z rozmów podlegają tym samym regułom pewności i pytaniom (sekcja 9).
+- Model małego rozmiaru (do ok. 2 mld parametrów) odpowiada gorzej niż Claude, zwłaszcza po polsku, i może się mylić w wyciąganiu pojęć. Filtr liczb i danych wrażliwych (sekcja 9) działa tak samo.
 
 Dane opuszczające telefon:
 
-- Do Anthropic (tylko przy silniku Claude): wypowiedź, ostatnie `history_turns` (10) par rozmowy, blok kontekstu (czas lokalny i fakty według ustawień niżej) oraz, przy włączonym uczeniu, osobne zapytanie o wnioski z samą wypowiedzią.
+- Do Anthropic (tylko przy silniku Claude): wypowiedź, ostatnie `history_turns` (10) par rozmowy, blok kontekstu (czas lokalny i pojęcia według ustawień niżej), definicje i wyniki narzędzi pamięci oraz, przy włączonym uczeniu, osobne zapytanie o pojęcia z samą wypowiedzią.
 - Do usługi mowy systemu: nagranie, gdy rozpoznawanie nie działa offline.
 - Do GitHuba: sprawdzenie i pobranie aktualizacji (sekcja "Aktualizacje" wyżej).
 - Do `alphacephei.com`: jednorazowe pobranie modelu hasła wybudzającego, na żądanie (sekcja "Hasło wybudzające" wyżej).
-- Nic innego. Aplikacja nie ma analityki. Rozmowa nie jest zapisywana, historia żyje w pamięci procesu; fakty są w bazie na telefonie i nie trafiają do logów (`logcat`).
+- Nic innego. Aplikacja nie ma analityki. Rozmowa nie jest zapisywana, historia żyje w pamięci procesu; pamięć IRIS jest w bazie na telefonie i nie trafiają do logów (`logcat`).
 
-Ustawienia pamięci. Jedyny silnik jest zdalny, więc domyślne `send_facts = local_only` i `infer = local_only` z hosta oznaczałyby brak faktów w kontekście i brak wniosków. Aplikacja ma dwa przełączniki, domyślnie wyłączone, z opisem, co wychodzi do chmury:
+Ustawienia pamięci. Silnik Claude jest zdalny, więc domyślne `send_memory = local_only` i `infer = local_only` z hosta oznaczałyby brak pamięci w rozmowie i naukę tylko heurystyką. Aplikacja ma dwa przełączniki, domyślnie wyłączone, z opisem, co wychodzi do chmury:
 
-- "Używaj pamięci w rozmowie": `send_facts` równe `never` (wyłączony) albo `always` (włączony).
+- "Używaj pamięci w rozmowie": `send_memory` równe `never` (wyłączony) albo `always` (włączony).
 - "Ucz się z rozmów": `infer` równe `never` albo `always`.
 
-Polecenia pamięci ("zapamiętaj ...", "zapomnij ...", "zapomnij wszystko", "co o mnie wiesz") i odpowiedzi tak/nie działają zawsze, lokalnie, bez modelu. Pozostałe wartości `learning.*` i `brain.llm.*` (progi, `history_turns`, `max_facts`, `min_inferred_confidence` itd.) to wartości początkowe hosta (`host/core/config.py`).
+Polecenia pamięci ("zapamiętaj ...", "zapomnij ...", "zapomnij wszystko", "co o mnie wiesz") i odpowiedź tak/nie działają zawsze, lokalnie, bez modelu. Pozostałe wartości `memory.*` i `brain.llm.*` (progi, `half_life_days`, `history_turns`, `max_tool_rounds` itd.) to wartości początkowe hosta (`host/core/config.py`).
 
-Baza: SQLite w pamięci prywatnej aplikacji. Tabela `facts` jak w sekcji 9, bez `session_id` (nie ma sesji). Czas UTC, ISO 8601 ze stałą szerokością jak w sekcji 9. Identyfikatory rosną i nie są ponownie używane po usunięciu (jak `AUTOINCREMENT`).
+Baza: SQLite w pamięci prywatnej aplikacji. Tabele pamięci jak w sekcji 9. Czas UTC, ISO 8601 ze stałą szerokością jak w sekcji 9. Pierwsze uruchomienie wersji z grafem migruje fakty z tabeli `facts` tak jak migracja z wersji 3 hosta (sekcja 9), a tabela zostaje jako `facts_v3`, którą usuwa "zapomnij wszystko".
 
-Interfejs. Jedna aktywność z trzema ekranami: rozmowa, ustawienia i pamięć ("Co IRIS o mnie wie"). Interfejs jest po polsku, ciemny, a teksty nie sugerują uczuć ani świadomości.
+Interfejs. Jedna aktywność z trzema ekranami: rozmowa, ustawienia i pamięć ("Pamięć IRIS"). Interfejs jest po polsku, ciemny, a teksty nie sugerują uczuć ani świadomości.
 
 - Ekran rozmowy: fala głosu, napis stanu, napisy rozmowy (rozpoznana wypowiedź i odpowiedź), przycisk mówienia i pole do pisania. Stany: w spoczynku ("Dotknij i mów"), słucham, przygotowuję odpowiedź, mówię, brak klucza ("Wpisz klucz API w ustawieniach"). Dotknięcie przycisku zaczyna słuchanie; rozpoznawanie kończy się samo po ciszy albo po ponownym dotknięciu. Odpowiedź jest od razu w napisach w całości i czytana przez syntezę mowy, o ile system ma polski głos.
 - Fala: poziom przy słuchaniu to poziom mikrofonu z `SpeechRecognizer`. `TextToSpeech` nie udostępnia dźwięku, więc przy mówieniu fala porusza się według stałego wzoru (przybliżenie, nie odczyt dźwięku). Kształt i stany jak w kliencie przeglądarkowym (sekcja 1).
 - Komunikaty błędów: brak rozpoznania "Nic nie rozpoznano. Mów bliżej mikrofonu."; brak zgody na mikrofon, brak usługi rozpoznawania i błędy modelu (niedostępny, konfiguracja, odmowa, inny; sekcja 12) z opisem, co zrobić. Napisy rozmowy zostają tylko w pamięci procesu aplikacji.
-- Ustawienia: silnik (Claude API albo model na telefonie); dla Claude klucz API, identyfikator workspace (opcjonalny), model; dla modelu na telefonie wybór i usunięcie pliku modelu; przełączniki pamięci (wyżej), hasło wybudzające (przełącznik, słuchanie w tle, pobranie i usunięcie modelu), "Preferuj rozpoznawanie offline". Pamięć: lista faktów (tekst, "od ciebie" albo przypuszczenie z pewnością w procentach) z usuwaniem pojedynczym.
+- Ustawienia: silnik (Claude API albo model na telefonie); dla Claude klucz API, identyfikator workspace (opcjonalny), model; dla modelu na telefonie wybór i usunięcie pliku modelu; przełączniki pamięci (wyżej), hasło wybudzające (przełącznik, słuchanie w tle, pobranie i usunięcie modelu), "Preferuj rozpoznawanie offline". Pamięć: lista pojęć od najsilniejszych (etykieta, siła bieżąca w procentach, liczba użyć, główna domena) z usuwaniem pojedynczym i liczbą zapomnianych.
 - Mikrofon wymaga zgody `RECORD_AUDIO` prośbą w czasie działania. Aplikacja ma tylko uprawnienie `INTERNET` i `RECORD_AUDIO`.
 
-Prompt systemowy ma ten sam sens co w sekcji 12: IRIS jest programem, nie twierdzi, że coś czuje lub jest świadomy, opisuje pamięć tak, jak działa (fakty podane wprost, przypuszczenia z rozmów, polecenia), nie zmyśla i odpowiada krótko do czytania na głos. Mówi, że działa na telefonie użytkownika, i nie wspomina o ciele, baterii ani łączu. Blok kontekstu zawiera czas lokalny i fakty (sekcja 12), bez linii o stanie.
+Prompt systemowy ma ten sam sens co w sekcji 12: IRIS jest programem, nie twierdzi, że coś czuje lub jest świadomy, opisuje pamięć tak, jak działa (pojęcia z rozmów, zanik, polecenia), nie zmyśla i odpowiada krótko do czytania na głos. Mówi, że działa na telefonie użytkownika, i nie wspomina o ciele, baterii ani łączu. Blok kontekstu zawiera czas lokalny i, bez narzędzi pamięci, przypomniane pojęcia (sekcja 12), bez linii o stanie.
 
 Hasło wybudzające. Zamiast dotykać przycisku, użytkownik mówi "Hej Iris" albo "Irysku", a aplikacja zaczyna słuchać wypowiedzi tak, jak po dotknięciu "Mów":
 
@@ -432,10 +475,10 @@ Hasło wybudzające. Zamiast dotykać przycisku, użytkownik mówi "Hej Iris" al
 - Po wykryciu: nasłuch hasła zwalnia mikrofon, potem aplikacja startuje jak po dotknięciu "Mów" (system pokazuje stan "Słucham"). Wypowiedź należy zacząć po tym, jak aplikacja zacznie słuchać; słowa wypowiedziane tuż po haśle mogą zostać pominięte.
 - Ograniczenia: stały nasłuch zużywa baterię i procesor; mały model myli się, zwłaszcza w hałasie, więc zdarzają się niewykryte i fałszywe wywołania. Skuteczności nie sprawdzano na prawdziwym telefonie.
 
-Eksport faktów. Ekran pamięci ma przycisk "Eksportuj do pliku" (widoczny, gdy są fakty), który zapisuje wszystkie fakty do pliku wybranego przez użytkownika w systemowym oknie "Zapisz jako" (domyślna nazwa `iris-fakty-RRRR-MM-DD.json`):
+Eksport pamięci. Ekran pamięci ma przycisk "Eksportuj do pliku" (widoczny, gdy są pojęcia), który zapisuje całą pamięć do pliku wybranego przez użytkownika w systemowym oknie "Zapisz jako" (domyślna nazwa `iris-pamiec-RRRR-MM-DD.json`):
 
-- Plik to JSON w UTF-8 z wcięciami: `{"format": "iris-facts", "version": 1, "exportedAt": "<ISO 8601>", "facts": [...]}`. Każdy fakt: `text`, `source` (`stated` albo `inferred`), `confidence`, `reinforced`, `createdAt`, `updatedAt`, `askedAt` (null, gdy nie pytano). Czasy w formacie z sekcji 9. Bez `id` (to numery lokalne bazy). Kolejność jak na ekranie pamięci: najpierw fakty podane wprost, potem przypuszczenia od najpewniejszych.
-- Plik jest nieszyfrowany i zawiera treść faktów, więc ekran ostrzega, że to dane osobiste. Aplikacja zapisuje go tylko tam, gdzie wskaże użytkownik, i niczego nie wysyła. Po zapisie ekran pokazuje liczbę zapisanych faktów albo błąd.
+- Plik to JSON w UTF-8 z wcięciami: `{"format": "iris-memory", "version": 1, "exportedAt": "<ISO 8601>", "concepts": [...], "links": [...], "forgotten": N}`. Pojęcie: `key`, `label`, `strength`, `effective` (siła bieżąca w chwili eksportu), `hits`, `lastUsed`, `createdAt`, `contexts` (liczniki domen). Połączenie: `a`, `b`, `strength`, `lastUsed`. Czasy w formacie z sekcji 9. Pojęcia od najsilniejszych.
+- Plik jest nieszyfrowany i zawiera treść pamięci, więc ekran ostrzega, że to dane osobiste. Aplikacja zapisuje go tylko tam, gdzie wskaże użytkownik, i niczego nie wysyła. Po zapisie ekran pokazuje liczbę zapisanych pojęć albo błąd.
 - Wczytywanie z pliku nie jest częścią tej wersji.
 
 Aktualizacje. Aplikacja instaluje nowe wersje sama po jednym potwierdzeniu użytkownika (Android nie pozwala instalować cicho):
@@ -447,12 +490,12 @@ Aktualizacje. Aplikacja instaluje nowe wersje sama po jednym potwierdzeniu użyt
 - Uprawnienie `REQUEST_INSTALL_PACKAGES`. Gdy system nie zezwala jeszcze IRIS na instalowanie aplikacji, aplikacja otwiera jego ustawienie "Instalowanie nieznanych aplikacji" dla IRIS i po powrocie czeka na ponowne dotknięcie "Zainstaluj".
 - Dane i ustawienia przeżywają aktualizację (ten sam podpis i identyfikator aplikacji).
 
-Podpis. Klucz debug (`android/app/debug.keystore`, hasło `android`) jest w publicznym repozytorium, więc każdy może podpisać nim APK, który Android przyjmie jako aktualizację IRIS (z dostępem do bazy faktów i klucza API z Keystore). Dlatego CI podpisuje APK dodatkowo kluczem prywatnym z sekretów repozytorium `IRIS_RELEASE_KEYSTORE` (plik PKCS12 w base64, alias `iris`) i `IRIS_RELEASE_PASSWORD` (hasło magazynu i klucza), z dowodem rotacji klucza (`apksigner rotate`, schemat podpisu v3, `--rotation-min-sdk-version 28`):
+Podpis. Klucz debug (`android/app/debug.keystore`, hasło `android`) jest w publicznym repozytorium, więc każdy może podpisać nim APK, który Android przyjmie jako aktualizację IRIS (z dostępem do bazy pamięci i klucza API z Keystore). Dlatego CI podpisuje APK dodatkowo kluczem prywatnym z sekretów repozytorium `IRIS_RELEASE_KEYSTORE` (plik PKCS12 w base64, alias `iris`) i `IRIS_RELEASE_PASSWORD` (hasło magazynu i klucza), z dowodem rotacji klucza (`apksigner rotate`, schemat podpisu v3, `--rotation-min-sdk-version 28`):
 
 - Android 9+ (API 28) przyjmuje taki plik jako aktualizację wersji podpisanej kluczem debug, bez odinstalowania i utraty danych. Od tej chwili akceptuje tylko pliki z kluczem prywatnym; plik podpisany samym kluczem debug nie zainstaluje się jako aktualizacja.
 - Android 8 (API 26-27) nie zna rotacji i nadal sprawdza tylko podpis debug, więc tam ochrony nie ma.
-- Bez sekretów CI zostawia sam podpis debug i dodaje ostrzeżenie. Po pierwszej instalacji pliku z rotacją sekretów nie wolno usuwać ani zmieniać: kolejne wersje bez nich nie zainstalują się na telefonie. Utrata pliku klucza oznacza, że następną wersję da się zainstalować tylko po odinstalowaniu aplikacji (fakty można wcześniej wyeksportować).
+- Bez sekretów CI zostawia sam podpis debug i dodaje ostrzeżenie. Po pierwszej instalacji pliku z rotacją sekretów nie wolno usuwać ani zmieniać: kolejne wersje bez nich nie zainstalują się na telefonie. Utrata pliku klucza oznacza, że następną wersję da się zainstalować tylko po odinstalowaniu aplikacji (pamięć można wcześniej wyeksportować).
 
-Zgodność z hostem. Reguły z sekcji 9 i 12 muszą dawać w Kotlinie te same wyniki co w Pythonie: polecenia i odpowiedzi, podobieństwo, dane wrażliwe, pytania, "co o mnie wiesz", wnioski, zanikanie, wybór faktów i oczyszczanie odpowiedzi. Plik `android/core/src/test/resources/learning_vectors.json` generuje kod hosta (`python -m host.tests.make_android_vectors`), test w Pythonie sprawdza, że plik jest aktualny, a testy Kotlina odtwarzają każdy przypadek. Zmiana reguły w Pythonie wymaga więc regeneracji pliku i dopasowania Kotlina.
+Zgodność z hostem. Reguły z sekcji 9 i 12 muszą dawać w Kotlinie te same wyniki co w Pythonie: wyciąganie pojęć i filtr, siła, zanik, połączenia, przypomnienie, zapominanie, polecenia i odpowiedź tak/nie, reakcje, "co o mnie wiesz", wybór pamięci do kontekstu i oczyszczanie odpowiedzi. Plik `android/core/src/test/resources/memory_vectors.json` generuje kod hosta (`python -m host.tests.make_android_vectors`), test w Pythonie sprawdza, że plik jest aktualny, a testy Kotlina odtwarzają każdy przypadek. Zmiana reguły w Pythonie wymaga więc regeneracji pliku i dopasowania Kotlina.
 
 Budowanie: Gradle w `android/`, moduł `core` (Kotlin/JVM, bez Androida, testowany na JVM) i moduł `app` (Android). APK buduje CI.

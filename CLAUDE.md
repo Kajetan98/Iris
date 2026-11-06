@@ -1,10 +1,10 @@
 # IRIS
 
-Asystent głosowy po polsku, zbudowany z ciała (HERMES, STM32L476) i hosta (Python). Host utrzymuje model własnego stanu ("self", "body"), który działa bez LLM. LLM jest opcjonalny i wywoływany tylko przy rozmowie.
+Asystent głosowy po polsku. IRIS to osobny program na hoście (Python) z własnym stanem ("self") i pamięcią (graf pojęć), który działa bez LLM. Urządzenia (HERMES na STM32L476, przeglądarka, komputer, Raspberry Pi) łączą się z nim jako wejście i wyjście; żadne nie jest ciałem IRIS (spec, sekcja 0, i `docs/adr/0001-pamiec-jako-graf-pojec.md`). LLM jest opcjonalny i wywoływany tylko przy rozmowie.
 
 ## Cel
 
-- Warstwa stanu (body, self, drives, continuity) działa bez LLM, STT i TTS.
+- Warstwa stanu (stan urządzeń `body`, self, drives, continuity, pamięć) działa bez LLM, STT i TTS.
 - LLM, STT i TTS są w module `host/brain` i można je wyłączyć bez wpływu na resztę.
 - Źródłem prawdy dla protokołu jest `docs/spec.md`. Kod ma być z nim zgodny, a nie odwrotnie.
 
@@ -15,14 +15,16 @@ Asystent głosowy po polsku, zbudowany z ciała (HERMES, STM32L476) i hosta (Pyt
 - Firmware: C (HAL/LL), FreeRTOS do rozważenia po pierwszym działającym prototypie.
 - LLM: adapter z wymiennym silnikiem (Ollama lokalnie, Claude API opcjonalnie).
 - STT: faster-whisper. TTS: Piper (polskie głosy), do zweryfikowania jakości. `piper-tts` ma licencję GPL-3.0-or-later: sprawdź zgodność przed dystrybucją hosta.
-- Pełny model `self` istnieje tylko na hoście. Wyjątek: aplikacja Android bez hosta ma tylko pamięć faktów (spec, sekcja 14).
+- Pełny model `self` istnieje tylko na hoście. Wyjątek: aplikacja Android bez hosta ma tylko pamięć (graf pojęć, spec, sekcja 14).
+- Nazwy `body` i "ciało" w protokole są historyczne i oznaczają aktywne urządzenie. Zdarzenia z czujników nie uczą pamięci.
 - Android: Kotlin, Gradle (`android/`), moduł `core` (czysty Kotlin/JVM, testowany tutaj) i `app` (Android, budowany w CI). Mowa z systemu, model przez Claude API z telefonu (klucz wpisywany w aplikacji) albo lokalny model `.litertlm` przez LiteRT-LM (`android/app`, `LiteRtGenerator`; port `LocalGenerator` w `core`). Hasło wybudzające "Hej Iris" / "Irysku": Vosk offline (`WakeWordListener`, model polski pobierany na żądanie), przy otwartej aplikacji albo w tle (`ListenService`, usługa pierwszoplanowa z mikrofonem).
 
 ## Ograniczenia
 
 - STM32L476: ok. 1 MB flash, 128 KB RAM. Firmware nie parsuje dużych JSON-ów i nie trzyma historii.
 - Dane z HERMES (tętno, lokalizacja) to dane o zdrowiu i położeniu. Do LLM w chmurze trafia tylko wycinek potrzebny do zapytania.
-- IRIS jest programem. Opisy stanu ("bateria ciała 15%") pochodzą z danych, nie z odczuwania. Prompty systemowe nie mogą twierdzić inaczej.
+- IRIS jest programem. Opisy stanu pochodzą z danych, nie z odczuwania, i dotyczą urządzenia ("bateria urządzenia hermes: 15%"), nie IRIS. Prompty systemowe nie mogą twierdzić inaczej.
+- Pamięć nie trzyma liczb (wartości z czujników, numery, adresy). Wypowiedź z danymi wrażliwymi nie uczy pamięci automatycznie (spec, sekcja 9).
 
 ## Zasady pracy
 
