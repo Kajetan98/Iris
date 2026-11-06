@@ -6,20 +6,50 @@ import asyncio
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
-from typing import Literal, Protocol, TypeVar
+from typing import Any, Literal, Protocol, TypeVar
 
 log = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
 Role = Literal["user", "assistant"]
-FinishReason = Literal["stop", "length", "refusal", "other"]
+FinishReason = Literal["stop", "length", "refusal", "tool_use", "other"]
+
+
+@dataclass(frozen=True)
+class ToolSpec:
+    """Narzędzie dla modelu (docs/spec.md, sekcja 12): nazwa, opis i schemat JSON argumentów."""
+
+    name: str
+    description: str
+    parameters: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolCall:
+    id: str
+    name: str
+    arguments: dict[str, Any]
+
+
+@dataclass(frozen=True)
+class ToolResult:
+    call_id: str
+    name: str
+    content: str
+    is_error: bool = False
 
 
 @dataclass(frozen=True)
 class Message:
+    """Wiadomość rozmowy. W rundzie narzędzi asystent ma `tool_calls` (i `raw`: odpowiedź silnika do
+    odesłania bez zmian, np. z blokami myślenia Claude), a następna wiadomość użytkownika `tool_results`."""
+
     role: Role
     content: str
+    tool_calls: tuple[ToolCall, ...] = ()
+    tool_results: tuple[ToolResult, ...] = ()
+    raw: Any = None
 
 
 @dataclass(frozen=True)
@@ -34,6 +64,8 @@ class LLMReply:
     finish: FinishReason
     model: str
     usage: Usage = Usage()
+    tool_calls: tuple[ToolCall, ...] = ()
+    raw: Any = None  # treść odpowiedzi w formacie silnika, do odesłania w tej samej turze
 
 
 class LLMError(Exception):
@@ -52,15 +84,22 @@ class LLMRefusal(LLMError):
     """Silnik odmówił odpowiedzi."""
 
 
+class LLMToolsUnsupported(LLMError):
+    """Model nie obsługuje narzędzi. Zapytanie można powtórzyć bez nich."""
+
+
 class LLMEngine(Protocol):
     @property
     def remote(self) -> bool:
-        """Prawda, gdy dane opuszczają maszynę hosta (decyduje o polityce faktów)."""
+        """Prawda, gdy dane opuszczają maszynę hosta (decyduje o polityce pamięci)."""
         ...
 
     async def complete(
         self, system: str, messages: Sequence[Message], *, max_tokens: int
-    ) -> LLMReply: ...
+    ) -> LLMReply:
+        """Odpowiedź silnika. Silnik z narzędziami ma też `supports_tools = True` i przyjmuje
+        argument `tools: Sequence[ToolSpec]`; bez tego atrybutu host narzędzi nie wysyła."""
+        ...
 
     async def aclose(self) -> None: ...
 

@@ -10,7 +10,9 @@ import json
 from dataclasses import dataclass
 
 from host.brain.llm import LLMEngine, LLMError, Message
+from host.core.config import MemoryConfig
 from host.core.learning import MAX_FACT_CHARS, MIN_FACT_CHARS, fact_text
+from host.core.memory import Extraction, parse_llm
 
 EXTRACT_PROMPT = """\
 Z wypowiedzi użytkownika wypisujesz trwałe fakty o nim samym, które przydadzą się asystentowi głosowemu w kolejnych rozmowach: zainteresowania, zwyczaje, plany, praca, bliskie osoby i zwierzęta, upodobania, jak chce, żeby się do niego zwracać.
@@ -71,4 +73,31 @@ async def infer_facts(engine: LLMEngine, utterance: str, *, limit: int) -> list[
     return parse_guesses(reply.text, limit=limit)
 
 
-__all__ = ["EXTRACT_PROMPT", "Guess", "LLMError", "LearnError", "infer_facts", "parse_guesses"]
+CONCEPTS_PROMPT = """\
+Wyciągasz pojęcia do pamięci asystenta głosowego IRIS z jednej wypowiedzi użytkownika.
+
+Zasady:
+- Do 8 pojęć: rzeczowniki, nazwy własne albo czasowniki niosące treść, w formie podstawowej (mianownik liczby pojedynczej, bezokolicznik), małymi literami poza nazwami własnymi i skrótami.
+- Pomijasz słowa funkcyjne, grzeczności i liczby.
+- Pomijasz zdrowie, leki, położenie i adres, pieniądze, wyznanie, poglądy polityczne i orientację.
+- Domena: dom = dom i sterowanie urządzeniami, czas = przypomnienia, kalendarz, plany, ty = użytkownik i jego bliscy, upodobania, praca, zajęcia, rozmowa = wszystko inne.
+- Odpowiadasz wyłącznie obiektem JSON, bez innego tekstu: {"domain": "dom|czas|ty|rozmowa", "concepts": ["...", "..."]}. Gdy nie ma nic do zapamiętania: {"domain": "rozmowa", "concepts": []}.
+"""
+
+
+async def extract_concepts(engine: LLMEngine, utterance: str, cfg: MemoryConfig) -> Extraction:
+    """Pojęcia z jednej wypowiedzi (spec, sekcja 9). Rzuca LLMError albo LearnError; wtedy host używa
+    heurystyki. Filtr liczb i danych wrażliwych stosuje wywołujący (host/core/memory.keep)."""
+    reply = await engine.complete(CONCEPTS_PROMPT, [Message("user", utterance)], max_tokens=MAX_TOKENS)
+    if reply.finish == "refusal":
+        raise LearnError("silnik odmówił")
+    extraction = parse_llm(reply.text, cfg)
+    if extraction is None:
+        raise LearnError("odpowiedź bez poprawnego obiektu JSON")
+    return extraction
+
+
+__all__ = [
+    "CONCEPTS_PROMPT", "EXTRACT_PROMPT", "Guess", "LLMError", "LearnError", "extract_concepts", "infer_facts",
+    "parse_guesses",
+]

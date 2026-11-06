@@ -70,12 +70,15 @@ MAX_FACT_CHARS = 300
 
 
 def render_user_turn(
-    text: str, state: dict[str, Any], facts: Sequence[Fact], now: datetime | None
+    text: str, state: dict[str, Any], facts: Sequence[Fact], now: datetime | None,
+    memory: Sequence[str] = (),
 ) -> str:
-    return f"{render_context(state, facts, now)}\n{USER_HEADER}\n{text}"
+    return f"{render_context(state, facts, now, memory)}\n{USER_HEADER}\n{text}"
 
 
-def render_context(state: dict[str, Any], facts: Sequence[Fact], now: datetime | None) -> str:
+def render_context(
+    state: dict[str, Any], facts: Sequence[Fact], now: datetime | None, memory: Sequence[str] = ()
+) -> str:
     lines = [CONTEXT_HEADER]
     if now is not None:
         lines.append(f"Czas: {format_time(now)}")
@@ -100,6 +103,9 @@ def render_context(state: dict[str, Any], facts: Sequence[Fact], now: datetime |
     if facts:
         lines.append("Znane fakty o użytkowniku:")
         lines.extend(_fact_line(f) for f in facts)
+    if memory:
+        lines.append("Pamięć IRIS, pojęcia przypomniane do tej wypowiedzi:")
+        lines.extend(f"- {line}" for line in memory)
     return "\n".join(lines)
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
@@ -15,8 +16,11 @@ from host.brain.llm import (
     LLMConfigError,
     LLMError,
     LLMReply,
+    LLMToolsUnsupported,
     LLMUnavailable,
     Message,
+    ToolCall,
+    ToolSpec,
     Usage,
     with_retries,
 )
@@ -28,6 +32,8 @@ MAX_ERROR_TEXT = 200
 
 
 class OllamaEngine:
+    supports_tools = True
+
     def __init__(
         self,
         model: str,
@@ -59,18 +65,26 @@ class OllamaEngine:
             self._client = None
 
     async def complete(
-        self, system: str, messages: Sequence[Message], *, max_tokens: int
+        self, system: str, messages: Sequence[Message], *, max_tokens: int, tools: Sequence[ToolSpec] = ()
     ) -> LLMReply:
         options: dict[str, Any] = {"num_predict": max_tokens}
         if self._temperature is not None:
             options["temperature"] = self._temperature
-        payload = {
+        chat: list[dict[str, Any]] = [{"role": "system", "content": system}]
+        for m in messages:
+            chat.extend(_messages(m))
+        payload: dict[str, Any] = {
             "model": self.model,
-            "messages": [{"role": "system", "content": system}]
-            + [{"role": m.role, "content": m.content} for m in messages],
+            "messages": chat,
             "stream": False,
             "options": options,
         }
+        if tools:
+            payload["tools"] = [
+                {"type": "function",
+                 "function": {"name": t.name, "description": t.description, "parameters": t.parameters}}
+                for t in tools
+            ]
         return await with_retries(
             lambda: self._post(payload), self._retries, sleep=self._sleep
         )
@@ -92,6 +106,8 @@ class OllamaEngine:
             raise LLMConfigError(f"Ollama zwróciła 404 (model {self.model!r} lub endpoint): {_error_text(response)}")
         if status == 429 or status >= 500:
             raise LLMUnavailable(f"Ollama zwróciła {status}: {_error_text(response)}")
+        if status == 400 and "tools" in payload and "support tools" in _error_text(response).lower():
+            raise LLMToolsUnsupported(f"model {self.model!r} nie obsługuje narzędzi")
         if status != 200:
             raise LLMError(f"Ollama zwróciła {status}: {_error_text(response)}")
         return self._parse(response)
@@ -112,12 +128,44 @@ class OllamaEngine:
         finish: FinishReason = (
             "stop" if reason is None else {"stop": "stop", "length": "length"}.get(reason, "other")
         )
+        calls = _tool_calls(message.get("tool_calls"))
+        if calls:
+            finish = "tool_use"
         return LLMReply(
             text=text,
             finish=finish,
             model=str(data.get("model") or self.model),
             usage=Usage(_count(data.get("prompt_eval_count")), _count(data.get("eval_count"))),
+            tool_calls=calls,
         )
+
+
+def _messages(m: Message) -> list[dict[str, Any]]:
+    """Wiadomość w formacie /api/chat: wywołania narzędzi przy asystencie, wyniki jako role `tool`."""
+    if m.tool_results:
+        return [{"role": "tool", "content": r.content, "tool_name": r.name} for r in m.tool_results]
+    out: dict[str, Any] = {"role": m.role, "content": m.content}
+    if m.tool_calls:
+        out["tool_calls"] = [{"function": {"name": c.name, "arguments": c.arguments}} for c in m.tool_calls]
+    return [out]
+
+
+def _tool_calls(raw: Any) -> tuple[ToolCall, ...]:
+    if not isinstance(raw, list):
+        return ()
+    calls = []
+    for i, item in enumerate(raw):
+        fn = item.get("function") if isinstance(item, dict) else None
+        if not isinstance(fn, dict) or not isinstance(fn.get("name"), str):
+            continue
+        args = fn.get("arguments")
+        if isinstance(args, str):  # niektóre wersje zwracają argumenty jako tekst JSON
+            try:
+                args = json.loads(args)
+            except ValueError:
+                args = None
+        calls.append(ToolCall(str(item.get("id") or f"call_{i}"), fn["name"], args if isinstance(args, dict) else {}))
+    return tuple(calls)
 
 
 def _count(value: Any) -> int | None:

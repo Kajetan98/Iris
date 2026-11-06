@@ -260,6 +260,8 @@ class LLMConfig(_Model):
     send_facts: Literal["always", "local_only", "never"] = "local_only"
     max_facts: int = Field(30, ge=0)
     min_inferred_confidence: float = Field(0.5, ge=0, le=1)
+    tools: bool = True  # narzędzia pamięci iris_recall i iris_remember (spec, sekcja 12)
+    max_tool_rounds: int = Field(2, ge=0, le=5)
     # Tylko claude:
     effort: Literal["off", "low", "medium", "high", "xhigh", "max"] = "low"  # off = bez parametru
     thinking_headroom_tokens: int = Field(2000, ge=0)

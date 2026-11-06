@@ -20,6 +20,8 @@ from host.brain.llm import (
     LLMReply,
     LLMUnavailable,
     Message,
+    ToolCall,
+    ToolSpec,
     Usage,
 )
 
@@ -49,10 +51,13 @@ _FINISH: dict[str | None, FinishReason] = {
     "stop_sequence": "stop",
     "max_tokens": "length",
     "refusal": "refusal",
+    "tool_use": "tool_use",
 }
 
 
 class ClaudeEngine:
+    supports_tools = True
+
     def __init__(
         self,
         model: str = "claude-opus-5-5",
@@ -96,15 +101,20 @@ class ClaudeEngine:
             self._client = None
 
     async def complete(
-        self, system: str, messages: Sequence[Message], *, max_tokens: int
+        self, system: str, messages: Sequence[Message], *, max_tokens: int, tools: Sequence[ToolSpec] = ()
     ) -> LLMReply:
         # Tokeny myślenia liczą się do max_tokens, więc odpowiedź dostaje zapas ponad swój limit.
         request: dict[str, Any] = {
             "model": self.model,
             "max_tokens": max_tokens + self._headroom,
             "system": system,
-            "messages": [{"role": m.role, "content": m.content} for m in messages],
+            "messages": [_message_param(m) for m in messages],
         }
+        if tools:
+            # tool_choice zostaje domyślne (auto): wymuszanie narzędzia daje 400 na nowszych modelach.
+            request["tools"] = [
+                {"name": t.name, "description": t.description, "input_schema": t.parameters} for t in tools
+            ]
         if self._effort != "off":
             request["output_config"] = {"effort": self._effort}
         client = self._get_client()
@@ -146,6 +156,11 @@ class ClaudeEngine:
     def _parse(self, response: Any) -> LLMReply:
         finish = _FINISH.get(response.stop_reason, "other")
         text = "".join(b.text for b in response.content if getattr(b, "type", None) == "text")
+        calls = tuple(
+            ToolCall(b.id, b.name, dict(b.input) if isinstance(b.input, dict) else {})
+            for b in response.content
+            if getattr(b, "type", None) == "tool_use"
+        )
         usage = response.usage
         input_tokens = (
             (usage.input_tokens or 0)
@@ -165,7 +180,26 @@ class ClaudeEngine:
             finish=finish,
             model=response.model,
             usage=Usage(input_tokens, usage.output_tokens),
+            tool_calls=calls,
+            # Cała treść (także bloki myślenia) wraca w następnym zapytaniu tej tury bez zmian.
+            raw=list(response.content) if calls else None,
         )
+
+
+def _message_param(m: Message) -> dict[str, Any]:
+    """Wiadomość w formacie Messages API. Odpowiedź z narzędziami jest odsyłana bez zmian (`raw`),
+    a wyniki narzędzi idą jako bloki `tool_result` w jednej wiadomości użytkownika."""
+    if m.role == "assistant" and m.raw is not None:
+        return {"role": "assistant", "content": m.raw}
+    if m.tool_results:
+        return {
+            "role": "user",
+            "content": [
+                {"type": "tool_result", "tool_use_id": r.call_id, "content": r.content, "is_error": r.is_error}
+                for r in m.tool_results
+            ],
+        }
+    return {"role": m.role, "content": m.content}
 
 
 def _message(e: anthropic.APIStatusError) -> str:

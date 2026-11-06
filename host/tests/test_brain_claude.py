@@ -144,7 +144,7 @@ def test_thinking_blocks_are_ignored_and_text_blocks_joined(stub):
 @pytest.mark.parametrize(
     "stop_reason, finish",
     [("end_turn", "stop"), ("stop_sequence", "stop"), ("max_tokens", "length"), ("refusal", "refusal"),
-     ("pause_turn", "other"), ("tool_use", "other")],
+     ("pause_turn", "other"), ("tool_use", "tool_use")],
 )
 def test_stop_reason_mapping(stub, stop_reason, finish):
     stub["script"] = [(200, anthropic_message(stop_reason=stop_reason), {})]
