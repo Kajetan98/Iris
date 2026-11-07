@@ -238,7 +238,7 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 ## 9. Ciągłość
 
 - Przy starcie host wyznacza `last_downtime_s` jako różnicę między czasem startu a ostatnią aktywnością poprzedniej sesji (`sessions.last_seen_at`). Przy pierwszym uruchomieniu `last_downtime_s` wynosi 0.
-- Zdarzenia i stany zapisywane w SQLite (tabele: `sessions`, `events`, `state_snapshots`, `devices` i tabele pamięci: `concepts`, `concept_domains`, `concept_links`, `memory_meta`). Wersja schematu w `PRAGMA user_version` (4); baza z nowszą wersją niż obsługiwana nie jest otwierana, starsza jest migrowana przy otwarciu.
+- Zdarzenia i stany zapisywane w SQLite (tabele: `sessions`, `events`, `state_snapshots`, `devices` i tabele pamięci: `concepts`, `concept_domains`, `concept_links`, `memory_meta`). Wersja schematu w `PRAGMA user_version` (5); baza z nowszą wersją niż obsługiwana nie jest otwierana, starsza jest migrowana przy otwarciu.
 - Czas w bazie: UTC, ISO 8601 ze stałą szerokością (`2026-03-01T12:00:00.000+00:00`), co pozwala porównywać go jako tekst. Czas bez strefy jest odrzucany.
 
 `sessions`: `id`, `started_at`, `ended_at` (ustawiane przy czystym zamknięciu), `last_seen_at`. `last_seen_at` odświeża się przy każdym zapisanym zdarzeniu i przez jawne `touch`, więc przerwa jest poprawna także wtedy, gdy nie zapisujemy heartbeatów. Sesja bez aktywności ma `last_seen_at` równe `started_at`.
@@ -254,6 +254,7 @@ Inicjatywa (wypowiedź bez wywołania użytkownika) wymaga zgody bramki: odmowa,
 `concepts`: `key` (klucz główny), `label`, `strength`, `last_used`, `hits`, `created_at`. `concept_domains`: `key`, `domain`, `count`. `concept_links`: `a`, `b` (klucze pojęć, `a` < `b`), `strength`, `last_used`. `memory_meta`: `k`, `v` (licznik `forgotten`). Usunięcie pojęcia usuwa jego wiersze w `concept_domains` i `concept_links`.
 
 - Migracja z wersji 3: każdy fakt z tabeli `facts` uczy graf heurystyką (bez filtra danych wrażliwych, bo fakty trafiły tam za zgodą użytkownika albo przez ten filtr; z filtrem liczb), w kolejności i w chwili `updated_at`. Tabela `facts` dostaje nazwę `facts_v3` i nie jest już używana. Usuwa ją "zapomnij wszystko" i `DELETE /memory`.
+- Migracja ze schematu 4 (zmiana reguły `stem`, niżej): klucz każdego pojęcia jest liczony od nowa z `label`. Pojęcia o tym samym nowym kluczu łączą się w jedno: `last_used` najpóźniejszy, `strength` największa z sił bieżących liczonych w chwili tego `last_used`, `label` pojęcia o tej sile (przy remisie wcześniej utworzonego, potem o mniejszym starym kluczu), `hits` i liczniki domen sumowane, `created_at` najwcześniejszy. Końce połączeń dostają nowe klucze. Połączenie pojęcia z samym sobą znika, a powtórzone łączą się tak samo jak pojęcia (najpóźniejszy `last_used`, największa siła bieżąca w tej chwili). Licznik `forgotten` się nie zmienia. Baza ze schematu 3 przechodzi obie migracje.
 - `continuity.known_concepts` to liczba wierszy w `concepts`.
 
 ### Pamięć: graf pojęć
@@ -280,7 +281,7 @@ Siła (`h` = `half_life_days`, 14 dni):
 
 Wyciąganie pojęć:
 
-- Heurystyka (bez LLM): słowa z liter (słowo z cyfrą jest pomijane). Pomijane są słowa krótsze niż 3 litery i słowa pomocnicze (`memory.stop_words`), poza skrótami. Skrót (co najmniej 2 litery, wszystkie wielkie, np. "AI") zostaje w oryginalnej pisowni, inne słowa małymi literami. Najwyżej `max_concepts` (8) pojęć z jednego tekstu, w kolejności wystąpienia, bez powtórzeń klucza. `stem(w)`: słowo małymi literami; ze słowa dłuższego niż 4 litery usuwana jest pierwsza pasująca końcówka z listy `owie, ami, ach, ego, emu, ymi, imi, ów, om, iu, ia, ie, ią, ię, ą, ę, y, i, a, e, u, o`, jeśli zostają co najmniej 4 litery.
+- Heurystyka (bez LLM): słowa z liter (słowo z cyfrą jest pomijane). Pomijane są słowa krótsze niż 3 litery i słowa pomocnicze (`memory.stop_words`), poza skrótami. Skrót (co najmniej 2 litery, wszystkie wielkie, np. "AI") zostaje w oryginalnej pisowni, inne słowa małymi literami. Najwyżej `max_concepts` (8) pojęć z jednego tekstu, w kolejności wystąpienia, bez powtórzeń klucza. `stem(w)`: słowo małymi literami; ze słowa dłuższego niż 3 litery usuwana jest pierwsza pasująca końcówka z listy `owie, iami, iach, ami, ach, ego, ymi, imi, iem, ów, om, ym, iu, ia, ie, ią, ię, ą, ę, y, i, a, e, u, o`, jeśli zostają co najmniej 3 litery. Łączy to np. "kawa", "kawę", "kawie" (`kaw`), "rok", "roku" i "spotkanie", "spotkaniem", "spotkaniach" (`spotkan`). Reguła nie zna oboczności ("pies" i "psa", "rower" i "rowerze" to różne klucze) ani narzędnika na `-em` ("kot" i "kotem"), bo ta końcówka rozbiłaby słowa takie jak "problem" i "system". Wersja reguły w schemacie 4 (rdzeń co najmniej 4 litery, z końcówką `emu`) rozdzielała m.in. "kawa" i "kawie" oraz "problem" i "problemu".
 - LLM: osobne zapytanie (sekcja 12) z promptem wyciągania i samą wypowiedzią użytkownika. Odpowiedź: `{"domain": "dom|czas|ty|rozmowa", "concepts": ["...", ...]}`, do 8 rzeczowników, nazw lub czasowników w formie podstawowej. Niepoprawna odpowiedź albo błąd silnika: heurystyka. Pojęcie dłuższe niż 40 znaków jest ucinane, a nieznana domena to `rozmowa`.
 - Filtr, dla obu sposobów: pojęcie z cyfrą jest odrzucane, więc graf nie trzyma liczb (wartości z czujników, numery, adresy). Pojęcie ze słowem zaczynającym się od rdzenia z `sensitive_words` (zdrowie, leki, tętno, położenie i adres, pieniądze, wyznanie, poglądy, orientacja) jest odrzucane, chyba że pochodzi z polecenia "zapamiętaj".
 
@@ -453,7 +454,7 @@ Ustawienia pamięci. Silnik Claude jest zdalny, więc domyślne `send_memory = l
 
 Polecenia pamięci ("zapamiętaj ...", "zapomnij ...", "zapomnij wszystko", "co o mnie wiesz") i odpowiedź tak/nie działają zawsze, lokalnie, bez modelu. Pozostałe wartości `memory.*` i `brain.llm.*` (progi, `half_life_days`, `history_turns`, `max_tool_rounds` itd.) to wartości początkowe hosta (`host/core/config.py`).
 
-Baza: SQLite w pamięci prywatnej aplikacji. Tabele pamięci jak w sekcji 9. Czas UTC, ISO 8601 ze stałą szerokością jak w sekcji 9. Pierwsze uruchomienie wersji z grafem migruje fakty z tabeli `facts` tak jak migracja z wersji 3 hosta (sekcja 9), a tabela zostaje jako `facts_v3`, którą usuwa "zapomnij wszystko".
+Baza: SQLite w pamięci prywatnej aplikacji. Tabele pamięci jak w sekcji 9. Czas UTC, ISO 8601 ze stałą szerokością jak w sekcji 9. Pierwsze uruchomienie wersji z grafem migruje fakty z tabeli `facts` tak jak migracja z wersji 3 hosta (sekcja 9), a tabela zostaje jako `facts_v3`, którą usuwa "zapomnij wszystko". Baza zapisana starszą regułą `stem` przelicza klucze tak jak migracja ze schematu 4 hosta.
 
 Interfejs. Jedna aktywność z trzema ekranami: rozmowa, ustawienia i pamięć ("Pamięć IRIS"). Interfejs jest po polsku, ciemny, a teksty nie sugerują uczuć ani świadomości.
 

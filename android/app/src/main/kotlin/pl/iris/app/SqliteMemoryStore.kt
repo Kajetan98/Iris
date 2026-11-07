@@ -11,12 +11,14 @@ import pl.iris.core.Link
 import pl.iris.core.MemoryConfig
 import pl.iris.core.MemoryStore
 import pl.iris.core.migrateFacts
+import pl.iris.core.rekey
 
 /**
  * Graf pojęć w SQLite w pamięci prywatnej aplikacji (spec, sekcje 9 i 14): tabele `concepts`, `concept_domains`,
  * `concept_links` i `memory_meta` jak w schemacie 4 hosta. Wersja 1 bazy miała tabelę `facts`; przejście na
  * wersję 2 uczy graf z faktów (migrateFacts, jak migracja hosta) w transakcji aktualizacji i zostawia tabelę
- * jako `facts_v3`. Reguły są w module core; tu tylko zapis wierszy. Treść pamięci nie trafia do logów.
+ * jako `facts_v3`. Przejście z wersji 2 na 3 przelicza klucze pojęć po zmianie reguły `stem` (rekey, jak migracja
+ * ze schematu 4 hosta). Reguły są w module core; tu tylko zapis wierszy. Treść pamięci nie trafia do logów.
  */
 class SqliteMemoryStore(context: Context, private val cfg: MemoryConfig = MemoryConfig()) : MemoryStore {
     private val helper = object : SQLiteOpenHelper(context.applicationContext, "iris.db", null, VERSION) {
@@ -32,7 +34,9 @@ class SqliteMemoryStore(context: Context, private val cfg: MemoryConfig = Memory
                 val facts = db.rawQuery("SELECT text, updated_at FROM facts_v3 ORDER BY updated_at, id", null).use { c ->
                     buildList { while (c.moveToNext()) add(LegacyFact(c.getString(0), IsoTime.parse(c.getString(1)))) }
                 }
-                migrateFacts(facts, Rows(db), cfg)
+                migrateFacts(facts, Rows(db), cfg) // już nową regułą stem
+            } else if (oldVersion < 3) {
+                Rows(db).recomputeKeys(cfg)
             }
         }
     }
@@ -185,6 +189,14 @@ class SqliteMemoryStore(context: Context, private val cfg: MemoryConfig = Memory
             n
         }
 
+        /** Klucze liczone od nowa z etykiet; licznik zapomnianych i `facts_v3` zostają. */
+        fun recomputeKeys(cfg: MemoryConfig): Unit = transaction {
+            val (fresh, freshLinks) = rekey(concepts(null).values, allLinks(), cfg)
+            db.delete("concept_links", null, null)
+            db.delete("concepts", null, null) // liczniki domen przez ON DELETE CASCADE
+            save(fresh, freshLinks, emptyList(), emptyList(), 0)
+        }
+
         override fun count(): Int = db.rawQuery("SELECT COUNT(*) FROM concepts", null).use { c -> if (c.moveToFirst()) c.getInt(0) else 0 }
 
         override fun forgotten(): Int =
@@ -204,7 +216,7 @@ class SqliteMemoryStore(context: Context, private val cfg: MemoryConfig = Memory
     }
 
     private companion object {
-        const val VERSION = 2
+        const val VERSION = 3
 
         // Starsze wersje SQLite na Androidzie przyjmują do 999 parametrów w zapytaniu.
         const val CHUNK = 500

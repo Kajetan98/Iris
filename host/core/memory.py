@@ -27,7 +27,7 @@ MIN_COMMAND_CHARS = 3
 MAX_COMMAND_CHARS = 300
 
 # Końcówki odcinane przez `stem`, w kolejności sprawdzania.
-_SUFFIXES = ("owie", "ami", "ach", "ego", "emu", "ymi", "imi", "ów", "om", "iu", "ia", "ie",
+_SUFFIXES = ("owie", "iami", "iach", "ami", "ach", "ego", "ymi", "imi", "iem", "ów", "om", "ym", "iu", "ia", "ie",
              "ią", "ię", "ą", "ę", "y", "i", "a", "e", "u", "o")
 _TOKEN = re.compile(r"[^\W_]+")  # litery i cyfry; słowo z cyfrą jest potem pomijane
 
@@ -65,12 +65,12 @@ class Extraction:
 
 
 def stem(word: str) -> str:
-    """Przybliżony rdzeń polskiego słowa: łączy "lampa", "lampę" i "lampie" w "lamp"."""
+    """Przybliżony rdzeń polskiego słowa: łączy "kawa", "kawę" i "kawie" w "kaw" (spec, sekcja 9)."""
     s = word.lower()
-    if len(s) <= 4:
+    if len(s) <= 3:
         return s
     for suffix in _SUFFIXES:
-        if s.endswith(suffix) and len(s) - len(suffix) >= 4:
+        if s.endswith(suffix) and len(s) - len(suffix) >= 3:
             return s[: -len(suffix)]
     return s
 
@@ -268,6 +268,43 @@ def plan_recall(
         for c in matches
     ]
     return hits, reinforced
+
+
+def rekey(concepts: Iterable[Concept], links: Iterable[Link], cfg: MemoryConfig) -> tuple[list[Concept], list[Link]]:
+    """Graf z kluczami liczonymi od nowa z etykiet (migracja po zmianie `stem`, spec, sekcja 9). Pojęcia
+    i połączenia o tym samym nowym kluczu łączą się; wynik posortowany po kluczach."""
+
+    def at_latest(strength: float, last_used: datetime, latest: datetime) -> float:
+        return effective(strength, last_used, latest, cfg.half_life_days)
+
+    groups: dict[str, list[Concept]] = {}
+    new_key: dict[str, str] = {}
+    for c in concepts:
+        k = concept_key(c.label) or c.key
+        new_key[c.key] = k
+        groups.setdefault(k, []).append(c)
+    merged: list[Concept] = []
+    for k in sorted(groups):
+        group = groups[k]
+        latest = max(c.last_used for c in group)
+        best = min(group, key=lambda c: (-at_latest(c.strength, c.last_used, latest), c.created_at, c.key))
+        domains: dict[str, int] = {}
+        for c in sorted(group, key=lambda c: c.key):
+            for d, n in c.domains.items():
+                domains[d] = domains.get(d, 0) + n
+        merged.append(Concept(k, best.label, at_latest(best.strength, best.last_used, latest), latest,
+                              sum(c.hits for c in group), min(c.created_at for c in group), domains))
+    pairs: dict[tuple[str, str], list[Link]] = {}
+    for link in links:
+        a, b = new_key.get(link.a, link.a), new_key.get(link.b, link.b)
+        if a != b:
+            pairs.setdefault((min(a, b), max(a, b)), []).append(link)
+    out_links = []
+    for (a, b) in sorted(pairs):
+        group = pairs[(a, b)]
+        latest = max(l.last_used for l in group)
+        out_links.append(Link(a, b, max(at_latest(l.strength, l.last_used, latest) for l in group), latest))
+    return merged, out_links
 
 
 def plan_prune(

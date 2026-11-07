@@ -66,7 +66,8 @@ def c(key: str, label: str | None = None, strength: float = 0.35, days: float = 
 
 
 WORDS = ["lampa", "lampę", "lampie", "Lampami", "dom", "kota", "salonie", "panowie", "spotkaniu", "Burek", "AI",
-         "kawę", "kawie", "mlekiem", "ŻÓŁW", "żółwia", "imieniu", "Kraków", "dzieci", "x"]
+         "kawę", "kawie", "mlekiem", "ŻÓŁW", "żółwia", "imieniu", "Kraków", "dzieci", "x", "kawa", "roku", "psa",
+         "problem", "problemu", "spotkaniem", "spotkaniach", "spotkaniami", "nowym", "Indiach", "dnia", "kotem", "Źdźbła"]
 
 TEXTS = [
     "Zapal lampę w salonie, IRIS. Moje tętno to 120 a SpO2 96, AI też",
@@ -178,6 +179,15 @@ def rules() -> dict[str, Any]:
     strong = [c("bbbb", strength=0.8), c("aaaa", strength=0.8), c("cccc", strength=0.9, days=-14)]
     out["strongest"] = {"concepts": [concept_json(x) for x in strong], "now": iso(at(14)), "n": 2,
                         "out": [x.key for x in m.strongest(strong, at(14), CFG, 2)]}
+    later = at(14)
+    rk_concepts = [Concept("kawa", "kawa", 0.8, T0, 3, at(-5), {"ty": 2}), Concept("kawi", "kawie", 0.5, later, 1, T0, {"ty": 1, "dom": 1}),
+                   Concept("kawy", "kawy", 0.5, later, 2, T0, {}), Concept("roku", "roku", 0.35, T0, 1, T0, {}),
+                   Concept("salon", "salon", 0.4, later, 2, T0, {"dom": 2}), Concept("ai", "AI", 0.3, T0, 1, T0, {})]
+    rk_links = [Link("kawa", "kawi", 0.9, T0), Link("kawa", "roku", 0.3, T0), Link("kawi", "roku", 0.2, later),
+                Link("kawa", "salon", 0.5, T0), Link("ai", "kawy", 0.25, at(3))]
+    rk_out = m.rekey(rk_concepts, rk_links, CFG)
+    out["rekey"] = {"concepts": [concept_json(x) for x in rk_concepts], "links": [link_json(x) for x in rk_links],
+                    "out": {"concepts": [concept_json(x) for x in rk_out[0]], "links": [link_json(x) for x in rk_out[1]]}}
     out["main_domain"] = [{"domains": d, "out": m.main_domain(c("x", domains=d) if d else Concept("x", "x", 0.3, T0, 1, T0, {}))}
                           for d in [{"ty": 2, "dom": 2, "czas": 1}, {}, {"rozmowa": 3, "czas": 3}, {"ty": 1}]]
 

@@ -51,7 +51,8 @@ class Store:
             self._conn.execute("PRAGMA busy_timeout = 5000")
             if str(path) != ":memory:":
                 self._conn.execute("PRAGMA journal_mode = WAL")
-            migrate(self._conn, on_v4=_migrate_facts(memory or MemoryConfig()))
+            cfg = memory or MemoryConfig()
+            migrate(self._conn, on_v4=_migrate_facts(cfg), on_v5=_rekey(cfg))
         except Exception:
             self._conn.close()
             raise
@@ -445,6 +446,21 @@ def _apply(
             " ON CONFLICT(k) DO UPDATE SET v = CAST(CAST(v AS INTEGER) + ? AS TEXT)",
             (str(forgotten), forgotten),
         )
+
+
+def _rekey(cfg: MemoryConfig) -> Callable[[sqlite3.Connection], None]:
+    """Migracja ze schematu 4: klucze pojęć liczone od nowa z etykiet nową regułą `stem` (spec, sekcja 9)."""
+
+    def run(conn: sqlite3.Connection) -> None:
+        from host.core.memory import rekey
+
+        old_links = [_to_link(r) for r in conn.execute("SELECT * FROM concept_links").fetchall()]
+        concepts, links = rekey(_load_concepts(conn, None).values(), old_links, cfg)
+        conn.execute("DELETE FROM concept_links")
+        conn.execute("DELETE FROM concepts")  # liczniki domen przez ON DELETE CASCADE
+        _apply(conn, concepts, links)
+
+    return run
 
 
 def _migrate_facts(cfg: MemoryConfig) -> Callable[[sqlite3.Connection], None]:

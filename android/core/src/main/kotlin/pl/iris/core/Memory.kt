@@ -69,7 +69,7 @@ fun linkStrength(l: Link, now: Instant, cfg: MemoryConfig): Double = effective(l
 // ---- wyciąganie pojęć ------------------------------------------------------------------------------
 
 private val SUFFIXES = listOf(
-    "owie", "ami", "ach", "ego", "emu", "ymi", "imi", "ów", "om", "iu", "ia", "ie",
+    "owie", "iami", "iach", "ami", "ach", "ego", "ymi", "imi", "iem", "ów", "om", "ym", "iu", "ia", "ie",
     "ią", "ię", "ą", "ę", "y", "i", "a", "e", "u", "o",
 )
 
@@ -77,13 +77,13 @@ private fun isDigitCp(cp: Int): Boolean = Character.getType(cp).toByte() == Char
 
 private fun hasDigit(s: String): Boolean = s.codePoints().anyMatch(::isDigitCp)
 
-/** Przybliżony rdzeń polskiego słowa: łączy "lampa", "lampę" i "lampie" w "lamp". */
+/** Przybliżony rdzeń polskiego słowa: łączy "kawa", "kawę" i "kawie" w "kaw" (spec, sekcja 9). */
 fun stem(word: String): String {
     val s = pyLower(word)
     val n = cpLength(s)
-    if (n <= 4) return s
+    if (n <= 3) return s
     for (suffix in SUFFIXES) {
-        if (s.endsWith(suffix) && n - cpLength(suffix) >= 4) return s.substring(0, s.length - suffix.length)
+        if (s.endsWith(suffix) && n - cpLength(suffix) >= 3) return s.substring(0, s.length - suffix.length)
     }
     return s
 }
@@ -267,6 +267,47 @@ fun planRecall(
 }
 
 /** Klucze pojęć i pary połączeń o sile bieżącej poniżej `forgetBelow`. */
+/**
+ * Graf z kluczami liczonymi od nowa z etykiet (migracja po zmianie `stem`, spec, sekcja 9). Pojęcia i połączenia
+ * o tym samym nowym kluczu łączą się; wynik posortowany po kluczach. Jak rekey w host/core/memory.py.
+ */
+fun rekey(concepts: Iterable<Concept>, links: Iterable<Link>, cfg: MemoryConfig): Pair<List<Concept>, List<Link>> {
+    fun atLatest(strength: Double, lastUsed: Instant, latest: Instant) = effective(strength, lastUsed, latest, cfg.halfLifeDays)
+
+    val groups = LinkedHashMap<String, MutableList<Concept>>()
+    val newKey = HashMap<String, String>()
+    for (c in concepts) {
+        val k = conceptKey(c.label).ifEmpty { c.key }
+        newKey[c.key] = k
+        groups.getOrPut(k) { mutableListOf() } += c
+    }
+    val merged = groups.keys.sorted().map { k ->
+        val group = groups.getValue(k)
+        val latest = group.maxOf { it.lastUsed }
+        val best = group.sortedWith(
+            compareBy<Concept> { -atLatest(it.strength, it.lastUsed, latest) }.thenBy { it.createdAt }.thenBy { it.key },
+        ).first()
+        val domains = LinkedHashMap<String, Int>()
+        for (c in group.sortedBy { it.key }) for ((d, n) in c.domains) domains[d] = (domains[d] ?: 0) + n
+        Concept(
+            k, best.label, atLatest(best.strength, best.lastUsed, latest), latest, group.sumOf { it.hits },
+            group.minOf { it.createdAt }, domains,
+        )
+    }
+    val pairs = LinkedHashMap<Pair<String, String>, MutableList<Link>>()
+    for (l in links) {
+        val a = newKey[l.a] ?: l.a
+        val b = newKey[l.b] ?: l.b
+        if (a != b) pairs.getOrPut(if (a < b) a to b else b to a) { mutableListOf() } += l
+    }
+    val outLinks = pairs.keys.sortedWith(compareBy<Pair<String, String>> { it.first }.thenBy { it.second }).map { key ->
+        val group = pairs.getValue(key)
+        val latest = group.maxOf { it.lastUsed }
+        Link(key.first, key.second, group.maxOf { atLatest(it.strength, it.lastUsed, latest) }, latest)
+    }
+    return merged to outLinks
+}
+
 fun planPrune(concepts: Iterable<Concept>, links: Iterable<Link>, now: Instant, cfg: MemoryConfig): Pair<List<String>, List<Pair<String, String>>> {
     val dead = concepts.filter { conceptStrength(it, now, cfg) < cfg.forgetBelow }.map { it.key }.sorted()
     val weak = links.filter { linkStrength(it, now, cfg) < cfg.forgetBelow }.map { it.a to it.b }

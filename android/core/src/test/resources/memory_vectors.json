@@ -315,7 +315,7 @@
    },
    {
     "word": "kota",
-    "out": "kota"
+    "out": "kot"
    },
    {
     "word": "salonie",
@@ -323,7 +323,7 @@
    },
    {
     "word": "panowie",
-    "out": "panow"
+    "out": "pan"
    },
    {
     "word": "spotkaniu",
@@ -339,15 +339,15 @@
    },
    {
     "word": "kawę",
-    "out": "kawę"
+    "out": "kaw"
    },
    {
     "word": "kawie",
-    "out": "kawi"
+    "out": "kaw"
    },
    {
     "word": "mlekiem",
-    "out": "mlekiem"
+    "out": "mlek"
    },
    {
     "word": "ŻÓŁW",
@@ -372,6 +372,58 @@
    {
     "word": "x",
     "out": "x"
+   },
+   {
+    "word": "kawa",
+    "out": "kaw"
+   },
+   {
+    "word": "roku",
+    "out": "rok"
+   },
+   {
+    "word": "psa",
+    "out": "psa"
+   },
+   {
+    "word": "problem",
+    "out": "problem"
+   },
+   {
+    "word": "problemu",
+    "out": "problem"
+   },
+   {
+    "word": "spotkaniem",
+    "out": "spotkan"
+   },
+   {
+    "word": "spotkaniach",
+    "out": "spotkan"
+   },
+   {
+    "word": "spotkaniami",
+    "out": "spotkan"
+   },
+   {
+    "word": "nowym",
+    "out": "now"
+   },
+   {
+    "word": "Indiach",
+    "out": "ind"
+   },
+   {
+    "word": "dnia",
+    "out": "dni"
+   },
+   {
+    "word": "kotem",
+    "out": "kotem"
+   },
+   {
+    "word": "Źdźbła",
+    "out": "źdźbł"
    }
   ],
   "heuristic": [
@@ -442,7 +494,7 @@
        "burek"
       ],
       [
-       "lubi",
+       "lub",
        "lubi"
       ],
       [
@@ -488,7 +540,7 @@
        "jutro"
       ],
       [
-       "rano",
+       "ran",
        "rano"
       ]
      ],
@@ -531,11 +583,11 @@
     "out": {
      "concepts": [
       [
-       "alfa",
+       "alf",
        "alfa"
       ],
       [
-       "beta",
+       "bet",
        "beta"
       ],
       [
@@ -551,7 +603,7 @@
        "epsilon"
       ],
       [
-       "zeta",
+       "zet",
        "zeta"
       ],
       [
@@ -559,7 +611,7 @@
        "theta"
       ],
       [
-       "jota",
+       "jot",
        "jota"
       ]
      ],
@@ -592,7 +644,7 @@
        "USA"
       ],
       [
-       "nato",
+       "nat",
        "NATO"
       ],
       [
@@ -609,7 +661,7 @@
     "out": {
      "concepts": [
       [
-       "ania",
+       "ani",
        "ania"
       ],
       [
@@ -684,7 +736,7 @@
     "out": {
      "concepts": [
       [
-       "lubi",
+       "lub",
        "lubię"
       ],
       [
@@ -2012,6 +2064,168 @@
     "bbbb"
    ]
   },
+  "rekey": {
+   "concepts": [
+    {
+     "key": "kawa",
+     "label": "kawa",
+     "strength": 0.8,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 3,
+     "created_at": "2026-10-27T12:00:00.000+00:00",
+     "domains": {
+      "ty": 2
+     }
+    },
+    {
+     "key": "kawi",
+     "label": "kawie",
+     "strength": 0.5,
+     "last_used": "2026-11-15T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "ty": 1,
+      "dom": 1
+     }
+    },
+    {
+     "key": "kawy",
+     "label": "kawy",
+     "strength": 0.5,
+     "last_used": "2026-11-15T12:00:00.000+00:00",
+     "hits": 2,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {}
+    },
+    {
+     "key": "roku",
+     "label": "roku",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {}
+    },
+    {
+     "key": "salon",
+     "label": "salon",
+     "strength": 0.4,
+     "last_used": "2026-11-15T12:00:00.000+00:00",
+     "hits": 2,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 2
+     }
+    },
+    {
+     "key": "ai",
+     "label": "AI",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {}
+    }
+   ],
+   "links": [
+    {
+     "a": "kawa",
+     "b": "kawi",
+     "strength": 0.9,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "kawa",
+     "b": "roku",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "kawi",
+     "b": "roku",
+     "strength": 0.2,
+     "last_used": "2026-11-15T12:00:00.000+00:00"
+    },
+    {
+     "a": "kawa",
+     "b": "salon",
+     "strength": 0.5,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "ai",
+     "b": "kawy",
+     "strength": 0.25,
+     "last_used": "2026-11-04T12:00:00.000+00:00"
+    }
+   ],
+   "out": {
+    "concepts": [
+     {
+      "key": "ai",
+      "label": "AI",
+      "strength": 0.3,
+      "last_used": "2026-11-01T12:00:00.000+00:00",
+      "hits": 1,
+      "created_at": "2026-11-01T12:00:00.000+00:00",
+      "domains": {}
+     },
+     {
+      "key": "kaw",
+      "label": "kawie",
+      "strength": 0.5,
+      "last_used": "2026-11-15T12:00:00.000+00:00",
+      "hits": 6,
+      "created_at": "2026-10-27T12:00:00.000+00:00",
+      "domains": {
+       "ty": 3,
+       "dom": 1
+      }
+     },
+     {
+      "key": "rok",
+      "label": "roku",
+      "strength": 0.35,
+      "last_used": "2026-11-01T12:00:00.000+00:00",
+      "hits": 1,
+      "created_at": "2026-11-01T12:00:00.000+00:00",
+      "domains": {}
+     },
+     {
+      "key": "salon",
+      "label": "salon",
+      "strength": 0.4,
+      "last_used": "2026-11-15T12:00:00.000+00:00",
+      "hits": 2,
+      "created_at": "2026-11-01T12:00:00.000+00:00",
+      "domains": {
+       "dom": 2
+      }
+     }
+    ],
+    "links": [
+     {
+      "a": "ai",
+      "b": "kaw",
+      "strength": 0.25,
+      "last_used": "2026-11-04T12:00:00.000+00:00"
+     },
+     {
+      "a": "kaw",
+      "b": "rok",
+      "strength": 0.2,
+      "last_used": "2026-11-15T12:00:00.000+00:00"
+     },
+     {
+      "a": "kaw",
+      "b": "salon",
+      "strength": 0.5,
+      "last_used": "2026-11-01T12:00:00.000+00:00"
+     }
+    ]
+   }
+  },
   "main_domain": [
    {
     "domains": {
@@ -2453,7 +2667,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.35,
      "last_used": "2026-11-01T12:00:00.000+00:00",
@@ -2473,13 +2687,13 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -2515,7 +2729,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.35,
      "last_used": "2026-11-01T12:00:00.000+00:00",
@@ -2535,13 +2749,13 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -2577,7 +2791,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.35,
      "last_used": "2026-11-01T12:00:00.000+00:00",
@@ -2597,13 +2811,13 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -2650,7 +2864,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.35,
      "last_used": "2026-11-01T12:00:00.000+00:00",
@@ -2693,7 +2907,7 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
@@ -2705,7 +2919,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -2752,7 +2966,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.35,
      "last_used": "2026-11-01T12:00:00.000+00:00",
@@ -2795,7 +3009,7 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
@@ -2807,7 +3021,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -2854,7 +3068,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.35,
      "last_used": "2026-11-01T12:00:00.000+00:00",
@@ -2897,7 +3111,7 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
@@ -2909,7 +3123,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -2956,7 +3170,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -2999,7 +3213,7 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
@@ -3011,7 +3225,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3058,7 +3272,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3101,7 +3315,7 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
@@ -3113,7 +3327,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3160,7 +3374,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3203,7 +3417,7 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
@@ -3215,7 +3429,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3262,7 +3476,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3305,7 +3519,7 @@
     },
     {
      "a": "lamp",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     },
@@ -3317,7 +3531,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3353,7 +3567,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3384,7 +3598,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3420,7 +3634,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3451,7 +3665,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3509,7 +3723,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3546,7 +3760,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3604,7 +3818,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3641,7 +3855,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3699,7 +3913,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3736,7 +3950,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3794,7 +4008,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3831,7 +4045,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3889,7 +4103,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -3926,7 +4140,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -3984,7 +4198,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -4021,7 +4235,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -4079,7 +4293,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -4116,7 +4330,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -4174,7 +4388,7 @@
      }
     },
     {
-     "key": "stoi",
+     "key": "sto",
      "label": "stoi",
      "strength": 0.3603642674029979,
      "last_used": "2026-11-08T12:00:00.000+00:00",
@@ -4211,7 +4425,7 @@
     },
     {
      "a": "salon",
-     "b": "stoi",
+     "b": "sto",
      "strength": 0.3,
      "last_used": "2026-11-01T12:00:00.000+00:00"
     }
@@ -4398,7 +4612,7 @@
     }
    },
    {
-    "key": "lata",
+    "key": "lat",
     "label": "lata",
     "strength": 0.35,
     "last_used": "2026-10-03T12:00:00.000+00:00",
@@ -4409,7 +4623,7 @@
     }
    },
    {
-    "key": "leki",
+    "key": "lek",
     "label": "leki",
     "strength": 0.35,
     "last_used": "2026-10-04T12:00:00.000+00:00",
@@ -4451,7 +4665,7 @@
    },
    {
     "a": "bior",
-    "b": "leki",
+    "b": "lek",
     "strength": 0.3,
     "last_used": "2026-10-04T12:00:00.000+00:00"
    },
@@ -4463,7 +4677,7 @@
    },
    {
     "a": "burek",
-    "b": "lata",
+    "b": "lat",
     "strength": 0.3,
     "last_used": "2026-10-03T12:00:00.000+00:00"
    },
@@ -4481,7 +4695,7 @@
    },
    {
     "a": "ciśnien",
-    "b": "leki",
+    "b": "lek",
     "strength": 0.3,
     "last_used": "2026-10-04T12:00:00.000+00:00"
    },
@@ -4492,7 +4706,7 @@
     "last_used": "2026-10-02T12:00:00.000+00:00"
    },
    {
-    "a": "lata",
+    "a": "lat",
     "b": "pies",
     "strength": 0.3,
     "last_used": "2026-10-03T12:00:00.000+00:00"

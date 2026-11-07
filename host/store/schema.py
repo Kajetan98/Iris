@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from collections.abc import Callable
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 _V1 = """
 CREATE TABLE sessions (
@@ -111,9 +111,14 @@ class SchemaError(Exception):
     pass
 
 
-def migrate(conn: sqlite3.Connection, on_v4: Callable[[sqlite3.Connection], None] | None = None) -> None:
+def migrate(
+    conn: sqlite3.Connection,
+    on_v4: Callable[[sqlite3.Connection], None] | None = None,
+    on_v5: Callable[[sqlite3.Connection], None] | None = None,
+) -> None:
     """Podnosi schemat do SCHEMA_VERSION. `on_v4` dostaje połączenie w transakcji migracji do v4,
-    po utworzeniu tabel pamięci i zmianie nazwy `facts` na `facts_v3` (migracja faktów do grafu)."""
+    po utworzeniu tabel pamięci i zmianie nazwy `facts` na `facts_v3` (migracja faktów do grafu);
+    `on_v5` w transakcji migracji do v5 (przeliczenie kluczy pojęć po zmianie reguły `stem`)."""
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version > SCHEMA_VERSION:
         raise SchemaError(
@@ -129,14 +134,23 @@ def migrate(conn: sqlite3.Connection, on_v4: Callable[[sqlite3.Connection], None
             raise
         version = 3
     if version == 3:
-        try:
-            conn.execute("BEGIN")
-            for statement in _V4:
-                conn.execute(statement)
-            if on_v4 is not None:
-                on_v4(conn)
-            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
-            conn.commit()
-        except BaseException:
-            conn.rollback()
-            raise
+        _step(conn, 4, _V4, on_v4)
+        version = 4
+    if version == 4:
+        _step(conn, 5, [], on_v5)
+
+
+def _step(conn: sqlite3.Connection, target: int, statements: list[str],
+          hook: Callable[[sqlite3.Connection], None] | None) -> None:
+    """Jedna migracja w jednej transakcji: instrukcje schematu, funkcja danych i nowa wersja."""
+    try:
+        conn.execute("BEGIN")
+        for statement in statements:
+            conn.execute(statement)
+        if hook is not None:
+            hook(conn)
+        conn.execute(f"PRAGMA user_version = {target}")
+        conn.commit()
+    except BaseException:
+        conn.rollback()
+        raise

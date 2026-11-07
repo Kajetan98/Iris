@@ -344,7 +344,7 @@ def test_facts_from_version_3_teach_the_graph_and_stay_in_facts_v3(tmp_path):
     assert sorted(c.label for c in concepts.values()) == [
         "biorę", "burek", "ciśnienie", "imieniu", "lata", "leki", "pies", "psa"]
     assert concepts["burek"].hits == 2 and concepts["burek"].strength == pytest.approx(0.35 * 0.5 ** (1 / 14) * 0.6 + 0.4)
-    assert store.has_facts_v3() and conn_version(path) == 4
+    assert store.has_facts_v3() and conn_version(path) == 5
     assert ("burek", "pies") in store.links_between(["pies", "burek"])
     store.close()
 
@@ -355,6 +355,60 @@ def conn_version(path):
         return c.execute("PRAGMA user_version").fetchone()[0]
     finally:
         c.close()
+
+
+def _v4_db(path):
+    """Baza w schemacie 4 z kluczami zapisanymi starą regułą `stem` (rdzeń co najmniej 4 litery)."""
+    from host.store.schema import _MIGRATIONS, _V4
+
+    conn = sqlite3.connect(path)
+    conn.executescript(f"BEGIN;{_MIGRATIONS[0]}PRAGMA user_version = 3;COMMIT;")
+    for statement in _V4:
+        conn.execute(statement)
+    conn.execute("PRAGMA user_version = 4")
+    t0, t1 = "2026-10-01T10:00:00.000+00:00", "2026-10-15T10:00:00.000+00:00"
+    conn.executemany("INSERT INTO concepts VALUES (?, ?, ?, ?, ?, ?)",
+                     [("kawa", "kawa", 0.8, t0, 3, t0), ("kawi", "kawie", 0.5, t1, 1, t1), ("roku", "roku", 0.35, t0, 1, t0)])
+    conn.executemany("INSERT INTO concept_domains VALUES (?, ?, ?)", [("kawa", "ty", 2), ("kawi", "ty", 1)])
+    conn.executemany("INSERT INTO concept_links VALUES (?, ?, ?, ?)",
+                     [("kawa", "kawi", 0.9, t0), ("kawa", "roku", 0.3, t0)])
+    conn.execute("INSERT INTO memory_meta VALUES ('forgotten', '7')")
+    conn.commit()
+    conn.close()
+
+
+def test_version_4_keys_are_recomputed_with_the_new_stem(tmp_path):
+    path = tmp_path / "v4.db"
+    _v4_db(path)
+    store = Store(path)
+    concepts = store.concepts()
+    assert sorted(concepts) == ["kaw", "rok"]
+    assert (concepts["kaw"].label, concepts["kaw"].hits, concepts["kaw"].strength) == ("kawie", 4, 0.5)
+    assert concepts["kaw"].domains == {"ty": 3}
+    assert [(l.a, l.b) for l in store.all_links()] == [("kaw", "rok")]
+    assert store.forgotten_count() == 7 and conn_version(path) == 5
+    store.close()
+
+
+def test_failed_key_migration_leaves_version_4(tmp_path, monkeypatch):
+    from host.store import store as store_module
+
+    path = tmp_path / "v4.db"
+    _v4_db(path)
+
+    def broken(cfg):
+        def run(c):
+            c.execute("DELETE FROM concepts")
+            raise RuntimeError("awaria w trakcie migracji")
+        return run
+
+    monkeypatch.setattr(store_module, "_rekey", broken)
+    with pytest.raises(RuntimeError):
+        Store(path)
+    assert conn_version(path) == 4
+    c = sqlite3.connect(path)
+    assert c.execute("SELECT COUNT(*) FROM concepts").fetchone()[0] == 3
+    c.close()
 
 
 def test_failed_fact_migration_leaves_version_3(tmp_path, monkeypatch):

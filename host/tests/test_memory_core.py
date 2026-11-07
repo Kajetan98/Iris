@@ -39,12 +39,47 @@ def test_concept_used_once_is_forgotten_after_about_fifty_days():
 
 @pytest.mark.parametrize(("word", "expected"), [
     ("lampa", "lamp"), ("lampę", "lamp"), ("lampie", "lamp"), ("Lampami", "lamp"),
-    ("dom", "dom"), ("kota", "kota"),  # do 4 liter bez zmian
-    ("salonie", "salon"),
-    ("panowie", "panow"),  # "owie" zostawiłoby 3 litery, więc pierwsza pasująca jest "ie"
+    ("kawa", "kaw"), ("kawę", "kaw"), ("kawie", "kaw"), ("kawy", "kaw"),
+    ("dom", "dom"), ("psa", "psa"),  # do 3 liter bez zmian
+    ("kota", "kot"), ("roku", "rok"), ("salonie", "salon"), ("panowie", "pan"),
+    ("problem", "problem"), ("problemu", "problem"),  # bez końcówki "emu"
+    ("spotkaniem", "spotkan"), ("spotkaniach", "spotkan"), ("spotkaniami", "spotkan"),
+    ("nowym", "now"), ("Indiach", "ind"),
+    ("dnia", "dni"),  # "ia" zostawiłoby 2 litery, więc pierwsza pasująca jest "a"
+    ("kotem", "kotem"),  # narzędnik na -em nie jest obsługiwany
 ])
 def test_stem(word, expected):
     assert m.stem(word) == expected
+
+
+def test_rekey_merges_concepts_and_links_with_the_same_new_key():
+    later = T0 + timedelta(days=14)
+    concepts = [
+        Concept("kawa", "kawa", 0.8, T0, 3, T0 - timedelta(days=5), {"ty": 2}),
+        Concept("kawi", "kawie", 0.5, later, 1, T0, {"ty": 1, "dom": 1}),
+        Concept("roku", "roku", 0.35, T0, 1, T0, {}),
+        Concept("salon", "salon", 0.4, later, 2, T0, {"dom": 2}),
+    ]
+    links = [Link("kawa", "kawi", 0.9, T0), Link("kawa", "roku", 0.3, T0), Link("kawi", "roku", 0.2, later),
+             Link("kawa", "salon", 0.5, T0)]
+    merged, out_links = m.rekey(concepts, links, CFG)
+    assert [c.key for c in merged] == ["kaw", "rok", "salon"]
+    kaw = merged[0]
+    # 0,8 po 14 dniach to 0,4 < 0,5, więc wygrywa "kawie" z siłą 0,5 w chwili najpóźniejszego użycia.
+    assert (kaw.label, kaw.strength, kaw.last_used, kaw.hits, kaw.created_at) == ("kawie", 0.5, later, 4, T0 - timedelta(days=5))
+    assert kaw.domains == {"ty": 3, "dom": 1}
+    assert merged[2] == concepts[3]  # klucz bez zmian: pojęcie bez zmian
+    assert [(l.a, l.b) for l in out_links] == [("kaw", "rok"), ("kaw", "salon")]  # połączenie kawa-kawie znika
+    assert out_links[0].strength == pytest.approx(0.2) and out_links[0].last_used == later  # 0,3 po 14 dniach to 0,15
+    assert out_links[1] == Link("kaw", "salon", 0.5, T0)
+
+
+def test_rekey_tie_goes_to_the_earlier_created_concept_and_is_idempotent():
+    a = Concept("kawa", "kawa", 0.5, T0, 1, T0 + timedelta(days=1), {})
+    b = Concept("kawy", "kawy", 0.5, T0, 1, T0, {})
+    merged, _ = m.rekey([a, b], [], CFG)
+    assert merged[0].label == "kawy"
+    assert m.rekey(merged, [], CFG) == (merged, [])
 
 
 def test_heuristic_skips_numbers_short_and_helper_words_and_keeps_acronyms():

@@ -156,6 +156,10 @@ class VectorsTest {
             )
             assertConcepts(out.getValue("reinforced"), reinforced, "plan_recall $i")
         }
+        val rk = rules.obj("rekey")
+        val (rkConcepts, rkLinks) = rekey(rk.getValue("concepts").objs().map(::concept), rk.getValue("links").objs().map(::link), cfg)
+        assertConcepts(rk.obj("out").getValue("concepts"), rkConcepts, "rekey")
+        assertLinks(rk.obj("out").getValue("links"), rkLinks, "rekey")
         val prune = rules.obj("plan_prune")
         val (dead, weak) = planPrune(prune.getValue("concepts").objs().map(::concept), prune.getValue("links").objs().map(::link), time(prune.str("now")), cfg)
         assertEquals(prune.obj("out").getValue("dead").strings(), dead)
