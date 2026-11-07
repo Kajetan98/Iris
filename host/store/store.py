@@ -339,10 +339,12 @@ class Store:
         delete: Iterable[str] = (),
         delete_links: Iterable[tuple[str, str]] = (),
         forgotten: int = 0,
-    ) -> None:
-        """Zapis zmian grafu w jednej transakcji: wiersze pojęć i połączeń, usunięcia, licznik zapomnianych."""
+    ) -> bool:
+        """Zapis zmian grafu w jednej transakcji: wiersze pojęć i połączeń, usunięcia, licznik zapomnianych.
+        Zwraca True (błąd bazy to wyjątek), żeby wywołujący przez strażnika błędów odróżnił sukces."""
         with self._lock, self._conn:
             _apply(self._conn, concepts, links, delete=delete, delete_links=delete_links, forgotten=forgotten)
+        return True
 
     def delete_concepts(self, keys: Iterable[str]) -> list[Concept]:
         """Usuwa pojęcia (z połączeniami i domenami); zwraca usunięte."""

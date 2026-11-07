@@ -175,6 +175,7 @@ class LearnPlan:
     fresh: list[str] = field(default_factory=list)  # etykiety nowych pojęć
     reinforced: list[str] = field(default_factory=list)  # etykiety wzmocnionych
     domain: str = DEFAULT_MEMORY_DOMAIN
+    stored: bool = True  # False, gdy zapis do bazy się nie udał
 
 
 def link_pair(a: str, b: str) -> tuple[str, str]:
@@ -419,6 +420,7 @@ def forget_all_question(n: int) -> str:
 
 
 FORGET_ALL_DONE = "Pamięć wyczyszczona."
+STORE_FAILED_TEXT = "Nie udało się zapisać w pamięci. Spróbuj ponownie."
 FORGET_ALL_KEPT = "Dobrze, niczego nie usuwam."
 PRAISE_TEXT = "Dobrze, wzmacniam pojęcia użyte w tej odpowiedzi."
 CRITICISM_TEXT = "Dobrze, osłabiam pojęcia użyte w tej odpowiedzi."

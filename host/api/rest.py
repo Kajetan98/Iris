@@ -21,7 +21,6 @@ from host.api.service import (
     NotConnected,
     UnknownDevice,
 )
-from host.core import memory as mem
 from host.core.protocol import valid_device_id
 from host.store.models import Snapshot, StoredEvent
 
@@ -235,9 +234,9 @@ async def get_memory(service: HostService = Depends(get_service)) -> dict[str, A
 async def post_memory_learn(req: LearnRequest, service: HostService = Depends(get_service)) -> dict[str, Any]:
     if not service.memory.enabled:
         raise HTTPException(409, "pamięć wyłączona w konfiguracji (memory.enabled)")
-    memory = service.memory
-    ext = mem.keep(mem.heuristic(req.text, memory.cfg), memory.cfg, allow_sensitive=True)
-    plan = memory.learn(ext, how="told", domain=req.domain)
+    plan = service.memory.teach(req.text, domain=req.domain)
+    if not plan.stored:
+        raise HTTPException(503, "zapis pamięci w bazie się nie udał")
     return {"fresh": plan.fresh, "reinforced": plan.reinforced, "domain": plan.domain}
 
 
@@ -323,11 +322,11 @@ async def memory_stream(websocket: WebSocket) -> None:
 
 
 async def _drain_incoming(websocket: WebSocket) -> None:
-    """Ramki od klienta strumienia są pomijane; kończy się przy rozłączeniu."""
+    """Ramki od klienta strumienia (tekstowe i binarne) są pomijane; kończy się przy rozłączeniu."""
     try:
-        while True:
-            await websocket.receive_text()
-    except (WebSocketDisconnect, RuntimeError, KeyError):
+        while (await websocket.receive())["type"] != "websocket.disconnect":
+            pass
+    except (WebSocketDisconnect, RuntimeError):
         return
 
 

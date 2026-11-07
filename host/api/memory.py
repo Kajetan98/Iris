@@ -84,7 +84,8 @@ class Memory:
         plan = m.plan_learn(ext, known, links, self.clock.wall(), self.cfg, domain)
         if not plan.concepts:
             return plan
-        self._guard(self.store.save_memory, plan.concepts, plan.links)
+        if not self._guard(self.store.save_memory, plan.concepts, plan.links):
+            return m.LearnPlan(domain=plan.domain, stored=False)  # błąd bazy (zalogowany)
         data: dict[str, Any] = {"how": how, "fresh": len(plan.fresh), "reinforced": len(plan.reinforced),
                                 "domain": plan.domain}
         if source is not None:
@@ -92,6 +93,12 @@ class Memory:
         self._event("memory.learn", **data)
         self._changed()
         return plan
+
+    def teach(self, text: str, *, domain: str | None = None) -> m.LearnPlan:
+        """Nauka wprost (polecenie "zapamiętaj", POST /memory/learn): heurystyka, filtr liczb, bez filtra
+        danych wrażliwych (spec, sekcja 9)."""
+        ext = m.keep(m.heuristic(text, self.cfg), self.cfg, allow_sensitive=True)
+        return self.learn(ext, how="told", domain=domain)
 
     def recall(self, query: str, *, by: str, k: int | None = None) -> list[m.RecallHit]:
         keys = [key for key, _ in m.heuristic(query, self.cfg).concepts]
@@ -187,9 +194,8 @@ class Memory:
             return self.feedback(text)
         log.info("polecenie pamięci: %s", cmd.kind)
         if cmd.kind == "remember":
-            ext = m.keep(m.heuristic(cmd.text, self.cfg), self.cfg, allow_sensitive=True)
-            plan = self.learn(ext, how="told")
-            return m.remember_text([label for _, label in ext.concepts] if plan.concepts else [])
+            plan = self.teach(cmd.text)
+            return m.remember_text(plan.fresh + plan.reinforced) if plan.stored else m.STORE_FAILED_TEXT
         if cmd.kind == "forget":
             keys = [k for k, _ in m.heuristic(cmd.text, self.cfg).concepts]
             return m.forget_text([c.label for c in self.forget(keys, why="user")])

@@ -381,3 +381,26 @@ def test_failed_fact_migration_leaves_version_3(tmp_path, monkeypatch):
     c = sqlite3.connect(path)
     assert c.execute("SELECT COUNT(*) FROM facts").fetchone()[0] == 1  # tabela nadal ma starą nazwę
     c.close()
+
+
+def test_stream_ignores_binary_frames_from_the_client():
+    app = rest()
+    with local_client(app) as c:
+        with c.websocket_connect("/memory/stream", subprotocols=["iris"]) as ws:
+            ws.receive_json()
+            ws.send_bytes(b"\x00\x01")
+            ws.send_text("cokolwiek")
+            c.post("/memory/learn", json={"text": "lampa"})
+            assert [n["label"] for n in ws.receive_json()["nodes"]] == ["lampa"]
+
+
+def test_failed_database_write_records_no_learning(monkeypatch, caplog):
+    service, _, _, store = make(with_assistant=False)
+
+    def locked(*args, **kwargs):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(store, "save_memory", locked)
+    with caplog.at_level("ERROR"):
+        assert turn(service, "zapamiętaj, że lampa")["text"] == "Nie udało się zapisać w pamięci. Spróbuj ponownie."
+    assert events(store, "memory.learn") == []
