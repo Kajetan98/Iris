@@ -242,6 +242,26 @@ def test_memory_panel_lists_and_deletes_concepts():
         stop(*server)
 
 
+def test_memory_orb_page_follows_the_host_graph():
+    app = create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=TOKEN)
+    port = free_port()
+    server = start(app, port)
+    base = f"http://127.0.0.1:{port}"
+    try:
+        with httpx.Client(base_url=base, headers={"Authorization": f"Bearer {TOKEN}"}) as http:
+            http.post("/memory/learn", json={"text": "Lampa w salonie", "domain": "dom"})
+            out = browser("orb", base, token=TOKEN)
+            assert sorted(out["start"]["list"]) == ["lampa", "salonie"]
+            assert out["start"]["legend"] == [["dom", "2"], ["czas", "0"], ["ty", "0"], ["rozmowa", "0"]]
+            assert {"burek", "lubi", "spacery"} <= set(out["taught"]["list"]) and out["taught"]["links"] == 4
+            assert out["taught"]["say"].startswith("Nowe: burek, lubi, spacery.")
+            assert "burek" not in out["removed"]["list"] and out["removed"]["say"] == "Zapomniane: burek."
+            assert out["empty"] and out["say"] == "Pamięć wyczyszczona."
+            assert http.get("/memory").json()["nodes"] == []
+    finally:
+        stop(*server)
+
+
 def test_token_in_the_browser():
     port = free_port()
     server = start(create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=TOKEN), port)

@@ -1,10 +1,12 @@
 // Service worker klienta IRIS: pliki aplikacji z pamięci podręcznej, żeby dało się ją zainstalować
 // i otworzyć bez sieci (połączenie z hostem i tak wymaga sieci). API i /ws nie są buforowane.
-const CACHE = "iris-app-v5";
+const CACHE = "iris-app-v6";
 const SHELL = [
   "./",
   "index.html",
   "app.js",
+  "memory.html",
+  "memory.js",
   "protocol.js",
   "wave.js",
   "mic-worklet.js",

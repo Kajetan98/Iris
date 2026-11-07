@@ -199,6 +199,28 @@ const scenarios = {
     return { before, after: await read(), status: await page.textContent("#memory-status") };
   },
 
+  // Strona "Pamięć IRIS" (memory.html): kula z GET /memory, zmiany ze strumienia, nauka i usuwanie.
+  async orb(page) {
+    await page.goto(`${base}/app/`);
+    await page.evaluate((t) => localStorage.setItem("iris.token", t), opts.token || "");
+    page.on("dialog", (d) => d.accept());
+    await page.goto(`${base}/app/memory.html`);
+    await page.waitForFunction(() => window.irisMemory && window.irisMemory.state.connected, null, { timeout: 10000 });
+    const list = () => page.evaluate(() => Array.from(document.querySelectorAll("#list li .nm"), (e) => e.textContent));
+    const start = { list: await list(), legend: await page.evaluate(() => Array.from(document.querySelectorAll("#legend button"), (b) => [b.dataset.id, b.querySelector(".ct").textContent])) };
+    const before = await page.evaluate(() => window.irisMemory.state.snapshots);
+    await page.fill("#in", "Burek lubi spacery");
+    await page.click("#teach button[type=submit]");
+    await page.waitForFunction((n) => window.irisMemory.state.snapshots > n && document.querySelectorAll("#list li").length >= 4, before, { timeout: 10000 });
+    const taught = { list: await list(), say: await page.textContent("#say"), links: await page.evaluate(() => window.irisMemory.edges.size) };
+    await page.click('#list li[data-key="burek"] button');
+    await page.waitForFunction(() => !document.querySelector('#list li[data-key="burek"]'), null, { timeout: 10000 });
+    const removed = { list: await list(), say: await page.textContent("#say") };
+    await page.click("#wipe");
+    await page.waitForFunction(() => document.querySelectorAll("#list li").length === 0, null, { timeout: 10000 });
+    return { start, taught, removed, empty: await page.isVisible("#empty"), say: await page.textContent("#say") };
+  },
+
   // Klient pobrany z jednego hosta, połączony z drugim (adres hosta w ustawieniach, spec sekcja 1).
   async remoteHost(page) {
     await connect(page, opts.device, opts.token, opts.hostUrl);
