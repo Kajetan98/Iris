@@ -22,7 +22,7 @@ def client(origins, token=TOKEN):
 
 def test_preflight_from_a_listed_origin_is_allowed():
     with client([SITE]) as c:
-        r = c.options("/facts", headers={"Origin": SITE, "Access-Control-Request-Method": "DELETE",
+        r = c.options("/memory", headers={"Origin": SITE, "Access-Control-Request-Method": "DELETE",
                                          "Access-Control-Request-Headers": "authorization"})
         assert r.status_code == 200
         assert r.headers["access-control-allow-origin"] == SITE
@@ -33,7 +33,7 @@ def test_preflight_from_a_listed_origin_is_allowed():
 
 def test_other_origins_get_no_cors_answer():
     with client([SITE]) as c:
-        r = c.options("/facts", headers={"Origin": "https://zly.example", "Access-Control-Request-Method": "GET"})
+        r = c.options("/memory", headers={"Origin": "https://zly.example", "Access-Control-Request-Method": "GET"})
         assert r.status_code == 400
         r = c.get("/health", headers={"Origin": "https://zly.example", "Authorization": f"Bearer {TOKEN}"})
         assert "access-control-allow-origin" not in r.headers
@@ -43,16 +43,16 @@ def test_without_the_setting_nothing_is_added():
     with client([]) as c:
         r = c.get("/health", headers={"Origin": SITE, "Authorization": f"Bearer {TOKEN}"})
         assert r.status_code == 200 and "access-control-allow-origin" not in r.headers
-        assert c.options("/facts", headers={"Origin": SITE, "Access-Control-Request-Method": "GET"}).status_code == 405
+        assert c.options("/memory", headers={"Origin": SITE, "Access-Control-Request-Method": "GET"}).status_code == 405
 
 
 def test_cors_does_not_replace_the_token():
     with client([SITE]) as c:
-        r = c.get("/facts", headers={"Origin": SITE})
+        r = c.get("/memory", headers={"Origin": SITE})
         assert r.status_code == 401 and r.headers["access-control-allow-origin"] == SITE  # przeglądarka zobaczy 401
-        r = c.get("/facts", headers={"Origin": SITE, "Authorization": f"Bearer {TOKEN}"})
+        r = c.get("/memory", headers={"Origin": SITE, "Authorization": f"Bearer {TOKEN}"})
         assert r.status_code == 200 and r.headers["access-control-allow-origin"] == SITE
-        assert c.get("/facts", headers={"Origin": SITE, "Authorization": "Bearer zly-token-1234567890"}).status_code == 401
+        assert c.get("/memory", headers={"Origin": SITE, "Authorization": "Bearer zly-token-1234567890"}).status_code == 401
 
 
 def test_websocket_still_needs_the_token_from_a_listed_origin():

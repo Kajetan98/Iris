@@ -17,7 +17,7 @@ from collections.abc import Callable, Coroutine
 from typing import TYPE_CHECKING, Any, Protocol
 
 from host.core.clock import Clock
-from host.api.learner import Learner
+from host.api.memory import Memory
 from host.core.commands import parse_switch, resolve_device
 from host.core.config import Config
 from host.core.core import HostCore
@@ -132,7 +132,9 @@ class HostService:
         self._started = clock.monotonic()
         self._last_touch = self._started
         self._last_snapshot = self._started
-        self.learner = Learner(config, clock, store, self._persist, self._store, self.refresh_known_facts)
+        self.memory = Memory(
+            config, clock, store, self._persist, self._store, self.refresh_known_concepts, self._spawn
+        )
 
     # --- cykl życia ---
 
@@ -143,7 +145,7 @@ class HostService:
         self._started = self._last_touch = self.clock.monotonic()
         self._persist(self.core.start())
         self._snapshot()
-        self.learner.maybe_decay()  # przy starcie, potem raz na dobę (spec, sekcja 9)
+        self.memory.maybe_prune()  # przy starcie, potem co memory.prune_every_s (spec, sekcja 9)
         self._init_voice()
 
     def stop(self) -> None:
@@ -170,7 +172,7 @@ class HostService:
             self._store(self.store.touch_devices, list(self._conns))
         if now - self._last_snapshot >= self.config.api.snapshot_every_s:
             self._snapshot()
-        self.learner.maybe_decay()
+        self.memory.maybe_prune()
 
     # --- połączenia z urządzeniami ---
 
@@ -577,13 +579,13 @@ class HostService:
         if not text:
             raise ValueError("pusta wypowiedź")
         # Przed LLM i bez niego: odpowiedź na pytanie IRIS, przełączenie, pamięć (spec, sekcje 1 i 9).
-        reply = await self._local_command(self.learner.answer, text)
+        reply = await self._local_command(self.memory.answer, text)
         if reply is not None:
             return reply
         command = await self._switch_command(text)
         if command is not None:
             return command
-        reply = await self._local_command(self.learner.command, text)
+        reply = await self._local_command(self.memory.command, text)
         if reply is not None:
             return reply
         assistant = self.assistant
@@ -595,10 +597,10 @@ class HostService:
         async with self._chat_lock:
             self._persist(core.note_interaction())
             state = core.prompt_slice()
-            facts = self._store(self.store.facts) or []
+            tools = self.memory.tools() if self.memory.enabled else None
             started = time.monotonic()
             try:
-                answer = await assistant.ask(text, state=state, facts=facts, now=self.clock.wall())
+                answer = await assistant.ask(text, state=state, now=self.clock.wall(), tools=tools)
             except BaseException as e:
                 core.rollback_prompt_slice()  # także przy anulowaniu żądania
                 if isinstance(e, LLMRefusal):
@@ -609,20 +611,13 @@ class HostService:
                     raise ChatError("failed", str(e)) from None
                 raise
             reply_text = answer.text
-            from host.brain.prompt import select_facts
-
-            # Które przypuszczenia poszły do modelu: pochwała lub krytyka dotyczy właśnie ich (spec, sekcja 9).
-            used = select_facts(facts, self.config.brain.llm, remote=assistant.engine.remote)
-            self.learner.note_context([f.id for f in used if f.source == "inferred"])
-            question = self.learner.question()  # pytanie o przypuszczenie (spec, sekcja 9)
-            if question is not None:
-                reply_text = f"{reply_text} {question}"
-        if self.learner.infers_with(assistant.engine):
-            self._spawn(self.learner.learn_from(assistant.engine, text))  # w tle, tura nie czeka
+            # Pochwała lub krytyka dotyczy pojęć przypomnianych do tej odpowiedzi (spec, sekcja 9).
+            self.memory.note_recalled(tools.recalled if tools is not None else [])
+        self.memory.submit(assistant.engine, text)  # nauka w tle, tura nie czeka
         log.info(
-            "chat: model=%s tokens=%s/%s truncated=%s %.0f ms",
+            "chat: model=%s tokens=%s/%s truncated=%s tool_rounds=%d %.0f ms",
             answer.model, answer.usage.input_tokens, answer.usage.output_tokens,
-            answer.truncated, (time.monotonic() - started) * 1000,
+            answer.truncated, answer.tool_rounds, (time.monotonic() - started) * 1000,
         )
         return {
             "text": reply_text,
@@ -673,8 +668,10 @@ class HostService:
 
     # --- stan ---
 
-    def refresh_known_facts(self) -> None:
-        self._require_core().set_known_facts(self.store.count_facts())
+    def refresh_known_concepts(self) -> None:
+        count = self._store(self.store.concept_count)
+        if count is not None and self.core is not None:
+            self.core.set_known_concepts(count)
 
     def health(self) -> dict[str, Any]:
         body = self._require_core().body.snapshot()

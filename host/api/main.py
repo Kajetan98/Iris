@@ -78,7 +78,7 @@ def create_app(
         cfg = config
         clk = clock or SystemClock()
         owned_store = store is None
-        st = store or Store(cfg.store.path, clk)
+        st = store or Store(cfg.store.path, clk, cfg.memory)
         owned_assistant = assistant is None
         asst = assistant
         if asst is None and cfg.brain.llm.engine != "none":
@@ -122,6 +122,7 @@ def create_app(
 
     app = FastAPI(title="IRIS host", lifespan=lifespan)
     app.state.token = token
+    app.state.memory_clients = set()  # połączenia /memory/stream (limit memory.stream_max_clients)
     app.state.allowed_origins = tuple(config.api.cors_origins)  # Origin dopuszczony bez tokenu (spec, sekcja 1)
     if config.api.cors_origins:
         # Klient z innego adresu (np. Vercel); token nadal obowiązuje, ciasteczek nie ma (spec, sekcja 10).

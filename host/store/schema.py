@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import sqlite3
+from collections.abc import Callable
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 _V1 = """
 CREATE TABLE sessions (
@@ -75,23 +76,67 @@ ALTER TABLE facts ADD COLUMN asked_at TEXT;
 
 _MIGRATIONS = {0: _V1 + _V2 + _V3, 1: _V2 + _V3, 2: _V3}
 
+# Wersja 4: pamięć jako graf pojęć (docs/spec.md, sekcja 9, "Pamięć: graf pojęć"). Fakty uczą graf
+# w tej samej transakcji (wywołanie zwrotne), a tabela `facts` zostaje jako `facts_v3`.
+_V4 = [
+    """CREATE TABLE concepts (
+        key        TEXT PRIMARY KEY CHECK (length(key) > 0),
+        label      TEXT NOT NULL,
+        strength   REAL NOT NULL CHECK (strength BETWEEN 0 AND 1),
+        last_used  TEXT NOT NULL,
+        hits       INTEGER NOT NULL CHECK (hits >= 1),
+        created_at TEXT NOT NULL
+    )""",
+    """CREATE TABLE concept_domains (
+        key    TEXT NOT NULL REFERENCES concepts(key) ON DELETE CASCADE,
+        domain TEXT NOT NULL,
+        count  INTEGER NOT NULL CHECK (count >= 1),
+        PRIMARY KEY (key, domain)
+    )""",
+    """CREATE TABLE concept_links (
+        a         TEXT NOT NULL REFERENCES concepts(key) ON DELETE CASCADE,
+        b         TEXT NOT NULL REFERENCES concepts(key) ON DELETE CASCADE,
+        strength  REAL NOT NULL CHECK (strength BETWEEN 0 AND 1),
+        last_used TEXT NOT NULL,
+        PRIMARY KEY (a, b),
+        CHECK (a < b)
+    )""",
+    "CREATE INDEX concept_links_b ON concept_links(b)",
+    "CREATE TABLE memory_meta (k TEXT PRIMARY KEY, v TEXT NOT NULL)",
+    "ALTER TABLE facts RENAME TO facts_v3",
+]
+
 
 class SchemaError(Exception):
     pass
 
 
-def migrate(conn: sqlite3.Connection) -> None:
+def migrate(conn: sqlite3.Connection, on_v4: Callable[[sqlite3.Connection], None] | None = None) -> None:
+    """Podnosi schemat do SCHEMA_VERSION. `on_v4` dostaje połączenie w transakcji migracji do v4,
+    po utworzeniu tabel pamięci i zmianie nazwy `facts` na `facts_v3` (migracja faktów do grafu)."""
     version = conn.execute("PRAGMA user_version").fetchone()[0]
     if version > SCHEMA_VERSION:
         raise SchemaError(
             f"baza ma schemat v{version}, ten program obsługuje do v{SCHEMA_VERSION}"
         )
     script = _MIGRATIONS.get(version)
-    if script is None:
-        return
-    # executescript robi własny COMMIT, więc wersję ustawiamy w tym samym skrypcie.
-    try:
-        conn.executescript(f"BEGIN;{script}PRAGMA user_version = {SCHEMA_VERSION};COMMIT;")
-    except sqlite3.Error:
-        conn.rollback()
-        raise
+    if script is not None:
+        # executescript robi własny COMMIT, więc wersję ustawiamy w tym samym skrypcie.
+        try:
+            conn.executescript(f"BEGIN;{script}PRAGMA user_version = 3;COMMIT;")
+        except sqlite3.Error:
+            conn.rollback()
+            raise
+        version = 3
+    if version == 3:
+        try:
+            conn.execute("BEGIN")
+            for statement in _V4:
+                conn.execute(statement)
+            if on_v4 is not None:
+                on_v4(conn)
+            conn.execute(f"PRAGMA user_version = {SCHEMA_VERSION}")
+            conn.commit()
+        except BaseException:
+            conn.rollback()
+            raise

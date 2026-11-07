@@ -60,7 +60,7 @@ def test_get_self(client):
     assert r.status_code == 200
     body = r.json()
     assert body["self"]["name"] == "IRIS" and body["self"]["mode"] == "nominal"
-    assert body["self"]["continuity"] == {"sessions": 1, "known_facts": 0}
+    assert body["self"]["continuity"] == {"sessions": 1, "known_concepts": 0}
     assert body["body"]["link"] == "unknown"
 
 
@@ -130,53 +130,15 @@ def test_naive_since_is_rejected_in_history_too(client):
     assert client.get("/self/history", params={"since": "2026-01-01T12:00:00"}).status_code == 422
 
 
-# --- fakty ---
+# --- pamięć ---
 
 
-def test_facts_list_patch_delete(client, service):
-    a = service.store.add_fact("Mieszkam w Gdańsku", "stated")
-    b = service.store.add_fact("Lubi kawę", "inferred", 0.4)
-
-    facts = client.get("/facts").json()["facts"]
-    assert [f["text"] for f in facts] == ["Mieszkam w Gdańsku", "Lubi kawę"]
-    assert set(facts[0]) == {"id", "text", "source", "confidence", "reinforced", "asked_at", "in_context",
-                             "created_at", "updated_at"}
-    assert facts[0]["in_context"] is False  # bez LLM nic nie trafia do kontekstu
-    assert (facts[0]["reinforced"], facts[0]["asked_at"]) == (0, None)
-    assert [f["id"] for f in client.get("/facts", params={"source": "inferred"}).json()["facts"]] == [b.id]
-    assert client.get("/facts", params={"source": "guessed"}).status_code == 422
-
-    r = client.patch(f"/facts/{b.id}", json={"text": "Pije herbatę"})
-    assert r.status_code == 200
-    assert (r.json()["text"], r.json()["source"], r.json()["confidence"]) == ("Pije herbatę", "stated", 1.0)
-    r = client.patch(f"/facts/{a.id}", json={"confidence": 0.7})
-    assert r.json()["confidence"] == 0.7 and r.json()["source"] == "stated"
-
-    assert client.delete(f"/facts/{a.id}").status_code == 204
-    assert client.delete(f"/facts/{a.id}").status_code == 404
-    assert [f["id"] for f in client.get("/facts").json()["facts"]] == [b.id]
-
-
-@pytest.mark.parametrize(
-    "payload",
-    [{}, {"text": None}, {"text": "  "}, {"confidence": 1.5}, {"source": "guessed"}, {"color": "red"}],
-)
-def test_patch_fact_validation(client, service, payload):
-    f = service.store.add_fact("a", "stated")
-    assert client.patch(f"/facts/{f.id}", json=payload).status_code == 422
-    assert service.store.get_fact(f.id).text == "a"
-
-
-def test_patch_missing_fact_is_404(client):
-    assert client.patch("/facts/99", json={"text": "x"}).status_code == 404
-
-
-def test_delete_updates_known_facts_in_self(client, service):
-    f = service.store.add_fact("a", "stated")
-    service.refresh_known_facts()
-    assert client.get("/self").json()["self"]["continuity"]["known_facts"] == 1
-    client.delete(f"/facts/{f.id}")
-    assert client.get("/self").json()["self"]["continuity"]["known_facts"] == 0
+def test_learning_and_deleting_update_known_concepts_in_self(client, service):
+    assert client.post("/memory/learn", json={"text": "lampa"}).status_code == 200
+    assert client.get("/self").json()["self"]["continuity"]["known_concepts"] == 1
+    assert client.delete("/memory/concepts/lamp").status_code == 204
+    assert client.get("/self").json()["self"]["continuity"]["known_concepts"] == 0
+    assert client.get("/facts").status_code == 404
 
 
 # --- WebSocket ---

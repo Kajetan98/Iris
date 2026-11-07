@@ -179,23 +179,23 @@ const scenarios = {
     return { shortKept, longKept, state: await page.textContent("#state"), notice: await page.textContent("#notice") };
   },
 
-  // Okno "Co IRIS o mnie wie": lista faktów z hosta i usuwanie pierwszego z nich.
+  // Okno "Pamięć IRIS": lista pojęć z hosta i usuwanie pierwszego z nich.
   async memory(page) {
     await connect(page, opts.device, opts.token);
     await waitState(page, "idle");
     await page.click("#open-memory");
-    await page.waitForSelector("#facts li");
+    await page.waitForSelector("#concepts li");
     const read = () =>
       page.evaluate(() =>
-        Array.from(document.querySelectorAll("#facts li"), (li) => ({
+        Array.from(document.querySelectorAll("#concepts li"), (li) => ({
           text: li.querySelector(".fact-text").textContent,
           meta: li.querySelector(".fact-meta").textContent,
           label: li.querySelector("button").getAttribute("aria-label"),
         })),
       );
     const before = await read();
-    await page.click("#facts li:first-child button");
-    await page.waitForFunction((n) => document.querySelectorAll("#facts li").length === n - 1, before.length);
+    await page.click("#concepts li:first-child button");
+    await page.waitForFunction((n) => document.querySelectorAll("#concepts li").length === n - 1, before.length);
     return { before, after: await read(), status: await page.textContent("#memory-status") };
   },
 
@@ -208,7 +208,7 @@ const scenarios = {
     if (opts.memory) {
       await page.click("#open-memory");
       await page.waitForTimeout(1200);
-      out.facts = await page.evaluate(() => Array.from(document.querySelectorAll("#facts .fact-text"), (e) => e.textContent));
+      out.concepts = await page.evaluate(() => Array.from(document.querySelectorAll("#concepts .fact-text"), (e) => e.textContent));
       out.memoryStatus = await page.textContent("#memory-status");
     }
     return out;

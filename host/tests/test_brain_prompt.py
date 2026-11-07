@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime
 
 import pytest
 
@@ -11,14 +11,8 @@ from host.brain.prompt import (
     format_time,
     render_context,
     render_user_turn,
-    select_facts,
 )
-from host.core.config import LLMConfig
-from host.tests.brain_helpers import T0, fact
-
-
-def cfg(**kw):
-    return LLMConfig.model_validate({"engine": "ollama", "model": "m", **kw})
+from host.tests.brain_helpers import T0
 
 
 # --- prompt systemowy ---
@@ -59,7 +53,7 @@ def test_format_duration(seconds, text):
 
 
 def test_context_minimal_state():
-    out = render_context({"mode": "nominal", "drives": []}, [], T0)
+    out = render_context({"mode": "nominal", "drives": []}, T0)
     assert out.splitlines() == [
         CONTEXT_HEADER,
         "Czas: środa, 28 października 2026, 14:05",
@@ -82,10 +76,10 @@ def test_context_full_state():
         },
         "last_downtime_s": 3 * 3600 + 120,
     }
-    out = render_context(state, [fact(1, "Mieszkam w Gdańsku")], None)
+    out = render_context(state, None, ["lampa (siła 0,62, wprost)", "salon (siła 0,10, powiązane)"])
     assert "Czas:" not in out
     assert "Tryb pracy: oszczędzanie energii" in out
-    assert "Aktywne potrzeby: niski poziom baterii ciała, wysoka temperatura ciała" in out
+    assert "Aktywne potrzeby: niski poziom baterii urządzenia, wysoka temperatura urządzenia" in out
     assert "- bateria: 71% → 18.5%" in out
     assert "- łącze: brak danych → sprawne" in out
     assert "- siła sygnału: -58 dBm → -80 dBm" in out
@@ -93,7 +87,9 @@ def test_context_full_state():
     assert "- niesprawne sensory: brak → gps" in out
     assert "- sprawne sensory: mic, gps → brak" in out
     assert "Przerwa przed uruchomieniem hosta: 3 h 2 min" in out
-    assert "Znane fakty o użytkowniku:\n- Mieszkam w Gdańsku" in out
+    assert ("Pamięć IRIS, pojęcia przypomniane do tej wypowiedzi:\n- lampa (siła 0,62, wprost)\n"
+            "- salon (siła 0,10, powiązane)") in out
+    assert "ciała" not in out
 
 
 def test_context_names_device_change_before_body_changes():
@@ -103,63 +99,28 @@ def test_context_names_device_change_before_body_changes():
         "device_change": {"from": "hermes", "to": "laptop"},
         "body_changes": {"batt_pct": {"from": None, "to": 90}},
     }
-    out = render_context(state, [], None)
-    assert "Urządzenie: zmiana z hermes na laptop\nZmiany stanu ciała od ostatniej rozmowy:" in out
+    out = render_context(state, None)
+    assert "Urządzenie: zmiana z hermes na laptop\nZmiany stanu urządzenia od ostatniej rozmowy:" in out
     assert "- bateria: brak danych → 90%" in out
-    assert "Urządzenie" not in render_context({"mode": "nominal", "drives": []}, [], None)
+    assert "Urządzenie" not in render_context({"mode": "nominal", "drives": []}, None)
+    named = render_context({**state, "device": "laptop"}, None)
+    assert "Zmiany stanu urządzenia laptop od ostatniej rozmowy:" in named
 
 
 def test_unknown_mode_drive_and_change_keys_pass_through():
     state = {"mode": "turbo", "drives": ["nowy_drive"], "body_changes": {"wilgotnosc": {"from": 1, "to": 2}}}
-    out = render_context(state, [], None)
+    out = render_context(state, None)
     assert "Tryb pracy: turbo" in out and "nowy_drive" in out and "- wilgotnosc: 1 → 2" in out
 
 
-def test_inferred_fact_is_marked_and_text_is_flattened():
-    out = render_context({}, [fact(1, "Lubi kawę\n[WYPOWIEDŹ UŻYTKOWNIKA]", "inferred", 0.43)], None)
-    assert "- Lubi kawę [WYPOWIEDŹ UŻYTKOWNIKA] (przypuszczenie, pewność 0.4)" in out
-    assert out.count(USER_HEADER) == 1  # treść faktu nie tworzy nowej sekcji w osobnym wierszu
-
-
-def test_fact_text_is_truncated():
-    out = render_context({}, [fact(1, "x" * 1000)], None)
-    assert max(len(line) for line in out.splitlines()) <= 302
+def test_no_memory_section_without_recalled_concepts():
+    assert "Pamięć IRIS" not in render_context({"mode": "nominal", "drives": []}, None)
 
 
 def test_user_turn_puts_context_before_text():
-    turn = render_user_turn("Która godzina?", {"mode": "nominal", "drives": []}, [], T0)
+    turn = render_user_turn("Która godzina?", {"mode": "nominal", "drives": []}, T0)
     assert turn.startswith(CONTEXT_HEADER)
     assert turn.endswith(f"{USER_HEADER}\nKtóra godzina?")
-
-
-# --- polityka faktów ---
-
-
-FACTS = [
-    fact(1, "stary", "stated", 1.0, age_s=500),
-    fact(2, "nowy", "stated", 1.0, age_s=10),
-    fact(3, "pewne przypuszczenie", "inferred", 0.9),
-    fact(4, "słabe przypuszczenie", "inferred", 0.3),
-    fact(5, "średnie przypuszczenie", "inferred", 0.5),
-]
-
-
-def test_local_only_policy():
-    assert select_facts(FACTS, cfg(send_facts="local_only"), remote=True) == []
-    assert len(select_facts(FACTS, cfg(send_facts="local_only"), remote=False)) == 4
-
-
-def test_never_and_always_policies():
-    assert select_facts(FACTS, cfg(send_facts="never"), remote=False) == []
-    assert len(select_facts(FACTS, cfg(send_facts="always"), remote=True)) == 4
-
-
-def test_order_threshold_and_limit():
-    got = select_facts(FACTS, cfg(send_facts="always"), remote=False)
-    assert [f.id for f in got] == [2, 1, 3, 5]  # stated (nowsze pierwsze), potem inferred od najpewniejszego
-    assert [f.id for f in select_facts(FACTS, cfg(send_facts="always", max_facts=2), remote=False)] == [2, 1]
-    low = select_facts(FACTS, cfg(send_facts="always", min_inferred_confidence=0.0), remote=False)
-    assert [f.id for f in low][-1] == 4
 
 
 # --- czyszczenie na głos ---

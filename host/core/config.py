@@ -77,7 +77,7 @@ class InitiativeConfig(_Model):
     quiet: bool = False
 
 
-# Rdzenie słów danych wrażliwych: wniosków z nimi IRIS nie zapisuje sama (spec, sekcja 9).
+# Rdzenie słów danych wrażliwych: z nimi pamięć nie uczy się sama (spec, sekcja 9).
 SENSITIVE_STEMS = [
     # zdrowie
     "zdrow", "chorob", "chory", "chora", "chorzy", "leki", "lekarstw", "lekarz", "leczen", "tętn", "puls",
@@ -92,37 +92,6 @@ SENSITIVE_STEMS = [
     "wyzna", "religi", "wierząc", "ateist", "katolik", "polityk", "partii", "partia", "głosuj",
     "orientacj", "seksual",
 ]
-
-
-class LearningConfig(_Model):
-    """Uczenie się faktów o użytkowniku (spec, sekcja 9, "Uczenie się")."""
-
-    enabled: bool = True
-    infer: Literal["local_only", "always", "never"] = "local_only"
-    max_per_turn: int = Field(3, ge=0, le=10)
-    similar: float = Field(0.6, gt=0, le=1)
-    forget_match: float = Field(0.5, gt=0, le=1)
-    start_max: float = Field(0.45, gt=0, lt=1)
-    reinforce_step: float = Field(0.2, gt=0, le=1)
-    max_inferred: float = Field(0.9, gt=0, lt=1)
-    ask: bool = True
-    ask_min: float = Field(0.4, ge=0, le=1)
-    ask_interval_s: float = Field(900.0, ge=0)
-    ask_again_days: float = Field(7.0, ge=0)
-    answer_window_s: float = Field(120.0, gt=0)
-    decay_after_days: float = Field(30.0, gt=0)
-    decay_step: float = Field(0.1, gt=0, le=1)
-    forget_below: float = Field(0.2, ge=0, lt=1)
-    feedback: bool = True  # pochwała i krytyka ostatniej odpowiedzi zmieniają pewność użytych przypuszczeń
-    feedback_up: float = Field(0.1, gt=0, le=1)
-    feedback_down: float = Field(0.2, gt=0, le=1)
-    sensitive_words: list[str] = SENSITIVE_STEMS
-
-    @model_validator(mode="after")
-    def _ordered(self) -> "LearningConfig":
-        if not self.forget_below < self.start_max <= self.max_inferred:
-            raise ValueError("wymagane forget_below < start_max <= max_inferred")
-        return self
 
 
 # Domeny pamięci (spec, sekcja 9): kontekst, w którym pojęcie padło. Kolory z logo IRIS.
@@ -257,15 +226,24 @@ class LLMConfig(_Model):
     timeout_s: float = Field(30.0, gt=0)
     retries: int = Field(1, ge=0, le=5)
     history_turns: int = Field(10, ge=0)
-    send_facts: Literal["always", "local_only", "never"] = "local_only"
-    max_facts: int = Field(30, ge=0)
-    min_inferred_confidence: float = Field(0.5, ge=0, le=1)
+    send_memory: Literal["always", "local_only", "never"] = "local_only"  # pamięć w zapytaniu (spec, sekcja 12)
     tools: bool = True  # narzędzia pamięci iris_recall i iris_remember (spec, sekcja 12)
     max_tool_rounds: int = Field(2, ge=0, le=5)
     # Tylko claude:
     effort: Literal["off", "low", "medium", "high", "xhigh", "max"] = "low"  # off = bez parametru
     thinking_headroom_tokens: int = Field(2000, ge=0)
     fallbacks: bool = True
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed_keys(cls, data: object) -> object:
+        if isinstance(data, dict):
+            if "send_facts" in data:
+                raise ValueError("brain.llm.send_facts zastąpiło send_memory (spec, sekcja 12)")
+            gone = sorted({"max_facts", "min_inferred_confidence"} & set(data))
+            if gone:
+                raise ValueError(f"brain.llm: {', '.join(gone)} nie istnieją od zmiany pamięci na graf pojęć")
+        return data
 
     @model_validator(mode="after")
     def _engine_settings(self) -> "LLMConfig":
@@ -369,8 +347,14 @@ class Config(_Model):
     store: StoreConfig = StoreConfig()
     api: ApiConfig = ApiConfig()
     brain: BrainConfig = BrainConfig()
-    learning: LearningConfig = LearningConfig()
     memory: MemoryConfig = MemoryConfig()
+
+    @model_validator(mode="before")
+    @classmethod
+    def _renamed_sections(cls, data: object) -> object:
+        if isinstance(data, dict) and "learning" in data:
+            raise ValueError("sekcję [learning] zastąpiła [memory]: pamięć to graf pojęć (spec, sekcja 9)")
+        return data
 
     @model_validator(mode="after")
     def _voice_engines_together(self) -> "Config":

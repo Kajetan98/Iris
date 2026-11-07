@@ -5,7 +5,7 @@ import asyncio
 import httpx
 import pytest
 from host.api.main import create_app
-from host.brain.learn import EXTRACT_PROMPT
+from host.brain.learn import CONCEPTS_PROMPT
 from host.core.config import Config
 from host.tests.servers import free_port, ollama_stub_app, start, stop, until
 from sim.body import SimRunner
@@ -51,7 +51,7 @@ def host(ollama_stub):
 
 def chat_requests(ollama):
     """Zapytania rozmowy; zapytania o wnioski (spec, sekcja 9) idą w tle i mogą przyjść później."""
-    return [r for r in ollama["requests"] if r["messages"][0]["content"] != EXTRACT_PROMPT]
+    return [r for r in ollama["requests"] if r["messages"][0]["content"] != CONCEPTS_PROMPT]
 
 
 def context_of(request_body):
@@ -92,7 +92,7 @@ def test_chat_through_the_whole_stack(host, ollama_stub):
             assert first["stream"] is False and first["model"] == "bielik"
             assert first["messages"][0]["role"] == "system" and "jesteś programem" in first["messages"][0]["content"].lower()
             ctx = context_of(first)
-            assert "oszczędzanie energii" in ctx and "niski poziom baterii ciała" in ctx
+            assert "oszczędzanie energii" in ctx and "niski poziom baterii urządzenia" in ctx
             assert "bateria: brak danych → 10%" in ctx
             assert "52.2297" not in str(first) and "21.0122" not in str(first)
 

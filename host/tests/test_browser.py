@@ -219,7 +219,7 @@ def test_browser_reconnects_after_a_long_time_in_the_background():
         stop(*server)
 
 
-def test_memory_panel_lists_and_deletes_facts():
+def test_memory_panel_lists_and_deletes_concepts():
     app = create_app(Config.model_validate({"store": {"path": ":memory:"}}), token=TOKEN)
     port = free_port()
     server = start(app, port)
@@ -227,20 +227,17 @@ def test_memory_panel_lists_and_deletes_facts():
     headers = {"Authorization": f"Bearer {TOKEN}"}
     try:
         with httpx.Client(base_url=base, headers=headers) as http:
-            assert http.post("/chat", json={"text": "Zapamiętaj, że mam psa Burka"}).json()["text"] == (
-                'Zapamiętane: "mam psa Burka".')
-            app.state.service.store.add_fact("Lubisz jazz", "inferred", 0.45)
+            assert http.post("/chat", json={"text": "Zapamiętaj, że lampa stoi w salonie"}).json()["text"] == (
+                "Zapamiętane: lampa, stoi, salonie.")
+            assert http.post("/memory/learn", json={"text": "lampa"}).status_code == 200  # lampa silniejsza
             out = browser("memory", base, device="telefon", token=TOKEN)
-            # bez LLM nic nie trafia do kontekstu, więc przypuszczenie jest "jeszcze nieużywane"
-            assert out["before"] == [
-                {"text": "mam psa Burka", "meta": "od ciebie", "label": "Usuń: mam psa Burka"},
-                {"text": "Lubisz jazz", "meta": "przypuszczenie, pewność 45%, jeszcze nieużywane w rozmowie",
-                 "label": "Usuń: Lubisz jazz"},
-            ]
-            assert [f["text"] for f in out["after"]] == ["Lubisz jazz"] and out["status"] == "Usunięte."
-            assert [f["text"] for f in http.get("/facts").json()["facts"]] == ["Lubisz jazz"]
-            forgets = http.get("/events", params={"type": "fact.forget"}).json()["events"]
-            assert [e["data"]["why"] for e in forgets] == ["user"]
+            assert out["before"][0]["text"] == "lampa" and out["before"][0]["label"] == "Usuń: lampa"
+            assert out["before"][0]["meta"] == "siła 61%, użyć 2, kontekst: dom"
+            assert sorted(c["text"] for c in out["before"][1:]) == ["salonie", "stoi"]
+            assert sorted(c["text"] for c in out["after"]) == ["salonie", "stoi"] and out["status"] == "Usunięte."
+            assert sorted(n["label"] for n in http.get("/memory").json()["nodes"]) == ["salonie", "stoi"]
+            forgets = http.get("/events", params={"type": "memory.forget"}).json()["events"]
+            assert [e["data"] for e in forgets] == [{"why": "user", "count": 1}]
     finally:
         stop(*server)
 
@@ -292,11 +289,12 @@ def test_client_from_one_host_talks_to_another_host():
                             token=TOKEN)
     remote = start(remote_app, remote_port)
     try:
-        remote_app.state.service.store.add_fact("mam psa Burka", "stated")
+        with httpx.Client(base_url=remote_origin, headers={"Authorization": f"Bearer {TOKEN}"}) as http:
+            http.post("/memory/learn", json={"text": "Burek"})
         out = browser("remoteHost", client_origin, device="telefon", token=TOKEN, hostUrl=remote_origin + "/", memory=True)
         assert out["link"] == "up" and out["saved"] == remote_origin + "/"
         assert "api.cors_origins" not in out["notice"]  # zapytania z tej strony przechodzą
-        assert out["facts"] == ["mam psa Burka"]  # lista pamięci z drugiego hosta, z tokenem
+        assert out["concepts"] == ["burek"]  # pamięć z drugiego hosta, pobrana z tokenem
         with httpx.Client(base_url=remote_origin, headers={"Authorization": f"Bearer {TOKEN}"}) as http:
             assert [d["id"] for d in http.get("/devices").json()["devices"]] == ["telefon"]  # tam się zarejestrował
         with httpx.Client(base_url=client_origin) as http:

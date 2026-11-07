@@ -9,7 +9,7 @@ path = "iris.db"
 [brain.llm]
 engine = "ollama"            # albo "claude" (klucz w ANTHROPIC_API_KEY) albo "none" (bez rozmowy)
 model = "llama3.1"           # przykład: dowolny model pobrany w Ollamie
-send_facts = "local_only"    # zapamiętane fakty trafiają tylko do lokalnego modelu
+send_memory = "local_only"   # pamięć (pojęcia) trafia tylko do lokalnego modelu
 
 [brain.stt]
 engine = "faster-whisper"

@@ -20,7 +20,11 @@ def run_session(path, clock, *, seconds, batt, fact=None):
     store = Store(path, clock)
     core = HostCore(clock=clock, continuity=store.begin_session())
     if fact:
-        store.add_fact(fact, "stated")
+        from host.core.config import MemoryConfig
+        from host.core.memory import heuristic, plan_learn
+
+        plan = plan_learn(heuristic(fact, MemoryConfig()), {}, {}, clock.wall(), MemoryConfig())
+        store.save_memory(plan.concepts, plan.links)
     for ev in core.start():
         store.append_host_event(ev)
     for _ in range(seconds):
@@ -50,7 +54,7 @@ def test_restart_reports_downtime_and_session_count(tmp_path):
 
     snap = core.self_snapshot()["self"]
     assert snap["last_downtime_s"] == 2 * 3600
-    assert snap["continuity"] == {"sessions": 2, "known_facts": 1}
+    assert snap["continuity"] == {"sessions": 2, "known_concepts": 2}  # "lubię", "herbatę"
     assert snap["last_restart"] == clock.wall().isoformat()
     assert core.prompt_slice()["last_downtime_s"] == 2 * 3600
     store.close()

@@ -1,4 +1,4 @@
-"""Zapis zdarzeń, stanu i faktów w SQLite (docs/spec.md, sekcja 9).
+"""Zapis zdarzeń, stanu i pamięci (graf pojęć) w SQLite (docs/spec.md, sekcja 9).
 
 Czas w bazie to UTC w stałym formacie ISO 8601, więc porównania tekstowe są poprawne.
 Jedna instancja obsługuje jedną sesję hosta i może być używana z wielu wątków.
@@ -9,22 +9,20 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from host.core.clock import Clock, SystemClock
+from host.core.config import MemoryConfig
 from host.core.continuity import Continuity
 from host.core.events import HostEvent
 from host.core.protocol import DecodedEvent
-from host.store.models import DeviceRow, Fact, SessionRow, Snapshot, StoredEvent
+from host.store.models import Concept, DeviceRow, Link, SessionRow, Snapshot, StoredEvent
 from host.store.schema import SchemaError, migrate
 
 __all__ = ["Store", "StoreError", "SchemaError"]
-
-FACT_SOURCES = ("stated", "inferred")
-
 
 class StoreError(Exception):
     pass
@@ -40,20 +38,10 @@ def _from_db(s: str) -> datetime:
     return datetime.fromisoformat(s)
 
 
-def _check_text(text: str) -> str:
-    if not text.strip():
-        raise ValueError("text nie może być pusty")
-    return text
-
-
-def _check_confidence(value: float) -> float:
-    if isinstance(value, bool) or not 0 <= value <= 1:
-        raise ValueError("confidence musi być liczbą z przedziału 0-1")
-    return float(value)
-
-
 class Store:
-    def __init__(self, path: str | Path = ":memory:", clock: Clock | None = None) -> None:
+    def __init__(
+        self, path: str | Path = ":memory:", clock: Clock | None = None, memory: MemoryConfig | None = None
+    ) -> None:
         self._clock = clock or SystemClock()
         self._lock = threading.RLock()
         self._conn = sqlite3.connect(str(path), check_same_thread=False)
@@ -63,7 +51,7 @@ class Store:
             self._conn.execute("PRAGMA busy_timeout = 5000")
             if str(path) != ":memory:":
                 self._conn.execute("PRAGMA journal_mode = WAL")
-            migrate(self._conn)
+            migrate(self._conn, on_v4=_migrate_facts(memory or MemoryConfig()))
         except Exception:
             self._conn.close()
             raise
@@ -97,14 +85,14 @@ class Store:
                     "SELECT last_seen_at FROM sessions ORDER BY id DESC LIMIT 1"
                 ).fetchone()
                 prior = self._conn.execute("SELECT COUNT(*) FROM sessions").fetchone()[0]
-                facts = self._conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
+                concepts = self._conn.execute("SELECT COUNT(*) FROM concepts").fetchone()[0]
                 cur = self._conn.execute(
                     "INSERT INTO sessions(started_at, last_seen_at) VALUES (?, ?)",
                     (_to_db(now), _to_db(now)),
                 )
             self.session_id = cur.lastrowid
         prev_dt = _from_db(prev["last_seen_at"]) if prev else None
-        return Continuity.at_start(now, prev_dt, prior_sessions=prior, known_facts=facts)
+        return Continuity.at_start(now, prev_dt, prior_sessions=prior, known_concepts=concepts)
 
     def end_session(self) -> None:
         """Czyste zamknięcie: ustawia ended_at i odświeża last_seen_at."""
@@ -316,138 +304,162 @@ class Store:
             json.loads(r["self_json"]), json.loads(r["body_json"]),
         )
 
-    # --- fakty ---
+    # --- pamięć: graf pojęć (spec, sekcja 9) ---
 
-    def add_fact(self, text: str, source: str, confidence: float | None = None) -> Fact:
-        if source not in FACT_SOURCES:
-            raise ValueError(f"source musi być jednym z {FACT_SOURCES}")
-        if confidence is None:
-            if source == "inferred":
-                raise ValueError("fakt 'inferred' wymaga confidence")
-            confidence = 1.0
-        confidence = _check_confidence(confidence)
-        _check_text(text)
-        now = _to_db(self._clock.wall())
-        with self._lock, self._conn:
-            sid = self._require_session()
-            cur = self._conn.execute(
-                "INSERT INTO facts(text, source, confidence, created_at, updated_at, session_id)"
-                " VALUES (?, ?, ?, ?, ?, ?)",
-                (text, source, confidence, now, now, sid),
-            )
-            return self._fact(cur.lastrowid)
-
-    def facts(self, *, source: str | None = None) -> list[Fact]:
-        sql, args = "SELECT * FROM facts", []
-        if source is not None:
-            sql += " WHERE source = ?"
-            args.append(source)
+    def concepts(self, keys: Iterable[str] | None = None) -> dict[str, Concept]:
+        """Pojęcia o podanych kluczach (wszystkie, gdy `keys` to None)."""
         with self._lock:
-            rows = self._conn.execute(sql + " ORDER BY id", args).fetchall()
-        return [self._to_fact(r) for r in rows]
+            return _load_concepts(self._conn, None if keys is None else list(keys))
 
-    def get_fact(self, fact_id: int) -> Fact | None:
+    def links_touching(self, keys: Iterable[str]) -> list[Link]:
+        """Połączenia, których jednym końcem jest któryś z kluczy."""
+        keys = list(dict.fromkeys(keys))
+        if not keys:
+            return []
+        marks = ",".join("?" * len(keys))
         with self._lock:
-            return self._fact(fact_id)
-
-    def update_fact(
-        self,
-        fact_id: int,
-        *,
-        text: str | None = None,
-        source: str | None = None,
-        confidence: float | None = None,
-    ) -> Fact | None:
-        """Poprawka faktu. Zmiana tekstu bez podanego source/confidence oznacza wypowiedź
-        użytkownika: source='stated', confidence=1. Zwraca None, gdy faktu nie ma."""
-        if source is not None and source not in FACT_SOURCES:
-            raise ValueError(f"source musi być jednym z {FACT_SOURCES}")
-        if confidence is not None:
-            confidence = _check_confidence(confidence)
-        if text is not None:
-            _check_text(text)
-        with self._lock, self._conn:
-            current = self._fact(fact_id)
-            if current is None:
-                return None
-            new_text = current.text if text is None else text
-            new_source, new_conf = current.source, current.confidence
-            if text is not None and text != current.text:
-                new_source, new_conf = "stated", 1.0
-            if source is not None:
-                new_source = source
-            if confidence is not None:
-                new_conf = confidence
-            self._conn.execute(
-                "UPDATE facts SET text = ?, source = ?, confidence = ?, updated_at = ?"
-                " WHERE id = ?",
-                (new_text, new_source, new_conf, _to_db(self._clock.wall()), fact_id),
-            )
-            return self._fact(fact_id)
-
-    def reinforce_fact(self, fact_id: int, step: float, cap: float) -> Fact | None:
-        """Powtórzony wniosek: pewność rośnie o step (najwyżej cap), licznik o 1 (spec, sekcja 9)."""
-        with self._lock, self._conn:
-            current = self._fact(fact_id)
-            if current is None:
-                return None
-            conf = max(current.confidence, min(cap, current.confidence + step))
-            self._conn.execute(
-                "UPDATE facts SET confidence = ?, reinforced = reinforced + 1, updated_at = ? WHERE id = ?",
-                (_check_confidence(conf), _to_db(self._clock.wall()), fact_id),
-            )
-            return self._fact(fact_id)
-
-    def mark_fact_asked(self, fact_id: int) -> Fact | None:
-        """Zapisuje pytanie o fakt. Nie odświeża updated_at, więc pytanie nie wstrzymuje zanikania."""
-        with self._lock, self._conn:
-            self._conn.execute(
-                "UPDATE facts SET asked_at = ? WHERE id = ?", (_to_db(self._clock.wall()), fact_id)
-            )
-            return self._fact(fact_id)
-
-    def decay_facts(self, older_than: datetime, step: float, forget_below: float) -> tuple[list[int], list[int]]:
-        """Zanikanie przypuszczeń niezmienionych od older_than. Zwraca (osłabione, usunięte)."""
-        now = _to_db(self._clock.wall())
-        with self._lock, self._conn:
             rows = self._conn.execute(
-                "SELECT id, confidence FROM facts WHERE source = 'inferred' AND updated_at < ?",
-                (_to_db(older_than),),
+                f"SELECT * FROM concept_links WHERE a IN ({marks}) OR b IN ({marks})", keys + keys
             ).fetchall()
-            weakened, forgotten = [], []
-            for r in rows:
-                conf = round(max(0.0, r["confidence"] - step), 6)
-                if conf < forget_below:
-                    self._conn.execute("DELETE FROM facts WHERE id = ?", (r["id"],))
-                    forgotten.append(r["id"])
-                else:
-                    self._conn.execute(
-                        "UPDATE facts SET confidence = ?, updated_at = ? WHERE id = ?", (conf, now, r["id"])
-                    )
-                    weakened.append(r["id"])
-        return weakened, forgotten
+        return [_to_link(r) for r in rows]
 
-    def delete_all_facts(self) -> int:
-        with self._lock, self._conn:
-            return self._conn.execute("DELETE FROM facts").rowcount
-
-    def delete_fact(self, fact_id: int) -> bool:
-        with self._lock, self._conn:
-            cur = self._conn.execute("DELETE FROM facts WHERE id = ?", (fact_id,))
-        return cur.rowcount > 0
-
-    def count_facts(self) -> int:
+    def links_between(self, keys: Iterable[str]) -> dict[tuple[str, str], Link]:
         with self._lock:
-            return self._conn.execute("SELECT COUNT(*) FROM facts").fetchone()[0]
+            return _load_links_between(self._conn, list(keys))
 
-    def _fact(self, fact_id: int) -> Fact | None:
-        r = self._conn.execute("SELECT * FROM facts WHERE id = ?", (fact_id,)).fetchone()
-        return self._to_fact(r) if r else None
+    def all_links(self) -> list[Link]:
+        with self._lock:
+            return [_to_link(r) for r in self._conn.execute("SELECT * FROM concept_links").fetchall()]
 
-    @staticmethod
-    def _to_fact(r: sqlite3.Row) -> Fact:
-        return Fact(
-            r["id"], r["text"], r["source"], r["confidence"],
-            _from_db(r["created_at"]), _from_db(r["updated_at"]), r["session_id"],
-            r["reinforced"], _from_db(r["asked_at"]) if r["asked_at"] else None,
+    def save_memory(
+        self,
+        concepts: Iterable[Concept] = (),
+        links: Iterable[Link] = (),
+        *,
+        delete: Iterable[str] = (),
+        delete_links: Iterable[tuple[str, str]] = (),
+        forgotten: int = 0,
+    ) -> None:
+        """Zapis zmian grafu w jednej transakcji: wiersze pojęć i połączeń, usunięcia, licznik zapomnianych."""
+        with self._lock, self._conn:
+            _apply(self._conn, concepts, links, delete=delete, delete_links=delete_links, forgotten=forgotten)
+
+    def delete_concepts(self, keys: Iterable[str]) -> list[Concept]:
+        """Usuwa pojęcia (z połączeniami i domenami); zwraca usunięte."""
+        keys = list(dict.fromkeys(keys))
+        with self._lock, self._conn:
+            found = _load_concepts(self._conn, keys)
+            self._conn.executemany("DELETE FROM concepts WHERE key = ?", [(k,) for k in found])
+        return [found[k] for k in keys if k in found]
+
+    def clear_memory(self) -> int:
+        """Usuwa całą pamięć: pojęcia, połączenia, licznik zapomnianych i dawne fakty (`facts_v3`)."""
+        with self._lock, self._conn:
+            count = self._conn.execute("DELETE FROM concepts").rowcount
+            self._conn.execute("DELETE FROM concept_links")
+            self._conn.execute("DELETE FROM memory_meta")
+            self._conn.execute("DROP TABLE IF EXISTS facts_v3")
+        return count
+
+    def concept_count(self) -> int:
+        with self._lock:
+            return self._conn.execute("SELECT COUNT(*) FROM concepts").fetchone()[0]
+
+    def forgotten_count(self) -> int:
+        with self._lock:
+            row = self._conn.execute("SELECT v FROM memory_meta WHERE k = 'forgotten'").fetchone()
+        return int(row[0]) if row else 0
+
+    def has_facts_v3(self) -> bool:
+        with self._lock:
+            return self._conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'facts_v3'"
+            ).fetchone() is not None
+
+
+def _to_link(r: sqlite3.Row) -> Link:
+    return Link(r["a"], r["b"], r["strength"], _from_db(r["last_used"]))
+
+
+def _load_concepts(conn: sqlite3.Connection, keys: list[str] | None) -> dict[str, Concept]:
+    if keys is not None and not keys:
+        return {}
+    where, args = "", []
+    if keys is not None:
+        where, args = f" WHERE key IN ({','.join('?' * len(keys))})", list(keys)
+    rows = conn.execute(f"SELECT * FROM concepts{where}", args).fetchall()
+    domains: dict[str, dict[str, int]] = {}
+    for d in conn.execute(f"SELECT key, domain, count FROM concept_domains{where}", args):
+        domains.setdefault(d["key"], {})[d["domain"]] = d["count"]
+    return {
+        r["key"]: Concept(r["key"], r["label"], r["strength"], _from_db(r["last_used"]), r["hits"],
+                          _from_db(r["created_at"]), domains.get(r["key"], {}))
+        for r in rows
+    }
+
+
+def _load_links_between(conn: sqlite3.Connection, keys: list[str]) -> dict[tuple[str, str], Link]:
+    keys = list(dict.fromkeys(keys))
+    if len(keys) < 2:
+        return {}
+    marks = ",".join("?" * len(keys))
+    rows = conn.execute(f"SELECT * FROM concept_links WHERE a IN ({marks}) AND b IN ({marks})", keys + keys)
+    return {(r["a"], r["b"]): _to_link(r) for r in rows}
+
+
+def _apply(
+    conn: sqlite3.Connection,
+    concepts: Iterable[Concept],
+    links: Iterable[Link],
+    *,
+    delete: Iterable[str] = (),
+    delete_links: Iterable[tuple[str, str]] = (),
+    forgotten: int = 0,
+) -> None:
+    for c in concepts:
+        conn.execute(
+            "INSERT INTO concepts(key, label, strength, last_used, hits, created_at) VALUES (?, ?, ?, ?, ?, ?)"
+            " ON CONFLICT(key) DO UPDATE SET strength = excluded.strength, last_used = excluded.last_used,"
+            " hits = excluded.hits",
+            (c.key, c.label, min(1.0, max(0.0, c.strength)), _to_db(c.last_used), c.hits, _to_db(c.created_at)),
         )
+        for domain, count in c.domains.items():
+            conn.execute(
+                "INSERT INTO concept_domains(key, domain, count) VALUES (?, ?, ?)"
+                " ON CONFLICT(key, domain) DO UPDATE SET count = excluded.count",
+                (c.key, domain, count),
+            )
+    for link in links:
+        conn.execute(
+            "INSERT INTO concept_links(a, b, strength, last_used) VALUES (?, ?, ?, ?)"
+            " ON CONFLICT(a, b) DO UPDATE SET strength = excluded.strength, last_used = excluded.last_used",
+            (link.a, link.b, min(1.0, max(0.0, link.strength)), _to_db(link.last_used)),
+        )
+    conn.executemany("DELETE FROM concept_links WHERE a = ? AND b = ?", list(delete_links))
+    conn.executemany("DELETE FROM concepts WHERE key = ?", [(k,) for k in delete])
+    if forgotten:
+        conn.execute(
+            "INSERT INTO memory_meta(k, v) VALUES ('forgotten', ?)"
+            " ON CONFLICT(k) DO UPDATE SET v = CAST(CAST(v AS INTEGER) + ? AS TEXT)",
+            (str(forgotten), forgotten),
+        )
+
+
+def _migrate_facts(cfg: MemoryConfig) -> Callable[[sqlite3.Connection], None]:
+    """Migracja z wersji 3: każdy fakt uczy graf heurystyką (bez filtra danych wrażliwych, z filtrem
+    liczb), w kolejności i w chwili `updated_at` (spec, sekcja 9)."""
+
+    def run(conn: sqlite3.Connection) -> None:
+        from host.core.memory import heuristic, keep, plan_learn
+
+        rows = conn.execute("SELECT text, updated_at FROM facts_v3 ORDER BY updated_at, id").fetchall()
+        for r in rows:
+            ext = keep(heuristic(r[0], cfg), cfg, allow_sensitive=True)
+            keys = [k for k, _ in ext.concepts]
+            if not keys:
+                continue
+            plan = plan_learn(ext, _load_concepts(conn, keys), _load_links_between(conn, keys),
+                              _from_db(r[1]), cfg)
+            _apply(conn, plan.concepts, plan.links)
+
+    return run

@@ -416,7 +416,7 @@ def test_conversation_never_reaches_logs_or_the_database(caplog):
         await answer_speak(ws)
         await finish_turns(service)
         dump = []
-        for table in ("sessions", "events", "state_snapshots", "facts"):
+        for table in ("sessions", "events", "state_snapshots", "concepts", "concept_links"):
             dump += [str(r) for r in store._conn.execute(f"SELECT * FROM {table}")]
         assert "TAJNE-55" not in "\n".join(dump) and "TAJNA-55" not in "\n".join(dump)
         ws.disconnect()

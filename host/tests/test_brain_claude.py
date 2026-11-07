@@ -288,14 +288,12 @@ def test_client_options_exist_in_the_installed_sdk():
         assert name in params
 
 
-# --- polityka faktów i cała ścieżka ---
+# --- cała ścieżka i dane czujników ---
 
 from host.api.main import create_app  # noqa: E402
 from host.brain import build_assistant, build_engine  # noqa: E402
 from host.core.clock import ManualClock  # noqa: E402
 from host.core.config import Config  # noqa: E402
-from host.store import Store  # noqa: E402
-from host.tests.brain_helpers import fact  # noqa: E402
 from host.tests.helpers import local_client  # noqa: E402
 
 STATE = {"mode": "nominal", "drives": []}
@@ -310,27 +308,6 @@ class RemoteClaude(ClaudeEngine):
     """Silnik skierowany na atrapę (adres lokalny), ale zachowujący się jak prawdziwa chmura."""
 
     remote = True
-
-
-def test_facts_stay_home_by_default_with_claude(stub):
-    facts = [fact(1, "Mieszkam w Gdańsku")]
-    eng = RemoteClaude(base_url=stub["url"], retries=0)
-    asyncio.run(Assistant(eng, LLMConfig(engine="claude")).ask("Cześć", state=STATE, facts=facts))
-    assert "Gdańsku" not in sent_text(stub)  # send_facts=local_only, a chmura jest zdalna
-
-
-def test_facts_reach_a_loopback_gateway_by_default(stub):
-    facts = [fact(1, "Mieszkam w Gdańsku")]
-    assert engine(stub).remote is False  # adres pętli zwrotnej liczy się jako lokalny (spec, sekcja 12)
-    asyncio.run(Assistant(engine(stub), LLMConfig(engine="claude")).ask("Cześć", state=STATE, facts=facts))
-    assert "Mieszkam w Gdańsku" in sent_text(stub)
-
-
-def test_facts_are_sent_when_explicitly_allowed(stub):
-    facts = [fact(1, "Mieszkam w Gdańsku")]
-    cfg = LLMConfig(engine="claude", send_facts="always")
-    asyncio.run(Assistant(RemoteClaude(base_url=stub["url"], retries=0), cfg).ask("Cześć", state=STATE, facts=facts))
-    assert "Mieszkam w Gdańsku" in sent_text(stub)
 
 
 def test_sensor_payloads_never_reach_claude(stub):

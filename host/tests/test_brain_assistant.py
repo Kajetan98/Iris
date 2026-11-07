@@ -19,7 +19,7 @@ from host.brain.prompt import CONTEXT_HEADER, SYSTEM_PROMPT, USER_HEADER
 from host.core.clock import ManualClock
 from host.core.config import Config, LLMConfig
 from host.core.core import HostCore
-from host.tests.brain_helpers import T0, ScriptedEngine, fact
+from host.tests.brain_helpers import T0, ScriptedEngine
 from host.tests.helpers import heartbeat, make_event
 
 STATE = {"mode": "nominal", "drives": []}
@@ -162,42 +162,6 @@ def test_aclose_closes_engine():
     assert engine.closed
 
 
-# --- polityka faktów w praktyce ---
-
-
-FACTS = [fact(1, "Mieszkam w Gdańsku"), fact(2, "Lubi kawę", "inferred", 0.8)]
-
-
-def facts_in_call(engine):
-    return "Mieszkam w Gdańsku" in engine.calls[0][1][-1].content
-
-
-def test_local_engine_gets_facts_by_default():
-    a, engine = make(remote=False)
-    run(a.ask("q", state=STATE, facts=FACTS))
-    assert facts_in_call(engine)
-    assert "(przypuszczenie, pewność 0.8)" in engine.calls[0][1][-1].content
-
-
-def test_remote_engine_gets_no_facts_by_default():
-    a, engine = make(remote=True)
-    run(a.ask("q", state=STATE, facts=FACTS))
-    assert not facts_in_call(engine)
-    assert "Znane fakty" not in engine.calls[0][1][-1].content
-
-
-def test_remote_engine_gets_facts_when_allowed():
-    a, engine = make(remote=True, send_facts="always")
-    run(a.ask("q", state=STATE, facts=FACTS))
-    assert facts_in_call(engine)
-
-
-def test_never_policy_withholds_facts_even_locally():
-    a, engine = make(remote=False, send_facts="never")
-    run(a.ask("q", state=STATE, facts=FACTS))
-    assert not facts_in_call(engine)
-
-
 # --- z HostCore ---
 
 
@@ -212,7 +176,7 @@ def test_prompt_slice_from_core_reaches_engine_without_sensor_payloads():
     a, engine = make(remote=True)
     run(a.ask("Jak z baterią?", state=core.prompt_slice(), now=T0))
     sent = json.dumps([m.content for m in engine.calls[0][1]], ensure_ascii=False)
-    assert "oszczędzanie energii" in sent and "niski poziom baterii ciała" in sent
+    assert "oszczędzanie energii" in sent and "niski poziom baterii urządzenia" in sent
     assert "bateria: brak danych → 18%" in sent
     for leaked in ("52.2297", "21.0122", "[9, 9, 9]"):
         assert leaked not in sent
@@ -241,12 +205,12 @@ def test_model_is_required_when_engine_is_set():
 
 def test_toml_section(tmp_path):
     p = tmp_path / "iris.toml"
-    p.write_text('[brain.llm]\nengine = "ollama"\nmodel = "bielik:11b"\nsend_facts = "never"\nmax_tokens = 150\n')
+    p.write_text('[brain.llm]\nengine = "ollama"\nmodel = "bielik:11b"\nsend_memory = "never"\nmax_tokens = 150\n')
     c = Config.load(p).brain.llm
-    assert (c.engine, c.model, c.send_facts, c.max_tokens, c.history_turns) == ("ollama", "bielik:11b", "never", 150, 10)
+    assert (c.engine, c.model, c.send_memory, c.max_tokens, c.history_turns) == ("ollama", "bielik:11b", "never", 150, 10)
 
 
-@pytest.mark.parametrize("bad", [{"engine": "gpt"}, {"send_facts": "sometimes"}, {"retries": 9}, {"max_tokens": 0}, {"temperature": 3}])
+@pytest.mark.parametrize("bad", [{"engine": "gpt"}, {"send_memory": "sometimes"}, {"retries": 9}, {"max_tokens": 0}, {"temperature": 3}])
 def test_invalid_llm_config_is_rejected(bad):
     with pytest.raises(Exception):
         LLMConfig.model_validate({"engine": "ollama", "model": "m", **bad})

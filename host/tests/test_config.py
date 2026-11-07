@@ -220,7 +220,7 @@ def test_example_config_is_valid_and_has_no_secrets():
     path = Path(__file__).parents[2] / "iris.example.toml"
     cfg = Config.load(path)
     assert (cfg.brain.llm.engine, cfg.brain.stt.engine, cfg.brain.tts.engine) == ("ollama", "faster-whisper", "piper")
-    assert cfg.brain.llm.send_facts == "local_only"
+    assert cfg.brain.llm.send_memory == "local_only"
     # aliasy z przykładu działają w komendzie "przełącz na ..."
     assert resolve_device("komputer", {"laptop", "telefon"}, cfg.devices.aliases) == ["laptop"]
     # token i klucz API tylko w zmiennych środowiskowych (spec, sekcja 1; CLAUDE.md)

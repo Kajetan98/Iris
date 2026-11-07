@@ -200,7 +200,7 @@ Napisy (urządzenia z `display` w `device.caps`, np. przeglądarka):
 
 `continuity.sessions`: liczba sesji hosta łącznie z bieżącą. `last_restart`: czas startu bieżącej sesji.
 
-Do promptu LLM trafia wycinek: `mode`, aktywne `drives`, zmiany `body` od ostatniego zapytania i `last_downtime_s`, jeśli była przerwa.
+Do promptu LLM trafia wycinek: `mode`, aktywne `drives`, `device` (nazwa aktywnego urządzenia, gdy jest), zmiany `body` od ostatniego zapytania i `last_downtime_s`, jeśli była przerwa.
 
 - Zmiana pola `body` jest raportowana, gdy różni się od wartości ostatnio raportowanej o więcej niż tolerancja z konfiguracji (wartości początkowe: `batt_pct` 5, `temp_c` 2, `rssi` 10). Pola nieliczbowe (`link`, `sensors_ok`, `sensors_down`) raportowane są przy każdej różnicy. Wartość odniesienia aktualizuje się tylko dla raportowanych pól. Przy pierwszym zapytaniu odniesieniem jest brak wartości (`null`).
 - `last_downtime_s` trafia do pierwszego wycinka w sesji, gdy przerwa wynosiła co najmniej `min_downtime_s` (wartość początkowa: 60 s). Kolejne wycinki go nie zawierają.

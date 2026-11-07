@@ -44,19 +44,6 @@ class Snapshot:
 
 
 @dataclass(frozen=True)
-class Fact:
-    id: int
-    text: str
-    source: str  # stated | inferred
-    confidence: float
-    created_at: datetime
-    updated_at: datetime
-    session_id: int | None
-    reinforced: int = 0  # ile razy wniosek się powtórzył (spec, sekcja 9)
-    asked_at: datetime | None = None  # kiedy host ostatnio o niego pytał
-
-
-@dataclass(frozen=True)
 class Concept:
     """Pojęcie w grafie pamięci (spec, sekcja 9). `strength` to siła w chwili `last_used`."""
 

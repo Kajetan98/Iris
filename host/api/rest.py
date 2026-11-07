@@ -2,16 +2,17 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime
 from typing import Any, Literal
 
-import logging
-
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.responses import Response
 
 from host.api.auth import UNAUTHORIZED_CLOSE_CODE, WS_PROTOCOL, bearer_ok, local_refusal, ws_token_ok
+from host.api.service import TOO_MANY_DEVICES_CLOSE_CODE
 from host.api.service import (
     AckTimeout,
     ChatDisabled,
@@ -20,8 +21,9 @@ from host.api.service import (
     NotConnected,
     UnknownDevice,
 )
+from host.core import memory as mem
 from host.core.protocol import valid_device_id
-from host.store.models import Fact, Snapshot, StoredEvent
+from host.store.models import Snapshot, StoredEvent
 
 log = logging.getLogger(__name__)
 
@@ -90,20 +92,6 @@ def _event(e: StoredEvent) -> dict[str, Any]:
 
 def _snapshot(s: Snapshot) -> dict[str, Any]:
     return {"id": s.id, "session_id": s.session_id, "at": s.at, "self": s.self_state, "body": s.body}
-
-
-def _fact(f: Fact, in_context: bool | None = None) -> dict[str, Any]:
-    return {
-        "id": f.id,
-        "text": f.text,
-        "source": f.source,
-        "confidence": f.confidence,
-        "reinforced": f.reinforced,
-        "asked_at": f.asked_at,
-        **({} if in_context is None else {"in_context": in_context}),
-        "created_at": f.created_at,
-        "updated_at": f.updated_at,
-    }
 
 
 # --- stan ---
@@ -221,60 +209,64 @@ async def post_chat(req: ChatRequest, service: HostService = Depends(get_service
         raise HTTPException(CHAT_STATUS[e.kind], f"silnik LLM: {e}") from None
 
 
-# --- fakty ---
+# --- pamięć (spec, sekcje 9 i 10) ---
 
 
-class FactPatch(BaseModel):
+class LearnRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    text: str | None = None
-    source: Literal["stated", "inferred"] | None = None
-    confidence: float | None = Field(None, ge=0, le=1)
+    text: str = Field(min_length=1, max_length=500)
+    domain: Literal["dom", "czas", "ty", "rozmowa"] | None = None
 
 
-@router.get("/facts")
-async def list_facts(
-    source: Literal["stated", "inferred"] | None = None,
-    service: HostService = Depends(get_service),
-) -> dict[str, Any]:
-    assistant = service.assistant
+class RecallRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
 
-    def used(f: Fact) -> bool:  # spec, sekcja 10: in_context
-        from host.brain.prompt import fact_allowed
-
-        return assistant is not None and fact_allowed(f, assistant.cfg, remote=assistant.engine.remote)
-
-    return {"facts": [_fact(f, used(f)) for f in service.store.facts(source=source)]}
+    query: str = Field(min_length=1, max_length=500)
+    k: int = Field(8, ge=1, le=50)
 
 
-@router.patch("/facts/{fact_id}")
-async def patch_fact(
-    fact_id: int, patch: FactPatch, service: HostService = Depends(get_service)
-) -> dict[str, Any]:
-    changes = patch.model_dump(exclude_unset=True)
-    if not changes or any(v is None for v in changes.values()):
-        raise HTTPException(422, "podaj co najmniej jedno pole: text, source, confidence")
-    try:
-        fact = service.store.update_fact(fact_id, **changes)
-    except ValueError as e:
-        raise HTTPException(422, str(e)) from None
-    if fact is None:
-        raise HTTPException(404, "nie ma takiego faktu")
-    return _fact(fact)
+@router.get("/memory")
+async def get_memory(service: HostService = Depends(get_service)) -> dict[str, Any]:
+    return service.memory.snapshot()
 
 
-@router.delete("/facts/{fact_id}", status_code=204)
-async def delete_fact(fact_id: int, service: HostService = Depends(get_service)) -> Response:
-    if not service.learner.forget(fact_id):  # zdarzenie fact.forget (spec, sekcja 10)
-        raise HTTPException(404, "nie ma takiego faktu")
+@router.post("/memory/learn")
+async def post_memory_learn(req: LearnRequest, service: HostService = Depends(get_service)) -> dict[str, Any]:
+    if not service.memory.enabled:
+        raise HTTPException(409, "pamięć wyłączona w konfiguracji (memory.enabled)")
+    memory = service.memory
+    ext = mem.keep(mem.heuristic(req.text, memory.cfg), memory.cfg, allow_sensitive=True)
+    plan = memory.learn(ext, how="told", domain=req.domain)
+    return {"fresh": plan.fresh, "reinforced": plan.reinforced, "domain": plan.domain}
+
+
+@router.post("/memory/recall")
+async def post_memory_recall(req: RecallRequest, service: HostService = Depends(get_service)) -> dict[str, Any]:
+    hits = service.memory.recall(req.query, by="api", k=req.k)
+    return {"results": [{"key": h.key, "label": h.label, "score": h.score, "via": h.via} for h in hits]}
+
+
+@router.delete("/memory/concepts/{key}", status_code=204)
+async def delete_concept(key: str, service: HostService = Depends(get_service)) -> Response:
+    if not service.memory.forget([key], why="user"):
+        raise HTTPException(404, "nie ma takiego pojęcia")
+    return Response(status_code=204)
+
+
+@router.delete("/memory", status_code=204)
+async def delete_memory(confirm: bool = Query(False), service: HostService = Depends(get_service)) -> Response:
+    if not confirm:
+        raise HTTPException(422, "usunięcie całej pamięci wymaga confirm=true")
+    service.memory.clear()
     return Response(status_code=204)
 
 
 # --- WebSocket ---
 
 
-@ws_router.websocket("/ws")
-async def body_socket(websocket: WebSocket) -> None:
+async def _ws_refused(websocket: WebSocket) -> tuple[str | None, bool]:
+    """(wybrany podprotokół, czy odrzucono). Odmowa: przyjęcie i zamknięcie kodem 4003 (spec, sekcja 1)."""
     offered = websocket.scope.get("subprotocols") or []
     subprotocol = WS_PROTOCOL if WS_PROTOCOL in offered else None
     token = getattr(websocket.app.state, "token", None)
@@ -289,6 +281,60 @@ async def body_socket(websocket: WebSocket) -> None:
         log.warning("połączenie odrzucone: %s", refused)
         await websocket.accept(subprotocol=subprotocol)
         await websocket.close(code=UNAUTHORIZED_CLOSE_CODE, reason="unauthorized")
+    return subprotocol, bool(refused)
+
+
+@ws_router.websocket("/memory/stream")
+async def memory_stream(websocket: WebSocket) -> None:
+    """Graf pamięci na żywo: stan po połączeniu, po każdej zmianie i co stream_keepalive_s (spec, sekcja 10)."""
+    subprotocol, refused = await _ws_refused(websocket)
+    if refused:
+        return
+    service: HostService = websocket.app.state.service
+    cfg = service.memory.cfg
+    clients: set[WebSocket] = websocket.app.state.memory_clients
+    await websocket.accept(subprotocol=subprotocol)
+    if len(clients) >= cfg.stream_max_clients:
+        await websocket.close(code=TOO_MANY_DEVICES_CLOSE_CODE, reason="too many clients")
+        return
+    clients.add(websocket)
+    changed = asyncio.Event()
+    loop = asyncio.get_running_loop()
+    unsubscribe = service.memory.subscribe(lambda: loop.call_soon_threadsafe(changed.set))
+    reader = asyncio.create_task(_drain_incoming(websocket))
+    try:
+        while True:
+            await websocket.send_json(service.memory.snapshot())
+            waiter = asyncio.create_task(changed.wait())
+            done, _ = await asyncio.wait({waiter, reader}, timeout=cfg.stream_keepalive_s,
+                                         return_when=asyncio.FIRST_COMPLETED)
+            waiter.cancel()
+            if reader in done:
+                break  # klient się rozłączył
+            changed.clear()
+            await asyncio.sleep(cfg.stream_min_interval_s)  # kilka zmian naraz daje jedną ramkę
+            changed.clear()
+    except (WebSocketDisconnect, RuntimeError):
+        pass
+    finally:
+        unsubscribe()
+        reader.cancel()
+        clients.discard(websocket)
+
+
+async def _drain_incoming(websocket: WebSocket) -> None:
+    """Ramki od klienta strumienia są pomijane; kończy się przy rozłączeniu."""
+    try:
+        while True:
+            await websocket.receive_text()
+    except (WebSocketDisconnect, RuntimeError, KeyError):
+        return
+
+
+@ws_router.websocket("/ws")
+async def body_socket(websocket: WebSocket) -> None:
+    subprotocol, refused = await _ws_refused(websocket)
+    if refused:
         return
     # device czytany ręcznie: niepoprawny ma dać kod zamknięcia 4002, nie odrzucony handshake
     await websocket.app.state.service.serve_connection(

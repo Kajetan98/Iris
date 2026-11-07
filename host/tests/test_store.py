@@ -6,8 +6,9 @@ import pytest
 
 from host.core.clock import ManualClock
 from host.store import SchemaError, Store, StoreError
+from host.store.models import Concept, Link
 from host.store.schema import SCHEMA_VERSION
-from host.tests.helpers import heartbeat, make_event
+from host.tests.helpers import make_event
 
 T0 = datetime(2026, 3, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -40,7 +41,9 @@ def test_schema_version_is_set(tmp_path):
     conn = sqlite3.connect(path)
     assert conn.execute("PRAGMA user_version").fetchone()[0] == SCHEMA_VERSION
     tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-    assert {"sessions", "events", "state_snapshots", "facts"} <= tables
+    assert {"sessions", "events", "state_snapshots", "concepts", "concept_domains", "concept_links",
+            "memory_meta", "facts_v3"} <= tables
+    assert "facts" not in tables
 
 
 def test_newer_schema_is_refused(tmp_path):
@@ -57,10 +60,10 @@ def test_reopen_keeps_data(tmp_path, clock):
     path = tmp_path / "iris.db"
     s = Store(path, clock)
     s.begin_session()
-    s.add_fact("Mieszkam w Gdańsku", "stated")
+    s.save_memory([concept("lamp", "lampa")])
     s.close()
     s2 = Store(path, clock)
-    assert [f.text for f in s2.facts()] == ["Mieszkam w Gdańsku"]
+    assert [c.label for c in s2.concepts().values()] == ["lampa"]
     s2.close()
 
 
@@ -70,7 +73,7 @@ def test_reopen_keeps_data(tmp_path, clock):
 def test_first_session_has_no_downtime(clock):
     s = Store(clock=clock)
     c = s.begin_session()
-    assert (c.sessions, c.known_facts, c.last_downtime_s) == (1, 0, 0)
+    assert (c.sessions, c.known_concepts, c.last_downtime_s) == (1, 0, 0)
     assert c.last_restart == T0
     assert s.session_id == 1
 
@@ -117,16 +120,15 @@ def test_last_seen_never_moves_backwards(store, clock):
     assert store.sessions()[0].last_seen_at == T0 + timedelta(seconds=100)
 
 
-def test_known_facts_and_prior_sessions_feed_continuity(tmp_path, clock):
+def test_known_concepts_and_prior_sessions_feed_continuity(tmp_path, clock):
     path = tmp_path / "iris.db"
     s = Store(path, clock)
     s.begin_session()
-    s.add_fact("a", "stated")
-    s.add_fact("b", "inferred", 0.4)
+    s.save_memory([concept("lamp"), concept("salon")])
     s.close()
     s2 = Store(path, clock)
     c = s2.begin_session()
-    assert (c.sessions, c.known_facts) == (2, 2)
+    assert (c.sessions, c.known_concepts) == (2, 2)
     s2.close()
 
 
@@ -142,8 +144,6 @@ def test_session_required_for_writes(clock):
     s = Store(clock=clock)
     with pytest.raises(StoreError):
         host_event(s)
-    with pytest.raises(StoreError):
-        s.add_fact("x", "stated")
     s.begin_session()
     with pytest.raises(StoreError):
         s.begin_session()
@@ -237,91 +237,51 @@ def test_snapshots(store, clock):
     assert store.latest_snapshot().body["sensors_down"] == ["gps"]
 
 
-# --- fakty ---
+# --- pamięć: graf pojęć ---
 
 
-def test_stated_fact_defaults_to_full_confidence(store):
-    f = store.add_fact("Mam psa o imieniu Burek", "stated")
-    assert (f.source, f.confidence, f.session_id) == ("stated", 1.0, 1)
-    assert f.created_at == f.updated_at == T0
+def concept(key, label=None, strength=0.35, at=T0, hits=1, domains=None):
+    return Concept(key, label or key, strength, at, hits, at, domains or {"rozmowa": 1})
 
 
-def test_inferred_fact_requires_confidence(store):
-    with pytest.raises(ValueError, match="confidence"):
-        store.add_fact("Lubi kawę", "inferred")
-    assert store.add_fact("Lubi kawę", "inferred", 0.6).confidence == 0.6
+def test_concepts_round_trip_with_domains_and_keep_the_first_label(store):
+    store.save_memory([concept("lamp", "lampa", domains={"dom": 2, "czas": 1})])
+    store.save_memory([concept("lamp", "lampę", 0.8, T0 + timedelta(days=1), 3, {"dom": 3, "czas": 1})])
+    got = store.concepts(["lamp", "brak"])["lamp"]
+    assert (got.label, got.strength, got.hits, got.domains) == ("lampa", 0.8, 3, {"dom": 3, "czas": 1})
+    assert got.last_used == T0 + timedelta(days=1) and got.created_at == T0
+    assert store.concepts([]) == {} and store.concept_count() == 1
 
 
-@pytest.mark.parametrize("bad", [-0.1, 1.1, True])
-def test_confidence_range(store, bad):
-    with pytest.raises(ValueError):
-        store.add_fact("x", "inferred", bad)
+def test_links_between_touching_and_cascade_on_delete(store):
+    store.save_memory([concept("lamp"), concept("salon"), concept("kuchni")],
+                      [Link("lamp", "salon", 0.3, T0), Link("kuchni", "lamp", 0.5, T0)])
+    assert set(store.links_between(["lamp", "salon"])) == {("lamp", "salon")}
+    assert {(l.a, l.b) for l in store.links_touching(["salon"])} == {("lamp", "salon")}
+    assert len(store.all_links()) == 2 and store.links_touching([]) == []
+    removed = store.delete_concepts(["lamp", "brak"])
+    assert [c.key for c in removed] == ["lamp"]
+    assert store.all_links() == [] and store.concept_count() == 2
 
 
-def test_rejects_bad_source_and_empty_text(store):
-    with pytest.raises(ValueError):
-        store.add_fact("x", "guessed", 0.5)
-    with pytest.raises(ValueError):
-        store.add_fact("   ", "stated")
-    assert store.facts() == []
+def test_link_order_and_strength_range_are_enforced(store):
+    store.save_memory([concept("aaaa"), concept("bbbb")])
+    with pytest.raises(sqlite3.IntegrityError):
+        store.save_memory(links=[Link("bbbb", "aaaa", 0.3, T0)])
+    store.save_memory([concept("aaaa", strength=1.0000001)])  # błąd zaokrąglenia jest przycinany do 1
+    assert store.concepts(["aaaa"])["aaaa"].strength == 1.0
 
 
-def test_list_and_filter_facts(store):
-    store.add_fact("a", "stated")
-    store.add_fact("b", "inferred", 0.3)
-    assert [f.text for f in store.facts()] == ["a", "b"]
-    assert [f.text for f in store.facts(source="inferred")] == ["b"]
-    assert store.count_facts() == 2
+def test_deletions_and_forgotten_counter_in_one_transaction(store):
+    store.save_memory([concept("lamp"), concept("salon")], [Link("lamp", "salon", 0.3, T0)])
+    store.save_memory(delete=["lamp"], delete_links=[("lamp", "salon")], forgotten=1)
+    store.save_memory(forgotten=2)
+    assert list(store.concepts()) == ["salon"] and store.forgotten_count() == 3
 
 
-def test_correcting_text_makes_fact_stated(store, clock):
-    f = store.add_fact("Pracuje w Krakowie", "inferred", 0.5)
-    clock.advance(10)
-    g = store.update_fact(f.id, text="Pracuje w Warszawie")
-    assert (g.text, g.source, g.confidence) == ("Pracuje w Warszawie", "stated", 1.0)
-    assert g.created_at == T0 and g.updated_at == T0 + timedelta(seconds=10)
-
-
-def test_changing_only_confidence_keeps_source(store):
-    f = store.add_fact("Lubi jazz", "inferred", 0.5)
-    g = store.update_fact(f.id, confidence=0.9)
-    assert (g.text, g.source, g.confidence) == ("Lubi jazz", "inferred", 0.9)
-
-
-def test_explicit_source_and_confidence_win_over_text_rule(store):
-    f = store.add_fact("a", "stated")
-    g = store.update_fact(f.id, text="b", source="inferred", confidence=0.4)
-    assert (g.text, g.source, g.confidence) == ("b", "inferred", 0.4)
-
-
-def test_same_text_does_not_promote_inferred(store):
-    f = store.add_fact("a", "inferred", 0.5)
-    g = store.update_fact(f.id, text="a")
-    assert (g.source, g.confidence) == ("inferred", 0.5)
-
-
-def test_update_invalid_values(store):
-    f = store.add_fact("a", "stated")
-    for kwargs in ({"text": " "}, {"confidence": 2}, {"source": "x"}):
-        with pytest.raises(ValueError):
-            store.update_fact(f.id, **kwargs)
-    assert store.get_fact(f.id).text == "a"
-
-
-def test_update_missing_fact_returns_none(store):
-    assert store.update_fact(99, text="x") is None
-
-
-def test_delete_fact_is_permanent(store):
-    f = store.add_fact("a", "stated")
-    assert store.delete_fact(f.id) is True
-    assert store.delete_fact(f.id) is False
-    assert store.get_fact(f.id) is None
-    assert store.count_facts() == 0
-
-
-def test_ping(store):
-    store.ping()
-    store.close()
-    with pytest.raises(sqlite3.ProgrammingError):
-        store.ping()
+def test_clear_memory_removes_everything_and_the_old_facts_table(store):
+    store.save_memory([concept("lamp")], forgotten=4)
+    assert store.has_facts_v3()
+    assert store.clear_memory() == 1
+    assert store.concept_count() == 0 and store.forgotten_count() == 0 and not store.has_facts_v3()
+    assert store.clear_memory() == 0  # drugi raz bez błędu

@@ -1,9 +1,8 @@
 """Pomocniki testów host/brain."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from host.brain.llm import LLMReply, Usage
-from host.store.models import Fact
 
 T0 = datetime(2026, 10, 28, 14, 5, tzinfo=timezone.utc)
 
@@ -28,15 +27,11 @@ class ScriptedEngine:
 
     @property
     def chat_calls(self):
-        """Tylko zapytania rozmowy, bez zapytań o wnioski z rozmowy (host/brain/learn.py)."""
-        from host.brain.learn import EXTRACT_PROMPT
+        """Tylko zapytania rozmowy, bez zapytań o pojęcia z wypowiedzi (host/brain/learn.py)."""
+        from host.brain.learn import CONCEPTS_PROMPT
 
-        return [c for c in self.calls if c[0] != EXTRACT_PROMPT]
+        return [c for c in self.calls if c[0] != CONCEPTS_PROMPT]
 
     async def aclose(self):
         self.closed = True
 
-
-def fact(id_, text, source="stated", confidence=1.0, age_s=0):
-    at = T0 - timedelta(seconds=age_s)
-    return Fact(id_, text, source, confidence, at, at, 1)

@@ -62,6 +62,7 @@ class SelfModel:
             out["device_change"] = {"from": previous, "to": device}
         if device is not None:
             self._slice_device = device
+            out["device"] = device  # stan opisuje urządzenie z nazwą, nie IRIS (spec, sekcja 0)
         changes = self._body_changes(body.snapshot())
         if changes:
             out["body_changes"] = changes

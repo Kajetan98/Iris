@@ -34,18 +34,19 @@ Na komputerze z hostem klient otwiera się pod `http://localhost:8000/app/`.
 
 Żeby aplikacja na telefonie działała po każdym włączeniu komputera lub Raspberry Pi, host może działać jako usługa użytkownika: `deploy/iris.service` (instrukcja w komentarzu na początku pliku). Token trzyma wtedy plik `~/.config/iris/env` z prawami tylko dla właściciela. `tailscale serve --bg` według dokumentacji Tailscale działa dalej po zamknięciu terminala; czy wraca po restarcie komputera, sprawdź poleceniem `tailscale serve status`.
 
-## Jak IRIS się uczy
+## Jak IRIS pamięta
 
-Model językowy się nie zmienia. IRIS uczy się faktów o Tobie, które host zapisuje w bazie i dodaje do kontekstu rozmowy (zasady: [docs/spec.md](docs/spec.md), sekcja 9, "Uczenie się"):
+Model językowy się nie zmienia. IRIS zapamiętuje pojęcia z rozmów w grafie, który host trzyma w bazie (zasady: [docs/spec.md](docs/spec.md), sekcja 9, "Pamięć: graf pojęć"; decyzja: [docs/adr/0001-pamiec-jako-graf-pojec.md](docs/adr/0001-pamiec-jako-graf-pojec.md)):
 
-- Mówisz wprost: "zapamiętaj, że w piątki gram w kosza". Fakt jest pewny od razu. "Zapomnij, że ..." go usuwa, "co o mnie wiesz?" wymienia, co IRIS wie, a "zapomnij wszystko" usuwa wszystko po potwierdzeniu. Te polecenia obsługuje host, także bez LLM.
-- IRIS wyciąga przypuszczenia z rozmów: po każdej odpowiedzi model w tle proponuje fakty z Twojej wypowiedzi ("Masz psa o imieniu Burek."). Nowe przypuszczenie jest słabe (45%) i nie trafia jeszcze do rozmowy. Gdy się powtórzy, zyskuje pewność. Przypuszczenie, które przez 30 dni się nie powtórzy, słabnie, a bardzo słabe znika.
-- IRIS pyta o przypuszczenia: dopisuje do odpowiedzi "Czy dobrze rozumiem: masz psa o imieniu Burek?". "Tak" zmienia je w pewny fakt, "nie" je usuwa, a "nie, mam kota" zapisuje poprawkę. Najwyżej jedno pytanie na 15 minut, żadnych w trybie ciszy.
-- Możesz ocenić ostatnią odpowiedź jedną frazą. "Świetnie", "dzięki" i podobne podnoszą pewność przypuszczeń użytych w tej odpowiedzi o 10 punktów procentowych. "To nie tak", "źle" i podobne obniżają ją o 20, a bardzo słabe przypuszczenie znika. Fakty podane wprost się nie zmieniają. Działa tylko wtedy, gdy do odpowiedzi trafiły przypuszczenia; ustawienie `feedback = false` to wyłącza.
-- O zdrowiu, lekach, adresie, pieniądzach, wyznaniu, poglądach i orientacji IRIS sama się nie uczy; zapisze je tylko po "zapamiętaj". Przypuszczenia wyciąga domyślnie tylko lokalny model (Ollama), nie model w chmurze.
-- W aplikacji przycisk z książką otwiera listę "Co IRIS o mnie wie", gdzie każdy fakt możesz usunąć.
+- Pojęcie to słowo albo nazwa z Twojej wypowiedzi, np. "lampa", "Burek", "spotkanie". Pojęcia z jednej wypowiedzi łączą się ze sobą. Każde użycie wzmacnia pojęcie, a bez użycia jego siła spada o połowę co 14 dni. Pojęcie użyte raz znika po ok. 50 dniach.
+- Po każdej odpowiedzi IRIS w tle wyciąga pojęcia z Twojej wypowiedzi: lokalny model (Ollama) albo, gdy go nie ma lub dane szłyby do chmury, prosta reguła słów. Odpowiedź na to nie czeka.
+- Pamięć nie trzyma liczb ani zdań. Wypowiedź o zdrowiu, lekach, adresie, pieniądzach, wyznaniu, poglądach lub orientacji nie uczy pamięci; takie pojęcie zapisze tylko polecenie "zapamiętaj".
+- Polecenia obsługuje host, także bez LLM: "zapamiętaj, że w piątki gram w kosza", "zapomnij o koszykówce", "co o mnie wiesz?" (najsilniejsze pojęcia) i "zapomnij wszystko" (po potwierdzeniu).
+- Model sam sprawdza pamięć narzędziem `iris_recall`, gdy pytasz np. "co pamiętasz o lampie?". Model bez narzędzi dostaje przypomniane pojęcia w kontekście. Do modelu w chmurze pamięć trafia tylko po ustawieniu `send_memory = "always"` w `[brain.llm]`.
+- Możesz ocenić ostatnią odpowiedź jedną frazą. "Świetnie", "dzięki" i podobne wzmacniają pojęcia przypomniane do tej odpowiedzi, "to nie tak", "źle" i podobne je osłabiają, a bardzo słabe znikają.
+- W aplikacji przycisk z książką otwiera "Pamięć IRIS": listę pojęć z siłą, w której każde możesz usunąć.
 
-Progi i ustawienia: sekcja `[learning]` w `iris.toml` (lista w `host/core/config.py`), np. `infer = "never"` wyłącza przypuszczenia, `enabled = false` całą naukę.
+Progi i ustawienia: sekcja `[memory]` w `iris.toml` (lista w `host/core/config.py`), np. `infer = "never"` wyłącza model przy wyciąganiu pojęć, `enabled = false` całą naukę. Baza z wersji z faktami przenosi je do grafu przy pierwszym uruchomieniu; stara tabela zostaje jako `facts_v3`, dopóki nie powiesz "zapomnij wszystko".
 
 ## Telefon: instalacja jako aplikacja
 

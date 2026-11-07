@@ -17,7 +17,7 @@ def frame(type_, body, t="event"):
 
 def make(prev_event=None):
     clock = ManualClock(START)
-    cont = Continuity.at_start(START, prev_event, prior_sessions=2, known_facts=3)
+    cont = Continuity.at_start(START, prev_event, prior_sessions=2, known_concepts=3)
     return HostCore(clock=clock, continuity=cont), clock
 
 
@@ -42,7 +42,7 @@ def test_start_event_carries_continuity():
     core, _ = make(prev_event=START - timedelta(minutes=10))
     (ev,) = core.start()
     assert ev.type == "host.start"
-    assert ev.data == {"sessions": 3, "known_facts": 3, "last_downtime_s": 600}
+    assert ev.data == {"sessions": 3, "known_concepts": 3, "last_downtime_s": 600}
 
 
 def test_self_snapshot_has_spec_fields():
@@ -59,7 +59,7 @@ def test_self_snapshot_has_spec_fields():
     assert snap["self"]["uptime_s"] == 42
     assert snap["self"]["last_restart"] == START.isoformat()
     assert snap["self"]["last_downtime_s"] == 3600
-    assert snap["self"]["continuity"] == {"sessions": 3, "known_facts": 3}
+    assert snap["self"]["continuity"] == {"sessions": 3, "known_concepts": 3}
     assert set(snap["body"]) == {
         "batt_pct", "link", "rssi", "temp_c", "sensors_ok", "sensors_down", "last_seen_ms",
     }
@@ -212,10 +212,10 @@ def test_initiative_gate_is_exposed():
     assert not core.initiative.acquire()
 
 
-def test_known_facts_are_updated():
+def test_known_concepts_are_updated():
     core, _ = make()
-    core.set_known_facts(9)
-    assert core.self_snapshot()["self"]["continuity"]["known_facts"] == 9
+    core.set_known_concepts(9)
+    assert core.self_snapshot()["self"]["continuity"]["known_concepts"] == 9
 
 
 # --- cofanie wycinka i interakcje spoza ramek ---

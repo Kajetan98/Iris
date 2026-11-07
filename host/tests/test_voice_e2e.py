@@ -11,7 +11,7 @@ import pytest
 
 from host.api.main import create_app
 from host.brain.audio import STT_RATE, OpusDecoder, resample
-from host.brain.learn import EXTRACT_PROMPT
+from host.brain.learn import CONCEPTS_PROMPT
 from host.core.config import Config
 from host.tests.audio_helpers import dominant_hz, sine, write_wav
 from host.tests.servers import free_port, ollama_stub_app, start, stop, until
@@ -61,7 +61,7 @@ def decode_playback(packets):
 
 def chat_requests(stack):
     """Zapytania rozmowy do atrapy Ollamy, bez zapytań o wnioski z rozmowy (spec, sekcja 9)."""
-    return [r for r in stack.ollama["requests"] if r["messages"][0]["content"] != EXTRACT_PROMPT]
+    return [r for r in stack.ollama["requests"] if r["messages"][0]["content"] != CONCEPTS_PROMPT]
 
 
 def test_voice_conversation_through_the_whole_stack(stack, tmp_path):

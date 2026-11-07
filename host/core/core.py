@@ -188,5 +188,5 @@ class HostCore:
         self.last_interaction = self.clock.wall()
         return self.tick()
 
-    def set_known_facts(self, n: int) -> None:
-        self.continuity.known_facts = n
+    def set_known_concepts(self, n: int) -> None:
+        self.continuity.known_concepts = n

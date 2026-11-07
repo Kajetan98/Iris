@@ -98,8 +98,8 @@ def test_successful_chat_does_not_repeat_changes():
     service.core.handle_event(heartbeat(71))
     run(service.chat("raz"))
     run(service.chat("dwa"))
-    assert "Zmiany stanu ciała" in user_turn(engine, 0)
-    assert "Zmiany stanu ciała" not in user_turn(engine, 1)
+    assert "Zmiany stanu urządzenia" in user_turn(engine, 0)
+    assert "Zmiany stanu urządzenia" not in user_turn(engine, 1)
 
 
 def test_cancelled_chat_rolls_the_slice_back():
@@ -189,32 +189,32 @@ def test_chats_are_serialized_and_slice_is_not_duplicated():
         engine.complete = slow
         await asyncio.gather(service.chat("pierwsza"), service.chat("druga"))
         turns = [user_turn(engine, i) for i in range(2)]
-        assert sum("Zmiany stanu ciała" in t for t in turns) == 1
+        assert sum("Zmiany stanu urządzenia" in t for t in turns) == 1
 
     run(scenario())
 
 
-# --- fakty i prywatność ---
+# --- pamięć i prywatność ---
 
 
-def test_facts_reach_a_local_engine_but_not_a_remote_one():
+def test_memory_reaches_a_local_engine_but_not_a_remote_one():
     for remote, expected in [(False, True), (True, False)]:
         service, engine, _, store = make(remote=remote)
-        store.add_fact("Mieszkam w Gdańsku", "stated")
-        run(service.chat("q"))
-        assert ("Mieszkam w Gdańsku" in user_turn(engine)) is expected
+        run(service.chat("zapamiętaj, że lampa stoi w salonie"))
+        run(service.chat("gdzie stoi lampa?"))
+        assert ("- lampa (siła" in user_turn(engine)) is expected
 
 
-def test_chat_survives_a_failing_facts_query(monkeypatch, caplog):
+def test_chat_survives_a_failing_memory_query(monkeypatch, caplog):
     service, engine, _, store = make()
 
-    def boom():
+    def boom(*args, **kwargs):
         raise sqlite3.OperationalError("locked")
 
-    monkeypatch.setattr(store, "facts", boom)
+    monkeypatch.setattr(store, "concepts", boom)
     with caplog.at_level(logging.ERROR):
-        assert run(service.chat("q"))["text"] == "Dobrze."
-    assert "Znane fakty" not in user_turn(engine)
+        assert run(service.chat("gdzie lampa?"))["text"] == "Dobrze."
+    assert "Pamięć IRIS" not in user_turn(engine)
 
 
 def test_conversation_text_is_not_stored_or_logged(caplog):
@@ -222,7 +222,8 @@ def test_conversation_text_is_not_stored_or_logged(caplog):
     with caplog.at_level(logging.DEBUG):
         run(service.chat("PYTANIE-TAJNE-42"))
     dump = []
-    for table in ("sessions", "events", "state_snapshots", "facts"):
+    # Pamięć może zapamiętać pojedyncze pojęcia, ale nie całą wypowiedź ani odpowiedź.
+    for table in ("sessions", "events", "state_snapshots", "concepts", "concept_links", "memory_meta"):
         dump += [str(row) for row in store._conn.execute(f"SELECT * FROM {table}")]
     haystack = "\n".join(dump) + "\n".join(r.getMessage() for r in caplog.records)
     assert "PYTANIE-TAJNE-42" not in haystack and "ODPOWIEDZ-TAJNA-77" not in haystack

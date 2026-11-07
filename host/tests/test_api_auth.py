@@ -60,7 +60,7 @@ def client():
 
 
 def test_rest_requires_the_bearer_token(client):
-    for path in ("/health", "/self", "/devices", "/events", "/facts"):
+    for path in ("/health", "/self", "/devices", "/events", "/memory"):
         r = client.get(path)
         assert r.status_code == 401 and r.headers["www-authenticate"] == "Bearer", path
         assert client.get(path, headers={"Authorization": "Bearer zly-token-1234567890"}).status_code == 401
@@ -223,16 +223,16 @@ def _refused_ws(c, url="/ws?device=hermes", **kwargs):
 def test_without_a_token_dns_rebinding_and_foreign_pages_are_refused(caplog):
     with local_client(_tokenless_app()) as c, caplog.at_level(logging.WARNING):
         foreign_host = {"Host": "rebind.attacker.example"}
-        assert c.get("/facts", headers=foreign_host).status_code == 403
+        assert c.get("/memory", headers=foreign_host).status_code == 403
         assert _refused_ws(c, headers=foreign_host) == 4003
         evil = {"Origin": "https://evil.example"}
         assert c.post("/devices/hermes/activate", headers=evil).status_code == 403
-        assert c.get("/facts", headers=evil).status_code == 403
+        assert c.get("/memory", headers=evil).status_code == 403
         assert _refused_ws(c, headers=evil) == 4003
         assert c.get("/devices").json()["devices"] == []  # obca strona nie została urządzeniem
         assert c.get("/app/", headers=foreign_host).status_code == 200  # pliki klienta są publiczne
         # klient z tego komputera: przeglądarka z Origin pętli zwrotnej i urządzenie bez Origin
-        assert c.get("/facts", headers={"Origin": "http://127.0.0.1:8000"}).status_code == 200
+        assert c.get("/memory", headers={"Origin": "http://127.0.0.1:8000"}).status_code == 200
         with c.websocket_connect("/ws?device=laptop", subprotocols=["iris"],
                                  headers={"Origin": "http://localhost:8000"}) as ws:
             ws.send_text(hb(50))
@@ -251,10 +251,10 @@ def test_without_a_token_other_computers_are_refused():
 def test_without_a_token_the_listed_site_is_allowed():
     site = "https://iris-asystent.vercel.app"
     with local_client(_tokenless_app(cors_origins=[site])) as c:
-        assert c.get("/facts", headers={"Origin": site}).status_code == 200
+        assert c.get("/memory", headers={"Origin": site}).status_code == 200
         with c.websocket_connect("/ws", subprotocols=["iris"], headers={"Origin": site}) as ws:
             assert ws.accepted_subprotocol == "iris"
-        assert c.get("/facts", headers={"Origin": "https://inna.vercel.app"}).status_code == 403
+        assert c.get("/memory", headers={"Origin": "https://inna.vercel.app"}).status_code == 403
 
 
 def test_with_a_token_foreign_host_origin_and_address_need_only_the_token():
@@ -262,7 +262,7 @@ def test_with_a_token_foreign_host_origin_and_address_need_only_the_token():
     app = create_app(Config(), clock=clock, store=Store(clock=clock), run_tick_loop=False, token=TOKEN)
     auth = {"Authorization": f"Bearer {TOKEN}"}
     with local_client(app, client=("192.168.1.20", 40000), base_url="https://iris.example.ts.net") as remote:
-        assert remote.get("/facts", headers={**auth, "Origin": "https://evil.example"}).status_code == 200
+        assert remote.get("/memory", headers={**auth, "Origin": "https://evil.example"}).status_code == 200
         with remote.websocket_connect("/ws", subprotocols=["iris", f"token.{TOKEN}"]) as ws:
             assert ws.accepted_subprotocol == "iris"
 

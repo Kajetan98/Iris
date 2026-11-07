@@ -21,10 +21,9 @@ from host.brain.llm import (
     ToolSpec,
     Usage,
 )
-from host.brain.prompt import SYSTEM_PROMPT, clean_for_speech, render_user_turn, select_facts
+from host.brain.prompt import SYSTEM_PROMPT, clean_for_speech, render_user_turn
 from host.brain.tools import RECALL, ToolBox
 from host.core.config import LLMConfig
-from host.store.models import Fact
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +61,6 @@ class Assistant:
         text: str,
         *,
         state: dict[str, Any],
-        facts: Sequence[Fact] = (),
         now: datetime | None = None,
         tools: ToolBox | None = None,
     ) -> Answer:
@@ -76,11 +74,10 @@ class Assistant:
         if not text:
             raise ValueError("pusta wypowiedź")
         remote = self.engine.remote
-        chosen = select_facts(facts, self.cfg, remote=remote)
         async with self._lock:
             specs = self._specs(tools, remote)
             memory = await self._context(tools, text, specs, remote)
-            messages = [*self._history, Message("user", render_user_turn(text, state, chosen, now, memory))]
+            messages = [*self._history, Message("user", render_user_turn(text, state, now, memory))]
             rounds = 0
             while True:
                 offer = specs if rounds < self.cfg.max_tool_rounds else []
@@ -93,7 +90,7 @@ class Assistant:
                     self._tools_ok = False
                     specs = []
                     memory = await self._context(tools, text, specs, remote)
-                    messages = [*self._history, Message("user", render_user_turn(text, state, chosen, now, memory))]
+                    messages = [*self._history, Message("user", render_user_turn(text, state, now, memory))]
                     continue
                 if reply.finish == "tool_use" and reply.tool_calls and offer and tools is not None:
                     results = [await _run(tools, c, offer) for c in reply.tool_calls]

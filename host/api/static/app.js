@@ -625,56 +625,64 @@ function authHeaders() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-function factMeta(fact) {
-  if (fact.source === "stated") return "od ciebie";
-  const pct = `${Math.round(fact.confidence * 100)}%`;
-  return fact.in_context ? `przypuszczenie, pewność ${pct}` : `przypuszczenie, pewność ${pct}, jeszcze nieużywane w rozmowie`;
+const DOMAIN_NAMES = { dom: "dom", czas: "czas", ty: "ty", rozmowa: "rozmowa" };
+
+function mainDomain(contexts) {
+  // Domena, w której pojęcie padło najczęściej (przy remisie wcześniejsza na liście, jak na hoście).
+  let best = "rozmowa", most = 0;
+  for (const id of Object.keys(DOMAIN_NAMES)) {
+    if ((contexts[id] || 0) > most) { best = id; most = contexts[id]; }
+  }
+  return best;
 }
 
-function renderFacts(facts) {
-  const list = $("facts");
+function conceptMeta(node) {
+  return `siła ${Math.round(node.effective * 100)}%, użyć ${node.hits}, kontekst: ${DOMAIN_NAMES[mainDomain(node.contexts || {})]}`;
+}
+
+function renderMemory(snapshot) {
+  const list = $("concepts");
   list.replaceChildren();
-  $("memory-status").textContent = facts.length ? "" : "IRIS jeszcze nic o tobie nie wie.";
-  // Najpierw pewne, potem przypuszczenia od najpewniejszych.
-  facts.sort((a, b) => (a.source === b.source ? b.confidence - a.confidence : a.source === "stated" ? -1 : 1));
-  for (const fact of facts) {
+  const nodes = snapshot.nodes; // host zwraca je od najsilniejszych
+  $("memory-status").textContent = nodes.length ? "" : "IRIS jeszcze nic nie pamięta.";
+  for (const node of nodes) {
     const li = document.createElement("li");
-    li.className = fact.source === "stated" ? "fact" : "fact guess";
+    li.className = "fact";
     const text = document.createElement("p");
     text.className = "fact-text";
-    text.textContent = fact.text;
+    text.textContent = node.label;
     const meta = document.createElement("p");
     meta.className = "fact-meta";
-    meta.textContent = factMeta(fact);
+    meta.textContent = conceptMeta(node);
     const remove = document.createElement("button");
     remove.type = "button";
     remove.className = "secondary";
     remove.textContent = "Usuń";
-    remove.setAttribute("aria-label", `Usuń: ${fact.text}`);
-    remove.addEventListener("click", () => deleteFact(fact.id, li));
+    remove.setAttribute("aria-label", `Usuń: ${node.label}`);
+    remove.addEventListener("click", () => deleteConcept(node.key, li));
     li.append(text, meta, remove);
     list.append(li);
   }
 }
 
-async function loadFacts() {
-  $("memory-status").textContent = "Pobieram listę z hosta.";
+async function loadMemory() {
+  $("memory-status").textContent = "Pobieram pamięć z hosta.";
   try {
-    const res = await fetch(`${currentBase()}/facts`, { headers: authHeaders() });
+    const res = await fetch(`${currentBase()}/memory`, { headers: authHeaders() });
     if (!res.ok) throw new Error(res.status === 401 ? "host odrzucił token" : `odpowiedź ${res.status}`);
-    renderFacts((await res.json()).facts);
+    renderMemory(await res.json());
   } catch (e) {
-    $("facts").replaceChildren();
-    $("memory-status").textContent = `Nie udało się pobrać listy (${e.message}). Sprawdź połączenie i token w ustawieniach.`;
+    $("concepts").replaceChildren();
+    $("memory-status").textContent = `Nie udało się pobrać pamięci (${e.message}). Sprawdź połączenie i token w ustawieniach.`;
   }
 }
 
-async function deleteFact(id, li) {
+async function deleteConcept(key, li) {
   try {
-    const res = await fetch(`${currentBase()}/facts/${id}`, { method: "DELETE", headers: authHeaders() });
+    const res = await fetch(`${currentBase()}/memory/concepts/${encodeURIComponent(key)}`, { method: "DELETE", headers: authHeaders() });
     if (!res.ok && res.status !== 404) throw new Error(`odpowiedź ${res.status}`);
     li.remove();
-    $("memory-status").textContent = $("facts").children.length ? "Usunięte." : "Usunięte. IRIS nic już o tobie nie wie.";
+    $("memory-status").textContent = $("concepts").children.length ? "Usunięte." : "Usunięte. IRIS nic już nie pamięta.";
   } catch (e) {
     $("memory-status").textContent = `Nie udało się usunąć (${e.message}).`;
   }
@@ -682,7 +690,7 @@ async function deleteFact(id, li) {
 
 function openMemory() {
   $("memory").showModal();
-  loadFacts();
+  loadMemory();
 }
 
 function openSettings() {
