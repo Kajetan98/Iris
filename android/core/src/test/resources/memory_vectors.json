@@ -1,0 +1,4502 @@
+{
+ "comment": "Plik generowany: python -m host.tests.make_android_vectors (nie edytuj ręcznie).",
+ "concepts_prompt": "Wyciągasz pojęcia do pamięci asystenta głosowego IRIS z jednej wypowiedzi użytkownika.\n\nZasady:\n- Do 8 pojęć: rzeczowniki, nazwy własne albo czasowniki niosące treść, w formie podstawowej (mianownik liczby pojedynczej, bezokolicznik), małymi literami poza nazwami własnymi i skrótami.\n- Pomijasz słowa funkcyjne, grzeczności i liczby.\n- Pomijasz zdrowie, leki, położenie i adres, pieniądze, wyznanie, poglądy polityczne i orientację.\n- Domena: dom = dom i sterowanie urządzeniami, czas = przypomnienia, kalendarz, plany, ty = użytkownik i jego bliscy, upodobania, praca, zajęcia, rozmowa = wszystko inne.\n- Odpowiadasz wyłącznie obiektem JSON, bez innego tekstu: {\"domain\": \"dom|czas|ty|rozmowa\", \"concepts\": [\"...\", \"...\"]}. Gdy nie ma nic do zapamiętania: {\"domain\": \"rozmowa\", \"concepts\": []}.\n",
+ "defaults": {
+  "memory": {
+   "enabled": true,
+   "infer": "local_only",
+   "half_life_days": 14.0,
+   "initial": 0.35,
+   "gain_concept": 0.4,
+   "gain_link": 0.3,
+   "gain_recall": 0.15,
+   "forget_below": 0.03,
+   "prune_every_s": 600.0,
+   "max_concepts": 8,
+   "recall_k": 8,
+   "answer_window_s": 120.0,
+   "feedback": true,
+   "feedback_down": 0.2
+  },
+  "llm": {
+   "max_tokens": 300,
+   "timeout_s": 30.0,
+   "retries": 1,
+   "history_turns": 10,
+   "send_memory": "local_only",
+   "tools": true,
+   "max_tool_rounds": 2,
+   "effort": "low",
+   "thinking_headroom_tokens": 2000,
+   "fallbacks": true
+  },
+  "sensitive_words": [
+   "zdrow",
+   "chorob",
+   "chory",
+   "chora",
+   "chorzy",
+   "leki",
+   "lekarstw",
+   "lekarz",
+   "leczen",
+   "tętn",
+   "puls",
+   "ciśnien",
+   "cukrzyc",
+   "depres",
+   "terapi",
+   "diagnoz",
+   "ciąż",
+   "szpital",
+   "alergi",
+   "nowotw",
+   "onkolog",
+   "psychiat",
+   "adres",
+   "mieszka",
+   "ulic",
+   "lokalizacj",
+   "gps",
+   "położeni",
+   "pieniąd",
+   "pieniędz",
+   "zarab",
+   "pensj",
+   "wypłat",
+   "konto",
+   "konta",
+   "bank",
+   "zadłuż",
+   "kredyt",
+   "pesel",
+   "hasł",
+   "dowód",
+   "wyzna",
+   "religi",
+   "wierząc",
+   "ateist",
+   "katolik",
+   "polityk",
+   "partii",
+   "partia",
+   "głosuj",
+   "orientacj",
+   "seksual"
+  ],
+  "domain_words": {
+   "dom": [
+    "świat",
+    "swiat",
+    "lamp",
+    "gniazd",
+    "salon",
+    "kuchni",
+    "sypialn",
+    "łazien",
+    "ogrzew",
+    "termostat",
+    "rolet",
+    "zapal",
+    "zgaś",
+    "zgas",
+    "włącz",
+    "wlacz",
+    "wyłącz",
+    "wylacz",
+    "przekaźn",
+    "drzwi",
+    "zamek",
+    "wentyl",
+    "klimaty",
+    "pokój",
+    "pokoj",
+    "przygaś",
+    "jasnoś",
+    "telewiz",
+    "głośnik"
+   ],
+   "czas": [
+    "przypom",
+    "jutro",
+    "dziś",
+    "dzis",
+    "godzin",
+    "minut",
+    "kalendar",
+    "spotkan",
+    "termin",
+    "notat",
+    "plan",
+    "poniedz",
+    "wtor",
+    "środ",
+    "czwart",
+    "piąt",
+    "sobot",
+    "niedziel",
+    "rano",
+    "wieczor",
+    "tydzie",
+    "tygodn",
+    "urodzin",
+    "rocznic",
+    "budzik"
+   ],
+   "ty": [
+    "lubi",
+    "uwielbi",
+    "kocha",
+    "prac",
+    "zawod",
+    "zawód",
+    "rodzin",
+    "żon",
+    "mąż",
+    "męż",
+    "dzieci",
+    "dzieck",
+    "córk",
+    "syn",
+    "brat",
+    "siostr",
+    "przyjaci",
+    "koleg",
+    "koleżank",
+    "pies",
+    "psa",
+    "psem",
+    "kot",
+    "hobby",
+    "imię",
+    "imie",
+    "nazyw",
+    "zainteres",
+    "sport",
+    "muzyk",
+    "książ",
+    "film",
+    "studi",
+    "szkoł",
+    "ulubion"
+   ]
+  },
+  "stop_words": [
+   "aby",
+   "albo",
+   "ale",
+   "and",
+   "bardzo",
+   "bez",
+   "bo",
+   "był",
+   "była",
+   "było",
+   "będzie",
+   "chciałabym",
+   "chciałbym",
+   "chcę",
+   "ciebie",
+   "czy",
+   "dla",
+   "for",
+   "from",
+   "gdy",
+   "jak",
+   "jako",
+   "jest",
+   "jestem",
+   "jesteś",
+   "już",
+   "która",
+   "które",
+   "który",
+   "lub",
+   "mam",
+   "masz",
+   "mnie",
+   "moja",
+   "moje",
+   "możesz",
+   "można",
+   "mój",
+   "nad",
+   "nie",
+   "ona",
+   "oni",
+   "oraz",
+   "pod",
+   "proszę",
+   "przez",
+   "się",
+   "są",
+   "także",
+   "tego",
+   "tej",
+   "ten",
+   "też",
+   "that",
+   "the",
+   "this",
+   "twoja",
+   "twoje",
+   "twój",
+   "tych",
+   "tylko",
+   "tym",
+   "with",
+   "więc",
+   "żeby"
+  ],
+  "domains": [
+   {
+    "id": "dom",
+    "name": "Dom",
+    "info": "dom i sterowanie urządzeniami",
+    "rgb": [
+     255,
+     138,
+     31
+    ]
+   },
+   {
+    "id": "czas",
+    "name": "Czas",
+    "info": "przypomnienia, kalendarz, plany",
+    "rgb": [
+     255,
+     61,
+     154
+    ]
+   },
+   {
+    "id": "ty",
+    "name": "Ty",
+    "info": "ludzie, upodobania, praca, zajęcia",
+    "rgb": [
+     42,
+     212,
+     255
+    ]
+   },
+   {
+    "id": "rozmowa",
+    "name": "Rozmowa",
+    "info": "wszystko inne",
+    "rgb": [
+     143,
+     91,
+     255
+    ]
+   }
+  ]
+ },
+ "rules": {
+  "stem": [
+   {
+    "word": "lampa",
+    "out": "lamp"
+   },
+   {
+    "word": "lampę",
+    "out": "lamp"
+   },
+   {
+    "word": "lampie",
+    "out": "lamp"
+   },
+   {
+    "word": "Lampami",
+    "out": "lamp"
+   },
+   {
+    "word": "dom",
+    "out": "dom"
+   },
+   {
+    "word": "kota",
+    "out": "kota"
+   },
+   {
+    "word": "salonie",
+    "out": "salon"
+   },
+   {
+    "word": "panowie",
+    "out": "panow"
+   },
+   {
+    "word": "spotkaniu",
+    "out": "spotkan"
+   },
+   {
+    "word": "Burek",
+    "out": "burek"
+   },
+   {
+    "word": "AI",
+    "out": "ai"
+   },
+   {
+    "word": "kawę",
+    "out": "kawę"
+   },
+   {
+    "word": "kawie",
+    "out": "kawi"
+   },
+   {
+    "word": "mlekiem",
+    "out": "mlekiem"
+   },
+   {
+    "word": "ŻÓŁW",
+    "out": "żółw"
+   },
+   {
+    "word": "żółwia",
+    "out": "żółw"
+   },
+   {
+    "word": "imieniu",
+    "out": "imien"
+   },
+   {
+    "word": "Kraków",
+    "out": "krak"
+   },
+   {
+    "word": "dzieci",
+    "out": "dziec"
+   },
+   {
+    "word": "x",
+    "out": "x"
+   }
+  ],
+  "heuristic": [
+   {
+    "text": "Zapal lampę w salonie, IRIS. Moje tętno to 120 a SpO2 96, AI też",
+    "out": {
+     "concepts": [
+      [
+       "zapal",
+       "zapal"
+      ],
+      [
+       "lamp",
+       "lampę"
+      ],
+      [
+       "salon",
+       "salonie"
+      ],
+      [
+       "iris",
+       "IRIS"
+      ],
+      [
+       "tętn",
+       "tętno"
+      ],
+      [
+       "ai",
+       "AI"
+      ]
+     ],
+     "domain": "dom",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "Przypomnij mi jutro o spotkaniu",
+    "out": {
+     "concepts": [
+      [
+       "przypomnij",
+       "przypomnij"
+      ],
+      [
+       "jutr",
+       "jutro"
+      ],
+      [
+       "spotkan",
+       "spotkaniu"
+      ]
+     ],
+     "domain": "czas",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "Mój pies Burek lubi spacery",
+    "out": {
+     "concepts": [
+      [
+       "pies",
+       "pies"
+      ],
+      [
+       "burek",
+       "burek"
+      ],
+      [
+       "lubi",
+       "lubi"
+      ],
+      [
+       "spacer",
+       "spacery"
+      ]
+     ],
+     "domain": "ty",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "Opowiedz o kosmosie",
+    "out": {
+     "concepts": [
+      [
+       "opowiedz",
+       "opowiedz"
+      ],
+      [
+       "kosmos",
+       "kosmosie"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "zapal lampę jutro rano",
+    "out": {
+     "concepts": [
+      [
+       "zapal",
+       "zapal"
+      ],
+      [
+       "lamp",
+       "lampę"
+      ],
+      [
+       "jutr",
+       "jutro"
+      ],
+      [
+       "rano",
+       "rano"
+      ]
+     ],
+     "domain": "dom",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "planeta i samolot",
+    "out": {
+     "concepts": [
+      [
+       "planet",
+       "planeta"
+      ],
+      [
+       "samolot",
+       "samolot"
+      ]
+     ],
+     "domain": "czas",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "lampa lampę lampie",
+    "out": {
+     "concepts": [
+      [
+       "lamp",
+       "lampa"
+      ]
+     ],
+     "domain": "dom",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "alfa beta gamma delta epsilon zeta theta jota kappa lambda",
+    "out": {
+     "concepts": [
+      [
+       "alfa",
+       "alfa"
+      ],
+      [
+       "beta",
+       "beta"
+      ],
+      [
+       "gamm",
+       "gamma"
+      ],
+      [
+       "delt",
+       "delta"
+      ],
+      [
+       "epsilon",
+       "epsilon"
+      ],
+      [
+       "zeta",
+       "zeta"
+      ],
+      [
+       "thet",
+       "theta"
+      ],
+      [
+       "jota",
+       "jota"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "",
+    "out": {
+     "concepts": [],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "   ",
+    "out": {
+     "concepts": [],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "USA i NATO, a także UE",
+    "out": {
+     "concepts": [
+      [
+       "usa",
+       "USA"
+      ],
+      [
+       "nato",
+       "NATO"
+      ],
+      [
+       "ue",
+       "UE"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "Ania_Kowalska napisała: ŻÓŁW i żółwia",
+    "out": {
+     "concepts": [
+      [
+       "ania",
+       "ania"
+      ],
+      [
+       "kowalsk",
+       "kowalska"
+      ],
+      [
+       "napisał",
+       "napisała"
+      ],
+      [
+       "żółw",
+       "ŻÓŁW"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "Mieszkam na ulicy Polnej 12 w Krakowie",
+    "out": {
+     "concepts": [
+      [
+       "mieszkam",
+       "mieszkam"
+      ],
+      [
+       "ulic",
+       "ulicy"
+      ],
+      [
+       "polnej",
+       "polnej"
+      ],
+      [
+       "krak",
+       "krakowie"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "pies, psa, psem! kot?",
+    "out": {
+     "concepts": [
+      [
+       "pies",
+       "pies"
+      ],
+      [
+       "psa",
+       "psa"
+      ],
+      [
+       "psem",
+       "psem"
+      ],
+      [
+       "kot",
+       "kot"
+      ]
+     ],
+     "domain": "ty",
+     "source": "heuristic"
+    }
+   },
+   {
+    "text": "Lubię jazz i książki o kosmosie",
+    "out": {
+     "concepts": [
+      [
+       "lubi",
+       "lubię"
+      ],
+      [
+       "jazz",
+       "jazz"
+      ],
+      [
+       "książk",
+       "książki"
+      ],
+      [
+       "kosmos",
+       "kosmosie"
+      ]
+     ],
+     "domain": "ty",
+     "source": "heuristic"
+    }
+   }
+  ],
+  "domain_of": [
+   {
+    "text": "Zapal lampę w salonie, IRIS. Moje tętno to 120 a SpO2 96, AI też",
+    "out": "dom"
+   },
+   {
+    "text": "Przypomnij mi jutro o spotkaniu",
+    "out": "czas"
+   },
+   {
+    "text": "Mój pies Burek lubi spacery",
+    "out": "ty"
+   },
+   {
+    "text": "Opowiedz o kosmosie",
+    "out": "rozmowa"
+   },
+   {
+    "text": "zapal lampę jutro rano",
+    "out": "dom"
+   },
+   {
+    "text": "planeta i samolot",
+    "out": "czas"
+   },
+   {
+    "text": "lampa lampę lampie",
+    "out": "dom"
+   },
+   {
+    "text": "alfa beta gamma delta epsilon zeta theta jota kappa lambda",
+    "out": "rozmowa"
+   },
+   {
+    "text": "",
+    "out": "rozmowa"
+   },
+   {
+    "text": "   ",
+    "out": "rozmowa"
+   },
+   {
+    "text": "USA i NATO, a także UE",
+    "out": "rozmowa"
+   },
+   {
+    "text": "Ania_Kowalska napisała: ŻÓŁW i żółwia",
+    "out": "rozmowa"
+   },
+   {
+    "text": "Mieszkam na ulicy Polnej 12 w Krakowie",
+    "out": "rozmowa"
+   },
+   {
+    "text": "pies, psa, psem! kot?",
+    "out": "ty"
+   },
+   {
+    "text": "Lubię jazz i książki o kosmosie",
+    "out": "ty"
+   }
+  ],
+  "concept_key": [
+   {
+    "label": "Kraków 2",
+    "out": "krak"
+   },
+   {
+    "label": "lampa w salonie",
+    "out": "lamp w salon"
+   },
+   {
+    "label": "",
+    "out": ""
+   },
+   {
+    "label": "!!!",
+    "out": ""
+   },
+   {
+    "label": "SpO2 i tętno",
+    "out": "i tętn"
+   }
+  ],
+  "parse_llm": [
+   {
+    "raw": "Oto wynik: {\"domain\": \"dom\", \"concepts\": [\"lampa\", \"salon\", \"lampa\", \"Kraków 2\"]}",
+    "out": {
+     "concepts": [
+      [
+       "lamp",
+       "lampa"
+      ],
+      [
+       "salon",
+       "salon"
+      ],
+      [
+       "krak",
+       "Kraków 2"
+      ]
+     ],
+     "domain": "dom",
+     "source": "llm"
+    }
+   },
+   {
+    "raw": "{\"domain\": \"kosmos\", \"concepts\": [\"mars\"]}",
+    "out": {
+     "concepts": [
+      [
+       "mars",
+       "mars"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "llm"
+    }
+   },
+   {
+    "raw": "{\"concepts\": [\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"]}",
+    "out": {
+     "concepts": [
+      [
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "llm"
+    }
+   },
+   {
+    "raw": "```json\n{\"domain\": \"ty\", \"concepts\": [\"pies\", \"Burek\", \"  wiele   słów  naraz \"]}\n```",
+    "out": {
+     "concepts": [
+      [
+       "pies",
+       "pies"
+      ],
+      [
+       "burek",
+       "Burek"
+      ],
+      [
+       "wiel słów naraz",
+       "wiele słów naraz"
+      ]
+     ],
+     "domain": "ty",
+     "source": "llm"
+    }
+   },
+   {
+    "raw": "{\"concepts\": [{\"name\": \"lampa\"}, 0.5, \"salon\", null, true]}",
+    "out": {
+     "concepts": [
+      [
+       "salon",
+       "salon"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "llm"
+    }
+   },
+   {
+    "raw": "{\"domain\": 5, \"concepts\": []}",
+    "out": {
+     "concepts": [],
+     "domain": "rozmowa",
+     "source": "llm"
+    }
+   },
+   {
+    "raw": "{\"domain\": \"czas\"}",
+    "out": {
+     "concepts": [],
+     "domain": "czas",
+     "source": "llm"
+    }
+   },
+   {
+    "raw": "",
+    "out": null
+   },
+   {
+    "raw": "brak",
+    "out": null
+   },
+   {
+    "raw": "{nie json}",
+    "out": null
+   },
+   {
+    "raw": "[\"lampa\"]",
+    "out": null
+   },
+   {
+    "raw": "{\"concepts\": \"lampa\"}",
+    "out": null
+   },
+   {
+    "raw": "{}",
+    "out": {
+     "concepts": [],
+     "domain": "rozmowa",
+     "source": "llm"
+    }
+   },
+   {
+    "raw": "{\"concepts\": [\"1234\", \"!!!\"]}",
+    "out": {
+     "concepts": [],
+     "domain": "rozmowa",
+     "source": "llm"
+    }
+   },
+   {
+    "raw": "{\"concepts\": [\"a\", \"b\", \"c\", \"d\", \"e\", \"f\", \"g\", \"h\", \"i\", \"j\"]}",
+    "out": {
+     "concepts": [
+      [
+       "a",
+       "a"
+      ],
+      [
+       "b",
+       "b"
+      ],
+      [
+       "c",
+       "c"
+      ],
+      [
+       "d",
+       "d"
+      ],
+      [
+       "e",
+       "e"
+      ],
+      [
+       "f",
+       "f"
+      ],
+      [
+       "g",
+       "g"
+      ],
+      [
+       "h",
+       "h"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "llm"
+    }
+   }
+  ],
+  "is_sensitive": [
+   {
+    "text": "Zapal lampę w salonie, IRIS. Moje tętno to 120 a SpO2 96, AI też",
+    "out": true
+   },
+   {
+    "text": "Przypomnij mi jutro o spotkaniu",
+    "out": false
+   },
+   {
+    "text": "Mój pies Burek lubi spacery",
+    "out": false
+   },
+   {
+    "text": "Opowiedz o kosmosie",
+    "out": false
+   },
+   {
+    "text": "zapal lampę jutro rano",
+    "out": false
+   },
+   {
+    "text": "planeta i samolot",
+    "out": false
+   },
+   {
+    "text": "lampa lampę lampie",
+    "out": false
+   },
+   {
+    "text": "alfa beta gamma delta epsilon zeta theta jota kappa lambda",
+    "out": false
+   },
+   {
+    "text": "",
+    "out": false
+   },
+   {
+    "text": "   ",
+    "out": false
+   },
+   {
+    "text": "USA i NATO, a także UE",
+    "out": false
+   },
+   {
+    "text": "Ania_Kowalska napisała: ŻÓŁW i żółwia",
+    "out": false
+   },
+   {
+    "text": "Mieszkam na ulicy Polnej 12 w Krakowie",
+    "out": true
+   },
+   {
+    "text": "pies, psa, psem! kot?",
+    "out": false
+   },
+   {
+    "text": "Lubię jazz i książki o kosmosie",
+    "out": false
+   },
+   {
+    "text": "biorę leki",
+    "out": true
+   },
+   {
+    "text": "LEKI",
+    "out": true
+   }
+  ],
+  "keep": [
+   {
+    "in": {
+     "concepts": [
+      [
+       "krak",
+       "Kraków 2"
+      ],
+      [
+       "tętn",
+       "tętno"
+      ],
+      [
+       "lamp",
+       "lampa"
+      ],
+      [
+       "cukrzyc",
+       "cukrzyca"
+      ],
+      [
+       "spo",
+       "SpO2"
+      ]
+     ],
+     "domain": "dom",
+     "source": "heuristic"
+    },
+    "allow_sensitive": false,
+    "out": {
+     "concepts": [
+      [
+       "lamp",
+       "lampa"
+      ]
+     ],
+     "domain": "dom",
+     "source": "heuristic"
+    }
+   },
+   {
+    "in": {
+     "concepts": [
+      [
+       "krak",
+       "Kraków 2"
+      ],
+      [
+       "tętn",
+       "tętno"
+      ],
+      [
+       "lamp",
+       "lampa"
+      ],
+      [
+       "cukrzyc",
+       "cukrzyca"
+      ],
+      [
+       "spo",
+       "SpO2"
+      ]
+     ],
+     "domain": "dom",
+     "source": "heuristic"
+    },
+    "allow_sensitive": true,
+    "out": {
+     "concepts": [
+      [
+       "tętn",
+       "tętno"
+      ],
+      [
+       "lamp",
+       "lampa"
+      ],
+      [
+       "cukrzyc",
+       "cukrzyca"
+      ]
+     ],
+     "domain": "dom",
+     "source": "heuristic"
+    }
+   }
+  ],
+  "effective": [
+   {
+    "strength": 0.8,
+    "last_used": "2026-11-01T12:00:00.000+00:00",
+    "now": "2026-11-15T12:00:00.000+00:00",
+    "half_life_days": 14,
+    "out": 0.4
+   },
+   {
+    "strength": 0.8,
+    "last_used": "2026-11-01T12:00:00.000+00:00",
+    "now": "2026-11-29T12:00:00.000+00:00",
+    "half_life_days": 14,
+    "out": 0.2
+   },
+   {
+    "strength": 0.8,
+    "last_used": "2026-11-01T12:00:00.000+00:00",
+    "now": "2026-10-29T12:00:00.000+00:00",
+    "half_life_days": 14,
+    "out": 0.8
+   },
+   {
+    "strength": 0.35,
+    "last_used": "2026-11-01T12:00:00.000+00:00",
+    "now": "2026-12-21T12:00:00.000+00:00",
+    "half_life_days": 14,
+    "out": 0.029441566713832783
+   },
+   {
+    "strength": 1.0,
+    "last_used": "2026-11-01T12:00:00.000+00:00",
+    "now": "2026-11-02T00:00:00.000+00:00",
+    "half_life_days": 3,
+    "out": 0.8908987181403393
+   }
+  ],
+  "plan_learn": [
+   {
+    "extraction": {
+     "concepts": [
+      [
+       "lamp",
+       "lampę"
+      ],
+      [
+       "salon",
+       "salonie"
+      ],
+      [
+       "lamp",
+       "lampie"
+      ]
+     ],
+     "domain": "dom",
+     "source": "heuristic"
+    },
+    "known": [
+     {
+      "key": "lamp",
+      "label": "lampa",
+      "strength": 0.5,
+      "last_used": "2026-10-18T12:00:00.000+00:00",
+      "hits": 2,
+      "created_at": "2026-10-18T12:00:00.000+00:00",
+      "domains": {
+       "dom": 2
+      }
+     }
+    ],
+    "links": [],
+    "now": "2026-11-01T12:00:00.000+00:00",
+    "domain": null,
+    "out": {
+     "concepts": [
+      {
+       "key": "lamp",
+       "label": "lampa",
+       "strength": 0.55,
+       "last_used": "2026-11-01T12:00:00.000+00:00",
+       "hits": 3,
+       "created_at": "2026-10-18T12:00:00.000+00:00",
+       "domains": {
+        "dom": 3
+       }
+      },
+      {
+       "key": "salon",
+       "label": "salonie",
+       "strength": 0.35,
+       "last_used": "2026-11-01T12:00:00.000+00:00",
+       "hits": 1,
+       "created_at": "2026-11-01T12:00:00.000+00:00",
+       "domains": {
+        "dom": 1
+       }
+      }
+     ],
+     "links": [
+      {
+       "a": "lamp",
+       "b": "salon",
+       "strength": 0.3,
+       "last_used": "2026-11-01T12:00:00.000+00:00"
+      }
+     ],
+     "fresh": [
+      "salonie"
+     ],
+     "reinforced": [
+      "lampę"
+     ],
+     "domain": "dom"
+    }
+   },
+   {
+    "extraction": {
+     "concepts": [
+      [
+       "salon",
+       "salon"
+      ],
+      [
+       "lamp",
+       "lampa"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    },
+    "known": [
+     {
+      "key": "lamp",
+      "label": "lamp",
+      "strength": 0.35,
+      "last_used": "2026-11-01T12:00:00.000+00:00",
+      "hits": 1,
+      "created_at": "2026-11-01T12:00:00.000+00:00",
+      "domains": {
+       "rozmowa": 1
+      }
+     },
+     {
+      "key": "salon",
+      "label": "salon",
+      "strength": 0.35,
+      "last_used": "2026-11-01T12:00:00.000+00:00",
+      "hits": 1,
+      "created_at": "2026-11-01T12:00:00.000+00:00",
+      "domains": {
+       "rozmowa": 1
+      }
+     }
+    ],
+    "links": [
+     {
+      "a": "lamp",
+      "b": "salon",
+      "strength": 0.6,
+      "last_used": "2026-10-18T12:00:00.000+00:00"
+     }
+    ],
+    "now": "2026-11-01T12:00:00.000+00:00",
+    "domain": "czas",
+    "out": {
+     "concepts": [
+      {
+       "key": "salon",
+       "label": "salon",
+       "strength": 0.61,
+       "last_used": "2026-11-01T12:00:00.000+00:00",
+       "hits": 2,
+       "created_at": "2026-11-01T12:00:00.000+00:00",
+       "domains": {
+        "rozmowa": 1,
+        "czas": 1
+       }
+      },
+      {
+       "key": "lamp",
+       "label": "lamp",
+       "strength": 0.61,
+       "last_used": "2026-11-01T12:00:00.000+00:00",
+       "hits": 2,
+       "created_at": "2026-11-01T12:00:00.000+00:00",
+       "domains": {
+        "rozmowa": 1,
+        "czas": 1
+       }
+      }
+     ],
+     "links": [
+      {
+       "a": "lamp",
+       "b": "salon",
+       "strength": 0.51,
+       "last_used": "2026-11-01T12:00:00.000+00:00"
+      }
+     ],
+     "fresh": [],
+     "reinforced": [
+      "salon",
+      "lampa"
+     ],
+     "domain": "czas"
+    }
+   },
+   {
+    "extraction": {
+     "concepts": [
+      [
+       "xxx",
+       "xxx"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    },
+    "known": [],
+    "links": [],
+    "now": "2026-11-01T12:00:00.000+00:00",
+    "domain": "kosmos",
+    "out": {
+     "concepts": [
+      {
+       "key": "xxx",
+       "label": "xxx",
+       "strength": 0.35,
+       "last_used": "2026-11-01T12:00:00.000+00:00",
+       "hits": 1,
+       "created_at": "2026-11-01T12:00:00.000+00:00",
+       "domains": {
+        "rozmowa": 1
+       }
+      }
+     ],
+     "links": [],
+     "fresh": [
+      "xxx"
+     ],
+     "reinforced": [],
+     "domain": "rozmowa"
+    }
+   },
+   {
+    "extraction": {
+     "concepts": [
+      [
+       "ccc",
+       "cccccccccccccccccccccccccccccccccccccccccccccccccc"
+      ],
+      [
+       "bbb",
+       "b"
+      ],
+      [
+       "aaa",
+       "a"
+      ]
+     ],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    },
+    "known": [],
+    "links": [],
+    "now": "2026-11-01T12:00:00.000+00:00",
+    "domain": null,
+    "out": {
+     "concepts": [
+      {
+       "key": "ccc",
+       "label": "cccccccccccccccccccccccccccccccccccccccc",
+       "strength": 0.35,
+       "last_used": "2026-11-01T12:00:00.000+00:00",
+       "hits": 1,
+       "created_at": "2026-11-01T12:00:00.000+00:00",
+       "domains": {
+        "rozmowa": 1
+       }
+      },
+      {
+       "key": "bbb",
+       "label": "b",
+       "strength": 0.35,
+       "last_used": "2026-11-01T12:00:00.000+00:00",
+       "hits": 1,
+       "created_at": "2026-11-01T12:00:00.000+00:00",
+       "domains": {
+        "rozmowa": 1
+       }
+      },
+      {
+       "key": "aaa",
+       "label": "a",
+       "strength": 0.35,
+       "last_used": "2026-11-01T12:00:00.000+00:00",
+       "hits": 1,
+       "created_at": "2026-11-01T12:00:00.000+00:00",
+       "domains": {
+        "rozmowa": 1
+       }
+      }
+     ],
+     "links": [
+      {
+       "a": "bbb",
+       "b": "ccc",
+       "strength": 0.3,
+       "last_used": "2026-11-01T12:00:00.000+00:00"
+      },
+      {
+       "a": "aaa",
+       "b": "ccc",
+       "strength": 0.3,
+       "last_used": "2026-11-01T12:00:00.000+00:00"
+      },
+      {
+       "a": "aaa",
+       "b": "bbb",
+       "strength": 0.3,
+       "last_used": "2026-11-01T12:00:00.000+00:00"
+      }
+     ],
+     "fresh": [
+      "cccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "b",
+      "a"
+     ],
+     "reinforced": [],
+     "domain": "rozmowa"
+    }
+   },
+   {
+    "extraction": {
+     "concepts": [],
+     "domain": "rozmowa",
+     "source": "heuristic"
+    },
+    "known": [],
+    "links": [],
+    "now": "2026-11-01T12:00:00.000+00:00",
+    "domain": null,
+    "out": {
+     "concepts": [],
+     "links": [],
+     "fresh": [],
+     "reinforced": [],
+     "domain": "rozmowa"
+    }
+   }
+  ],
+  "plan_recall": {
+   "known": [
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.8,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salon",
+     "strength": 0.6,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "kuchni",
+     "label": "kuchnia",
+     "strength": 0.9,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "jutr",
+     "label": "jutro",
+     "strength": 0.5,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "aaaa",
+     "label": "aaaa",
+     "strength": 0.5,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "bbbb",
+     "label": "bbbb",
+     "strength": 0.5,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "cccc",
+     "label": "cccc",
+     "strength": 0.5,
+     "last_used": "2026-10-25T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-10-25T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "dddd",
+     "label": "dddd",
+     "strength": 0.5,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.5,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchni",
+     "b": "lamp",
+     "strength": 0.2,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "jutr",
+     "b": "salon",
+     "strength": 0.9,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "zgubion",
+     "strength": 0.9,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "aaaa",
+     "b": "bbbb",
+     "strength": 1.0,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "aaaa",
+     "b": "cccc",
+     "strength": 0.4,
+     "last_used": "2026-10-29T12:00:00.000+00:00"
+    },
+    {
+     "a": "aaaa",
+     "b": "dddd",
+     "strength": 0.4,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "dddd",
+     "b": "lamp",
+     "strength": 0.7,
+     "last_used": "2026-10-31T12:00:00.000+00:00"
+    }
+   ],
+   "cases": [
+    {
+     "keys": [
+      "lamp",
+      "lamp",
+      "nieznane"
+     ],
+     "k": 8,
+     "now": "2026-11-01T12:00:00.000+00:00",
+     "out": {
+      "hits": [
+       {
+        "key": "lamp",
+        "label": "lampa",
+        "score": 0.8,
+        "via": "match"
+       },
+       {
+        "key": "dddd",
+        "label": "dddd",
+        "score": 0.3331,
+        "via": "link"
+       },
+       {
+        "key": "salon",
+        "label": "salon",
+        "score": 0.3,
+        "via": "link"
+       },
+       {
+        "key": "kuchni",
+        "label": "kuchnia",
+        "score": 0.18,
+        "via": "link"
+       }
+      ],
+      "reinforced": [
+       {
+        "key": "lamp",
+        "label": "lampa",
+        "strength": 0.8300000000000001,
+        "last_used": "2026-11-01T12:00:00.000+00:00",
+        "hits": 1,
+        "created_at": "2026-11-01T12:00:00.000+00:00",
+        "domains": {
+         "rozmowa": 1
+        }
+       }
+      ]
+     }
+    },
+    {
+     "keys": [
+      "aaaa",
+      "bbbb"
+     ],
+     "k": 3,
+     "now": "2026-11-01T12:00:00.000+00:00",
+     "out": {
+      "hits": [
+       {
+        "key": "aaaa",
+        "label": "aaaa",
+        "score": 0.5,
+        "via": "match"
+       },
+       {
+        "key": "bbbb",
+        "label": "bbbb",
+        "score": 0.5,
+        "via": "match"
+       },
+       {
+        "key": "dddd",
+        "label": "dddd",
+        "score": 0.2,
+        "via": "link"
+       }
+      ],
+      "reinforced": [
+       {
+        "key": "aaaa",
+        "label": "aaaa",
+        "strength": 0.575,
+        "last_used": "2026-11-01T12:00:00.000+00:00",
+        "hits": 1,
+        "created_at": "2026-11-01T12:00:00.000+00:00",
+        "domains": {
+         "rozmowa": 1
+        }
+       },
+       {
+        "key": "bbbb",
+        "label": "bbbb",
+        "strength": 0.575,
+        "last_used": "2026-11-01T12:00:00.000+00:00",
+        "hits": 1,
+        "created_at": "2026-11-01T12:00:00.000+00:00",
+        "domains": {
+         "rozmowa": 1
+        }
+       }
+      ]
+     }
+    },
+    {
+     "keys": [],
+     "k": 8,
+     "now": "2026-11-01T12:00:00.000+00:00",
+     "out": {
+      "hits": [],
+      "reinforced": []
+     }
+    },
+    {
+     "keys": [
+      "aaaa"
+     ],
+     "k": 8,
+     "now": "2026-11-01T12:00:00.000+00:00",
+     "out": {
+      "hits": [
+       {
+        "key": "aaaa",
+        "label": "aaaa",
+        "score": 0.5,
+        "via": "match"
+       },
+       {
+        "key": "bbbb",
+        "label": "bbbb",
+        "score": 0.5,
+        "via": "link"
+       },
+       {
+        "key": "dddd",
+        "label": "dddd",
+        "score": 0.2,
+        "via": "link"
+       },
+       {
+        "key": "cccc",
+        "label": "cccc",
+        "score": 0.1219,
+        "via": "link"
+       }
+      ],
+      "reinforced": [
+       {
+        "key": "aaaa",
+        "label": "aaaa",
+        "strength": 0.575,
+        "last_used": "2026-11-01T12:00:00.000+00:00",
+        "hits": 1,
+        "created_at": "2026-11-01T12:00:00.000+00:00",
+        "domains": {
+         "rozmowa": 1
+        }
+       }
+      ]
+     }
+    },
+    {
+     "keys": [
+      "dddd",
+      "kuchni"
+     ],
+     "k": 2,
+     "now": "2026-11-01T12:00:00.000+00:00",
+     "out": {
+      "hits": [
+       {
+        "key": "kuchni",
+        "label": "kuchnia",
+        "score": 0.9,
+        "via": "match"
+       },
+       {
+        "key": "lamp",
+        "label": "lampa",
+        "score": 0.5329,
+        "via": "link"
+       }
+      ],
+      "reinforced": [
+       {
+        "key": "dddd",
+        "label": "dddd",
+        "strength": 0.575,
+        "last_used": "2026-11-01T12:00:00.000+00:00",
+        "hits": 1,
+        "created_at": "2026-11-01T12:00:00.000+00:00",
+        "domains": {
+         "rozmowa": 1
+        }
+       },
+       {
+        "key": "kuchni",
+        "label": "kuchnia",
+        "strength": 0.915,
+        "last_used": "2026-11-01T12:00:00.000+00:00",
+        "hits": 1,
+        "created_at": "2026-11-01T12:00:00.000+00:00",
+        "domains": {
+         "rozmowa": 1
+        }
+       }
+      ]
+     }
+    }
+   ]
+  },
+  "plan_prune": {
+   "concepts": [
+    {
+     "key": "stare",
+     "label": "stare",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "swieze",
+     "label": "swieze",
+     "strength": 0.35,
+     "last_used": "2026-12-31T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-12-31T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "srednie",
+     "label": 0.9,
+     "strength": 10,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "stare",
+     "b": "swieze",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "swieze",
+     "b": "zzzz",
+     "strength": 0.9,
+     "last_used": "2026-12-31T12:00:00.000+00:00"
+    },
+    {
+     "a": "aaaa",
+     "b": "bbbb",
+     "strength": 0.03,
+     "last_used": "2026-12-30T12:00:00.000+00:00"
+    }
+   ],
+   "now": "2026-12-31T12:00:00.000+00:00",
+   "out": {
+    "dead": [
+     "stare"
+    ],
+    "weak": [
+     [
+      "aaaa",
+      "bbbb"
+     ],
+     [
+      "stare",
+      "swieze"
+     ]
+    ]
+   }
+  },
+  "feedback": {
+   "concepts": [
+    {
+     "key": "lamp",
+     "label": "lamp",
+     "strength": 0.5,
+     "last_used": "2026-10-30T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-10-30T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "slab",
+     "label": "slab",
+     "strength": 0.035,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    }
+   ],
+   "now": "2026-11-01T12:00:00.000+00:00",
+   "praise": [
+    {
+     "key": "lamp",
+     "label": "lamp",
+     "strength": 0.5349325573121604,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-10-30T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "slab",
+     "label": "slab",
+     "strength": 0.17975,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    }
+   ],
+   "criticism": {
+    "kept": [
+     {
+      "key": "lamp",
+      "label": "lamp",
+      "strength": 0.3622894657055627,
+      "last_used": "2026-11-01T12:00:00.000+00:00",
+      "hits": 1,
+      "created_at": "2026-10-30T12:00:00.000+00:00",
+      "domains": {
+       "rozmowa": 1
+      }
+     }
+    ],
+    "dead": [
+     "slab"
+    ]
+   }
+  },
+  "strongest": {
+   "concepts": [
+    {
+     "key": "bbbb",
+     "label": "bbbb",
+     "strength": 0.8,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "aaaa",
+     "label": "aaaa",
+     "strength": 0.8,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "cccc",
+     "label": "cccc",
+     "strength": 0.9,
+     "last_used": "2026-10-18T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-10-18T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    }
+   ],
+   "now": "2026-11-15T12:00:00.000+00:00",
+   "n": 2,
+   "out": [
+    "aaaa",
+    "bbbb"
+   ]
+  },
+  "main_domain": [
+   {
+    "domains": {
+     "ty": 2,
+     "dom": 2,
+     "czas": 1
+    },
+    "out": "dom"
+   },
+   {
+    "domains": {},
+    "out": "rozmowa"
+   },
+   {
+    "domains": {
+     "rozmowa": 3,
+     "czas": 3
+    },
+    "out": "czas"
+   },
+   {
+    "domains": {
+     "ty": 1
+    },
+    "out": "ty"
+   }
+  ],
+  "parse_command": [
+   {
+    "text": "Zapamiętaj, że lubię kawę z mlekiem.",
+    "out": {
+     "kind": "remember",
+     "text": "lubię kawę z mlekiem"
+    }
+   },
+   {
+    "text": "IRIS, zapisz sobie: Burek to mój pies",
+    "out": {
+     "kind": "remember",
+     "text": "Burek to mój pies"
+    }
+   },
+   {
+    "text": "pamiętaj, że jutro jest spotkanie",
+    "out": {
+     "kind": "remember",
+     "text": "jutro jest spotkanie"
+    }
+   },
+   {
+    "text": "Zapomnij o lampie",
+    "out": {
+     "kind": "forget",
+     "text": "lampie"
+    }
+   },
+   {
+    "text": "zapomnij, że lubię kawę",
+    "out": {
+     "kind": "forget",
+     "text": "lubię kawę"
+    }
+   },
+   {
+    "text": "Zapomnij wszystko!",
+    "out": {
+     "kind": "forget_all",
+     "text": ""
+    }
+   },
+   {
+    "text": "zapomnij o mnie wszystko",
+    "out": {
+     "kind": "forget_all",
+     "text": ""
+    }
+   },
+   {
+    "text": "co o mnie wiesz?",
+    "out": {
+     "kind": "recall",
+     "text": ""
+    }
+   },
+   {
+    "text": "Co pamiętasz?",
+    "out": {
+     "kind": "recall",
+     "text": ""
+    }
+   },
+   {
+    "text": "czego się o mnie nauczyłeś",
+    "out": {
+     "kind": "recall",
+     "text": ""
+    }
+   },
+   {
+    "text": "czego się o mnie nauczyłaś",
+    "out": {
+     "kind": "recall",
+     "text": ""
+    }
+   },
+   {
+    "text": "zapamiętaj to",
+    "out": null
+   },
+   {
+    "text": "co pamiętasz o lampie",
+    "out": null
+   },
+   {
+    "text": "pamiętaj o mnie",
+    "out": null
+   },
+   {
+    "text": "zapal lampę",
+    "out": null
+   },
+   {
+    "text": "  Zapamiętaj,   że   \"Ania\"  …",
+    "out": {
+     "kind": "remember",
+     "text": "Ania"
+    }
+   },
+   {
+    "text": "IRIS zapomnij o „kawie”",
+    "out": {
+     "kind": "forget",
+     "text": "kawie"
+    }
+   },
+   {
+    "text": "ZAPAMIĘTAJ ŻE KOT",
+    "out": {
+     "kind": "remember",
+     "text": "KOT"
+    }
+   },
+   {
+    "text": "zapamiętaj sobie, że xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "out": {
+     "kind": "remember",
+     "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   }
+  ],
+  "parse_answer": [
+   {
+    "text": "Tak, usuń",
+    "out": true
+   },
+   {
+    "text": "tak",
+    "out": true
+   },
+   {
+    "text": "nie zgadza się",
+    "out": false
+   },
+   {
+    "text": "Nie.",
+    "out": false
+   },
+   {
+    "text": "nieważne",
+    "out": null
+   },
+   {
+    "text": "może",
+    "out": null
+   },
+   {
+    "text": "Dokładnie",
+    "out": true
+   },
+   {
+    "text": "owszem!",
+    "out": true
+   },
+   {
+    "text": "nieprawda",
+    "out": false
+   },
+   {
+    "text": "takie sobie",
+    "out": null
+   }
+  ],
+  "parse_feedback": [
+   {
+    "text": "IRIS, dzięki!",
+    "out": "praise"
+   },
+   {
+    "text": "to nie tak",
+    "out": "criticism"
+   },
+   {
+    "text": "źle się czuję",
+    "out": null
+   },
+   {
+    "text": "Świetnie.",
+    "out": "praise"
+   },
+   {
+    "text": "dobra odpowiedź",
+    "out": "praise"
+   },
+   {
+    "text": "dobrze, a teraz?",
+    "out": null
+   },
+   {
+    "text": "mylisz się",
+    "out": "criticism"
+   },
+   {
+    "text": "iris dziękuję",
+    "out": "praise"
+   },
+   {
+    "text": "Nie o to chodziło",
+    "out": "criticism"
+   }
+  ],
+  "texts": {
+   "remember": [
+    {
+     "labels": [
+      "kawę",
+      "mlekiem"
+     ],
+     "out": "Zapamiętane: kawę, mlekiem."
+    },
+    {
+     "labels": [],
+     "out": "Nie znalazłem w tym zdaniu niczego do zapamiętania."
+    }
+   ],
+   "forget": [
+    {
+     "labels": [
+      "lampa"
+     ],
+     "out": "Zapomniane: lampa."
+    },
+    {
+     "labels": [],
+     "out": "Nie pamiętam takiego pojęcia."
+    }
+   ],
+   "forget_all_question": [
+    {
+     "n": 0,
+     "out": "Nic nie pamiętam, nie ma czego usuwać."
+    },
+    {
+     "n": 1,
+     "out": "Na pewno usunąć całą pamięć (1 pojęcie)? Powiedz tak albo nie."
+    },
+    {
+     "n": 2,
+     "out": "Na pewno usunąć całą pamięć (2 pojęcia)? Powiedz tak albo nie."
+    },
+    {
+     "n": 5,
+     "out": "Na pewno usunąć całą pamięć (5 pojęć)? Powiedz tak albo nie."
+    },
+    {
+     "n": 12,
+     "out": "Na pewno usunąć całą pamięć (12 pojęć)? Powiedz tak albo nie."
+    },
+    {
+     "n": 22,
+     "out": "Na pewno usunąć całą pamięć (22 pojęcia)? Powiedz tak albo nie."
+    },
+    {
+     "n": 101,
+     "out": "Na pewno usunąć całą pamięć (101 pojęć)? Powiedz tak albo nie."
+    },
+    {
+     "n": 112,
+     "out": "Na pewno usunąć całą pamięć (112 pojęć)? Powiedz tak albo nie."
+    }
+   ],
+   "recall": [
+    {
+     "labels": [
+      "kawa",
+      "Burek"
+     ],
+     "total": 5,
+     "out": "Najmocniej kojarzę: kawa, Burek. Razem pamiętam 5 pojęć."
+    },
+    {
+     "labels": [],
+     "total": 0,
+     "out": "Jeszcze nic nie pamiętam. Możesz powiedzieć: zapamiętaj, że ..."
+    },
+    {
+     "labels": [
+      "x"
+     ],
+     "total": 1,
+     "out": "Najmocniej kojarzę: x. Razem pamiętam 1 pojęcie."
+    }
+   ],
+   "decimal_pl": [
+    {
+     "x": 0.625,
+     "out": "0,63"
+    },
+    {
+     "x": 0.0849,
+     "out": "0,08"
+    },
+    {
+     "x": 0.005,
+     "out": "0,01"
+    },
+    {
+     "x": 1.0,
+     "out": "1,00"
+    },
+    {
+     "x": 0.0,
+     "out": "0,00"
+    },
+    {
+     "x": 0.995,
+     "out": "1,00"
+    },
+    {
+     "x": 0.1755,
+     "out": "0,18"
+    },
+    {
+     "x": 0.6249,
+     "out": "0,62"
+    }
+   ],
+   "tool_recall": "lampa (siła 0,63, wprost)\nsalon (siła 0,08, powiązane)",
+   "tool_recall_empty": "Nic na ten temat nie pamiętam.",
+   "tool_remember": [
+    {
+     "fresh": [
+      "kawa"
+     ],
+     "reinforced": [
+      "mleko"
+     ],
+     "out": "nowe: kawa; wzmocnione: mleko"
+    },
+    {
+     "fresh": [],
+     "reinforced": [],
+     "out": "Nic do zapamiętania."
+    },
+    {
+     "fresh": [
+      "a",
+      "b"
+     ],
+     "reinforced": [],
+     "out": "nowe: a, b"
+    }
+   ],
+   "constants": {
+    "forget_all_done": "Pamięć wyczyszczona.",
+    "forget_all_kept": "Dobrze, niczego nie usuwam.",
+    "store_failed": "Nie udało się zapisać w pamięci. Spróbuj ponownie.",
+    "praise": "Dobrze, wzmacniam pojęcia użyte w tej odpowiedzi.",
+    "criticism": "Dobrze, osłabiam pojęcia użyte w tej odpowiedzi."
+   }
+  },
+  "clean_for_speech": [
+   {
+    "raw": "**Dobrze**, już mówię.",
+    "out": "Dobrze, już mówię."
+   },
+   {
+    "raw": "# Tytuł\nTreść",
+    "out": "Tytuł Treść"
+   },
+   {
+    "raw": "- jeden\n- dwa\n* trzy",
+    "out": "jeden dwa trzy"
+   },
+   {
+    "raw": "Linia pierwsza.\n\nLinia druga.",
+    "out": "Linia pierwsza. Linia druga."
+   },
+   {
+    "raw": "Użyj `ls -l` teraz",
+    "out": "Użyj ls -l teraz"
+   },
+   {
+    "raw": "```kod\nx = 1\n```Po kodzie.",
+    "out": "Po kodzie."
+   },
+   {
+    "raw": "> cytat\n_ważne_",
+    "out": "cytat ważne"
+   }
+  ]
+ },
+ "scenario": [
+  {
+   "kind": "say",
+   "arg": "Zapamiętaj, że lampa stoi w salonie.",
+   "reply": "Zapamiętane: lampa, stoi, salonie.",
+   "now": "2026-11-01T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "co o mnie wiesz?",
+   "reply": "Najmocniej kojarzę: lampa, salonie, stoi. Razem pamiętam 3 pojęcia.",
+   "now": "2026-11-01T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "advance",
+   "arg": 7,
+   "reply": null,
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "zapamiętaj, że lampa świeci w kuchni",
+   "reply": "Zapamiętane: świeci, kuchni, lampa.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.5484924240491751,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 2,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 2
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "kuchn",
+     "b": "lamp",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "Co pamiętasz",
+   "reply": "Najmocniej kojarzę: lampa, kuchni, świeci, salonie, stoi. Razem pamiętam 5 pojęć.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.5484924240491751,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 2,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 2
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "kuchn",
+     "b": "lamp",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "recall",
+   "arg": "lampa",
+   "reply": "lampa (siła 0,55, wprost)\nkuchni (siła 0,11, powiązane)\nświeci (siła 0,11, powiązane)\nsalonie (siła 0,05, powiązane)\nstoi (siła 0,05, powiązane)",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.6162185604417988,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 2,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 2
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.35,
+     "last_used": "2026-11-01T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "kuchn",
+     "b": "lamp",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "dzięki",
+   "reply": "Dobrze, wzmacniam pojęcia użyte w tej odpowiedzi.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.4475,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.6737857763755289,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 2,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 2
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.4475,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "kuchn",
+     "b": "lamp",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "dzięki",
+   "reply": null,
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.4475,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.6737857763755289,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 2,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 2
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.4475,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "kuchn",
+     "b": "lamp",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "recall",
+   "arg": "kuchnia",
+   "reply": "kuchni (siła 0,45, wprost)\nlampa (siła 0,20, powiązane)\nświeci (siła 0,13, powiązane)",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.530375,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.6737857763755289,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 2,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 2
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.4475,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "kuchn",
+     "b": "lamp",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "to nie tak",
+   "reply": "Dobrze, osłabiam pojęcia użyte w tej odpowiedzi.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "lamp",
+     "label": "lampa",
+     "strength": 0.5390286211004232,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 2,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 2
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "kuchn",
+     "b": "lamp",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "salon",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    },
+    {
+     "a": "lamp",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "Zapomnij o lampie",
+   "reply": "Zapomniane: lampa.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "Zapomnij o kosmosie",
+   "reply": "Nie pamiętam takiego pojęcia.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "zapamiętaj, że mam cukrzycę i PIN 1234",
+   "reply": "Zapamiętane: cukrzycę, PIN.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "cukrzyc",
+     "label": "cukrzycę",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "pin",
+     "label": "PIN",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "cukrzyc",
+     "b": "pin",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "zapamiętaj, że 12 34",
+   "reply": "Nie znalazłem w tym zdaniu niczego do zapamiętania.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "cukrzyc",
+     "label": "cukrzycę",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "pin",
+     "label": "PIN",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "cukrzyc",
+     "b": "pin",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "zapomnij wszystko",
+   "reply": "Na pewno usunąć całą pamięć (6 pojęć)? Powiedz tak albo nie.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "cukrzyc",
+     "label": "cukrzycę",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "pin",
+     "label": "PIN",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "cukrzyc",
+     "b": "pin",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "nie",
+   "reply": "Dobrze, niczego nie usuwam.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "cukrzyc",
+     "label": "cukrzycę",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "pin",
+     "label": "PIN",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "cukrzyc",
+     "b": "pin",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "zapomnij wszystko",
+   "reply": "Na pewno usunąć całą pamięć (6 pojęć)? Powiedz tak albo nie.",
+   "now": "2026-11-08T12:00:00.000+00:00",
+   "concepts": [
+    {
+     "key": "cukrzyc",
+     "label": "cukrzycę",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "pin",
+     "label": "PIN",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "cukrzyc",
+     "b": "pin",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "advance",
+   "arg": 0.001400462962962963,
+   "reply": null,
+   "now": "2026-11-08T12:02:01.000+00:00",
+   "concepts": [
+    {
+     "key": "cukrzyc",
+     "label": "cukrzycę",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "pin",
+     "label": "PIN",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "cukrzyc",
+     "b": "pin",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "tak",
+   "reply": null,
+   "now": "2026-11-08T12:02:01.000+00:00",
+   "concepts": [
+    {
+     "key": "cukrzyc",
+     "label": "cukrzycę",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "pin",
+     "label": "PIN",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "cukrzyc",
+     "b": "pin",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "zapomnij wszystko",
+   "reply": "Na pewno usunąć całą pamięć (6 pojęć)? Powiedz tak albo nie.",
+   "now": "2026-11-08T12:02:01.000+00:00",
+   "concepts": [
+    {
+     "key": "cukrzyc",
+     "label": "cukrzycę",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "kuchn",
+     "label": "kuchni",
+     "strength": 0.42430000000000007,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "pin",
+     "label": "PIN",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "rozmowa": 1
+     }
+    },
+    {
+     "key": "salon",
+     "label": "salonie",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "stoi",
+     "label": "stoi",
+     "strength": 0.3603642674029979,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-01T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    },
+    {
+     "key": "świec",
+     "label": "świeci",
+     "strength": 0.35800000000000004,
+     "last_used": "2026-11-08T12:00:00.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:00:00.000+00:00",
+     "domains": {
+      "dom": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "cukrzyc",
+     "b": "pin",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "kuchn",
+     "b": "świec",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:00:00.000+00:00"
+    },
+    {
+     "a": "salon",
+     "b": "stoi",
+     "strength": 0.3,
+     "last_used": "2026-11-01T12:00:00.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "Tak, usuń.",
+   "reply": "Pamięć wyczyszczona.",
+   "now": "2026-11-08T12:02:01.000+00:00",
+   "concepts": [],
+   "links": [],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "zapomnij wszystko",
+   "reply": "Nic nie pamiętam, nie ma czego usuwać.",
+   "now": "2026-11-08T12:02:01.000+00:00",
+   "concepts": [],
+   "links": [],
+   "forgotten": 0
+  },
+  {
+   "kind": "say",
+   "arg": "zapamiętaj, że Burek to pies",
+   "reply": "Zapamiętane: burek, pies.",
+   "now": "2026-11-08T12:02:01.000+00:00",
+   "concepts": [
+    {
+     "key": "burek",
+     "label": "burek",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:02:01.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:02:01.000+00:00",
+     "domains": {
+      "ty": 1
+     }
+    },
+    {
+     "key": "pies",
+     "label": "pies",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:02:01.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:02:01.000+00:00",
+     "domains": {
+      "ty": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "burek",
+     "b": "pies",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:02:01.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "advance",
+   "arg": 60,
+   "reply": null,
+   "now": "2027-01-07T12:02:01.000+00:00",
+   "concepts": [
+    {
+     "key": "burek",
+     "label": "burek",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:02:01.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:02:01.000+00:00",
+     "domains": {
+      "ty": 1
+     }
+    },
+    {
+     "key": "pies",
+     "label": "pies",
+     "strength": 0.35,
+     "last_used": "2026-11-08T12:02:01.000+00:00",
+     "hits": 1,
+     "created_at": "2026-11-08T12:02:01.000+00:00",
+     "domains": {
+      "ty": 1
+     }
+    }
+   ],
+   "links": [
+    {
+     "a": "burek",
+     "b": "pies",
+     "strength": 0.3,
+     "last_used": "2026-11-08T12:02:01.000+00:00"
+    }
+   ],
+   "forgotten": 0
+  },
+  {
+   "kind": "prune",
+   "arg": null,
+   "reply": null,
+   "now": "2027-01-07T12:02:01.000+00:00",
+   "concepts": [],
+   "links": [],
+   "forgotten": 2
+  },
+  {
+   "kind": "say",
+   "arg": "co o mnie wiesz",
+   "reply": "Jeszcze nic nie pamiętam. Możesz powiedzieć: zapamiętaj, że ...",
+   "now": "2027-01-07T12:02:01.000+00:00",
+   "concepts": [],
+   "links": [],
+   "forgotten": 2
+  }
+ ],
+ "migration": {
+  "facts": [
+   {
+    "text": "Mam psa o imieniu Burek",
+    "updated_at": "2026-10-02T12:00:00.000+00:00"
+   },
+   {
+    "text": "Pies Burek ma 3 lata",
+    "updated_at": "2026-10-03T12:00:00.000+00:00"
+   },
+   {
+    "text": "Biorę leki na ciśnienie",
+    "updated_at": "2026-10-04T12:00:00.000+00:00"
+   },
+   {
+    "text": "12 34",
+    "updated_at": "2026-10-05T12:00:00.000+00:00"
+   }
+  ],
+  "concepts": [
+   {
+    "key": "bior",
+    "label": "biorę",
+    "strength": 0.35,
+    "last_used": "2026-10-04T12:00:00.000+00:00",
+    "hits": 1,
+    "created_at": "2026-10-04T12:00:00.000+00:00",
+    "domains": {
+     "rozmowa": 1
+    }
+   },
+   {
+    "key": "burek",
+    "label": "burek",
+    "strength": 0.5998559821322301,
+    "last_used": "2026-10-03T12:00:00.000+00:00",
+    "hits": 2,
+    "created_at": "2026-10-02T12:00:00.000+00:00",
+    "domains": {
+     "ty": 2
+    }
+   },
+   {
+    "key": "ciśnien",
+    "label": "ciśnienie",
+    "strength": 0.35,
+    "last_used": "2026-10-04T12:00:00.000+00:00",
+    "hits": 1,
+    "created_at": "2026-10-04T12:00:00.000+00:00",
+    "domains": {
+     "rozmowa": 1
+    }
+   },
+   {
+    "key": "imien",
+    "label": "imieniu",
+    "strength": 0.35,
+    "last_used": "2026-10-02T12:00:00.000+00:00",
+    "hits": 1,
+    "created_at": "2026-10-02T12:00:00.000+00:00",
+    "domains": {
+     "ty": 1
+    }
+   },
+   {
+    "key": "lata",
+    "label": "lata",
+    "strength": 0.35,
+    "last_used": "2026-10-03T12:00:00.000+00:00",
+    "hits": 1,
+    "created_at": "2026-10-03T12:00:00.000+00:00",
+    "domains": {
+     "ty": 1
+    }
+   },
+   {
+    "key": "leki",
+    "label": "leki",
+    "strength": 0.35,
+    "last_used": "2026-10-04T12:00:00.000+00:00",
+    "hits": 1,
+    "created_at": "2026-10-04T12:00:00.000+00:00",
+    "domains": {
+     "rozmowa": 1
+    }
+   },
+   {
+    "key": "pies",
+    "label": "pies",
+    "strength": 0.35,
+    "last_used": "2026-10-03T12:00:00.000+00:00",
+    "hits": 1,
+    "created_at": "2026-10-03T12:00:00.000+00:00",
+    "domains": {
+     "ty": 1
+    }
+   },
+   {
+    "key": "psa",
+    "label": "psa",
+    "strength": 0.35,
+    "last_used": "2026-10-02T12:00:00.000+00:00",
+    "hits": 1,
+    "created_at": "2026-10-02T12:00:00.000+00:00",
+    "domains": {
+     "ty": 1
+    }
+   }
+  ],
+  "links": [
+   {
+    "a": "bior",
+    "b": "ciśnien",
+    "strength": 0.3,
+    "last_used": "2026-10-04T12:00:00.000+00:00"
+   },
+   {
+    "a": "bior",
+    "b": "leki",
+    "strength": 0.3,
+    "last_used": "2026-10-04T12:00:00.000+00:00"
+   },
+   {
+    "a": "burek",
+    "b": "imien",
+    "strength": 0.3,
+    "last_used": "2026-10-02T12:00:00.000+00:00"
+   },
+   {
+    "a": "burek",
+    "b": "lata",
+    "strength": 0.3,
+    "last_used": "2026-10-03T12:00:00.000+00:00"
+   },
+   {
+    "a": "burek",
+    "b": "pies",
+    "strength": 0.3,
+    "last_used": "2026-10-03T12:00:00.000+00:00"
+   },
+   {
+    "a": "burek",
+    "b": "psa",
+    "strength": 0.3,
+    "last_used": "2026-10-02T12:00:00.000+00:00"
+   },
+   {
+    "a": "ciśnien",
+    "b": "leki",
+    "strength": 0.3,
+    "last_used": "2026-10-04T12:00:00.000+00:00"
+   },
+   {
+    "a": "imien",
+    "b": "psa",
+    "strength": 0.3,
+    "last_used": "2026-10-02T12:00:00.000+00:00"
+   },
+   {
+    "a": "lata",
+    "b": "pies",
+    "strength": 0.3,
+    "last_used": "2026-10-03T12:00:00.000+00:00"
+   }
+  ]
+ }
+}

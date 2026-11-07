@@ -48,7 +48,7 @@ class FakeSpeaker(override val available: Boolean = true) : Speaker {
 
 class FakeConversation(private val replies: MutableList<Any>) : Conversation {
     val said = mutableListOf<String>()
-    val forgotten = mutableListOf<Long>()
+    val forgotten = mutableListOf<String>()
 
     override suspend fun say(text: String): ChatReply {
         said += text
@@ -57,9 +57,9 @@ class FakeConversation(private val replies: MutableList<Any>) : Conversation {
         return ChatReply(item.toString(), false, "m", Usage(1, 1))
     }
 
-    override suspend fun facts(): List<Fact> = emptyList()
+    override suspend fun memory(): MemoryView = MemoryView(java.time.Instant.EPOCH, emptyList(), emptyList(), 0)
 
-    override suspend fun forget(id: Long): Boolean = forgotten.add(id)
+    override suspend fun forget(key: String): Boolean = forgotten.add(key)
 }
 
 class ControllerTest {

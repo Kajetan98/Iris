@@ -53,11 +53,10 @@ class PyTextTest {
     }
 
     @Test
-    fun `fact meta shows the source and the confidence in percent`() {
+    fun `concept meta shows the strength in percent, uses and the context`() {
         val t = java.time.Instant.EPOCH
-        fun fact(source: Source, c: Double) = Fact(1, "x", source, c, t, t)
-        assertEquals("od ciebie", Texts.factMeta(fact(Source.STATED, 1.0)))
-        assertEquals("przypuszczenie, pewność 65%", Texts.factMeta(fact(Source.INFERRED, 0.65)))
-        assertEquals("przypuszczenie, pewność 45%", Texts.factMeta(fact(Source.INFERRED, 0.45)))
+        val c = Concept("lamp", "lampa", 0.5, t, 3, t, mapOf("dom" to 2))
+        assertEquals("siła 65%, użyć 3, kontekst: dom", Texts.conceptMeta(ConceptView(c, 0.646, "dom")))
+        assertEquals("siła 4%, użyć 3, kontekst: ty", Texts.conceptMeta(ConceptView(c, 0.035, "ty")))
     }
 }

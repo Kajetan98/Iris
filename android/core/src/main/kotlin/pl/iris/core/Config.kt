@@ -7,9 +7,9 @@ package pl.iris.core
 
 enum class InferPolicy { LOCAL_ONLY, ALWAYS, NEVER }
 
-enum class SendFacts { ALWAYS, LOCAL_ONLY, NEVER }
+enum class SendMemory { ALWAYS, LOCAL_ONLY, NEVER }
 
-/** Rdzenie słów danych wrażliwych: wniosków z nimi IRIS nie zapisuje sama (spec, sekcja 9). */
+/** Rdzenie słów danych wrażliwych: z nimi pamięć nie uczy się sama (spec, sekcja 9). */
 val SENSITIVE_STEMS: List<String> = listOf(
     "zdrow", "chorob", "chory", "chora", "chorzy", "leki", "lekarstw", "lekarz",
     "leczen", "tętn", "puls", "ciśnien", "cukrzyc", "depres", "terapi", "diagnoz",
@@ -20,32 +20,54 @@ val SENSITIVE_STEMS: List<String> = listOf(
     "partia", "głosuj", "orientacj", "seksual"
 )
 
-data class LearningConfig(
+/** Domena pamięci: kontekst, w którym pojęcie padło; kolor z logo IRIS. */
+data class MemoryDomain(val id: String, val name: String, val info: String, val rgb: List<Int>)
+
+val MEMORY_DOMAINS: List<MemoryDomain> = listOf(
+    MemoryDomain("dom", "Dom", "dom i sterowanie urządzeniami", listOf(255, 138, 31)),
+    MemoryDomain("czas", "Czas", "przypomnienia, kalendarz, plany", listOf(255, 61, 154)),
+    MemoryDomain("ty", "Ty", "ludzie, upodobania, praca, zajęcia", listOf(42, 212, 255)),
+    MemoryDomain("rozmowa", "Rozmowa", "wszystko inne", listOf(143, 91, 255)),
+)
+val MEMORY_DOMAIN_IDS: List<String> = MEMORY_DOMAINS.map { it.id }
+const val DEFAULT_MEMORY_DOMAIN = "rozmowa"
+
+/** Rdzenie słów wskazujące domenę (dopasowanie do początku słowa). */
+val DOMAIN_WORDS: Map<String, List<String>> = linkedMapOf(
+    "dom" to listOf("świat", "swiat", "lamp", "gniazd", "salon", "kuchni", "sypialn", "łazien", "ogrzew", "termostat", "rolet", "zapal", "zgaś", "zgas", "włącz", "wlacz", "wyłącz", "wylacz", "przekaźn", "drzwi", "zamek", "wentyl", "klimaty", "pokój", "pokoj", "przygaś", "jasnoś", "telewiz", "głośnik"),
+    "czas" to listOf("przypom", "jutro", "dziś", "dzis", "godzin", "minut", "kalendar", "spotkan", "termin", "notat", "plan", "poniedz", "wtor", "środ", "czwart", "piąt", "sobot", "niedziel", "rano", "wieczor", "tydzie", "tygodn", "urodzin", "rocznic", "budzik"),
+    "ty" to listOf("lubi", "uwielbi", "kocha", "prac", "zawod", "zawód", "rodzin", "żon", "mąż", "męż", "dzieci", "dzieck", "córk", "syn", "brat", "siostr", "przyjaci", "koleg", "koleżank", "pies", "psa", "psem", "kot", "hobby", "imię", "imie", "nazyw", "zainteres", "sport", "muzyk", "książ", "film", "studi", "szkoł", "ulubion"),
+)
+
+/** Słowa pomocnicze pomijane przez heurystykę wyciągania pojęć. */
+val MEMORY_STOP_WORDS: List<String> = listOf(
+    "aby", "albo", "ale", "and", "bardzo", "bez", "bo", "był", "była", "było", "będzie", "chciałabym", "chciałbym", "chcę", "ciebie", "czy", "dla", "for", "from", "gdy", "jak", "jako", "jest", "jestem", "jesteś", "już", "która", "które", "który", "lub", "mam", "masz", "mnie", "moja", "moje", "możesz", "można", "mój", "nad", "nie", "ona", "oni", "oraz", "pod", "proszę", "przez", "się", "są", "także", "tego", "tej", "ten", "też", "that", "the", "this", "twoja", "twoje", "twój", "tych", "tylko", "tym", "with", "więc", "żeby",
+)
+
+/** Pamięć: graf pojęć (spec, sekcja 9, "Pamięć: graf pojęć"). */
+data class MemoryConfig(
     val enabled: Boolean = true,
     val infer: InferPolicy = InferPolicy.LOCAL_ONLY,
-    val maxPerTurn: Int = 3,
-    val similar: Double = 0.6,
-    val forgetMatch: Double = 0.5,
-    val startMax: Double = 0.45,
-    val reinforceStep: Double = 0.2,
-    val maxInferred: Double = 0.9,
-    val ask: Boolean = true,
-    val askMin: Double = 0.4,
-    val askIntervalS: Double = 900.0,
-    val askAgainDays: Double = 7.0,
+    val halfLifeDays: Double = 14.0,
+    val initial: Double = 0.35,
+    val gainConcept: Double = 0.4,
+    val gainLink: Double = 0.3,
+    val gainRecall: Double = 0.15,
+    val forgetBelow: Double = 0.03,
+    val pruneEveryS: Double = 600.0,
+    val maxConcepts: Int = 8,
+    val recallK: Int = 8,
     val answerWindowS: Double = 120.0,
-    val decayAfterDays: Double = 30.0,
-    val decayStep: Double = 0.1,
-    val forgetBelow: Double = 0.2,
-    /** Pochwała i krytyka ostatniej odpowiedzi zmieniają pewność użytych przypuszczeń (spec, sekcja 9). */
+    /** Pochwała i krytyka ostatniej odpowiedzi zmieniają siłę przypomnianych pojęć. */
     val feedback: Boolean = true,
-    val feedbackUp: Double = 0.1,
     val feedbackDown: Double = 0.2,
     val sensitiveWords: List<String> = SENSITIVE_STEMS,
+    val domainWords: Map<String, List<String>> = DOMAIN_WORDS,
+    val stopWords: List<String> = MEMORY_STOP_WORDS,
 ) {
     init {
-        require(maxPerTurn in 0..10) { "maxPerTurn: 0-10" }
-        require(forgetBelow < startMax && startMax <= maxInferred) { "wymagane forgetBelow < startMax <= maxInferred" }
+        require(forgetBelow < initial) { "wymagane forgetBelow < initial" }
+        require(maxConcepts in 1..32) { "maxConcepts: 1-32" }
     }
 }
 
@@ -55,9 +77,10 @@ data class LlmConfig(
     val timeoutS: Double = 30.0,
     val retries: Int = 1,
     val historyTurns: Int = 10,
-    val sendFacts: SendFacts = SendFacts.LOCAL_ONLY,
-    val maxFacts: Int = 30,
-    val minInferredConfidence: Double = 0.5,
+    val sendMemory: SendMemory = SendMemory.LOCAL_ONLY,
+    /** Narzędzia pamięci iris_recall i iris_remember (spec, sekcja 12). */
+    val tools: Boolean = true,
+    val maxToolRounds: Int = 2,
     val effort: String = "low", // "off" pomija parametr
     val thinkingHeadroomTokens: Int = 2000,
     val fallbacks: Boolean = true,
@@ -65,9 +88,8 @@ data class LlmConfig(
 
 const val DEFAULT_CLAUDE_MODEL = "claude-opus-5-5"
 
-/** Całość ustawień rdzenia. `quiet` odpowiada `initiative.quiet` hosta: bez pytań o przypuszczenia. */
+/** Całość ustawień rdzenia aplikacji. */
 data class CoreConfig(
-    val learning: LearningConfig = LearningConfig(),
+    val memory: MemoryConfig = MemoryConfig(),
     val llm: LlmConfig = LlmConfig(),
-    val quiet: Boolean = false,
 )

@@ -10,111 +10,139 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 
 class ChatTest {
-    private val burek = """[{"fakt": "Masz psa o imieniu Burek.", "pewnosc": 0.9}]"""
+    private val lampa = """{"domain": "dom", "concepts": ["lampa", "salon"]}"""
 
-    private class Rig(scope: TestScope, replies: List<Any>, remote: Boolean, config: CoreConfig, withEngine: Boolean = true) {
+    private class Rig(scope: TestScope, replies: List<Any>, remote: Boolean, tools: Boolean, config: CoreConfig, withEngine: Boolean) {
         val clock = ManualClock()
-        val store = InMemoryFactStore(clock)
-        val engine = ScriptedEngine(replies, remote)
+        val store = InMemoryMemoryStore()
+        val engine = ScriptedEngine(replies, remote, tools)
         val chat = Chat(config, clock, store, if (withEngine) Assistant(engine, config.llm) else null, scope, ZoneOffset.UTC)
 
-        fun facts() = store.facts().map { Triple(it.text, it.source, Math.round(it.confidence * 100) / 100.0) }
+        fun labels() = store.concepts().values.map { it.label }.sorted()
+
+        fun extractions() = engine.calls.filter { it.first == CONCEPTS_PROMPT }
     }
 
     private fun TestScope.rig(
         replies: List<Any> = listOf("Dobrze."),
         remote: Boolean = false,
+        tools: Boolean = false,
         config: CoreConfig = CoreConfig(),
         withEngine: Boolean = true,
-    ) = Rig(this, replies, remote, config, withEngine)
+    ) = Rig(this, replies, remote, tools, config, withEngine)
 
     private suspend fun Rig.turn(text: String): ChatReply = chat.say(text).also { chat.idle() }
 
     @Test
     fun `memory commands work without a model`() = runTest {
         val r = rig(withEngine = false)
-        assertEquals(ChatReply("Zapamiętane: \"mam psa Burka\".", false, null, Usage(0, 0)), r.turn("Zapamiętaj, że mam psa Burka."))
-        r.turn("IRIS, zapisz: pracuję w Gdyni")
-        assertTrue(r.turn("Co o mnie wiesz?").text.startsWith("Wiem od ciebie: \"mam psa Burka\"; \"pracuję w Gdyni\""))
-        assertEquals("Zapomniane: \"mam psa Burka\".", r.turn("Zapomnij, że mam psa").text)
-        assertEquals(listOf(Triple("pracuję w Gdyni", Source.STATED, 1.0)), r.facts())
+        assertEquals(ChatReply("Zapamiętane: lampa, stoi, salonie.", false, null, Usage(0, 0)), r.turn("Zapamiętaj, że lampa stoi w salonie."))
+        val recall = r.turn("Co o mnie wiesz?").text
+        assertTrue(recall.startsWith("Najmocniej kojarzę: ") && recall.endsWith("Razem pamiętam 3 pojęcia."), recall)
+        assertEquals("Zapomniane: lampa.", r.turn("Zapomnij o lampie").text)
+        assertEquals(listOf("salonie", "stoi"), r.labels())
+        assertEquals("Zapamiętane: cukrzycę, PIN.", r.turn("zapamiętaj, że mam cukrzycę i PIN 1234").text)
         assertFailsWith<ChatDisabled> { r.turn("Jaka jest pogoda?") }
         assertFailsWith<IllegalArgumentException> { r.turn("   ") }
     }
 
     @Test
-    fun `a guess starts weak and grows with repetition`() = runTest {
-        val config = CoreConfig(learning = LearningConfig(infer = InferPolicy.ALWAYS))
-        val r = rig(listOf("Miłego spaceru.", burek, "Pozdrów Burka.", burek), config = config)
-        assertEquals("Miłego spaceru.", r.turn("Idę z Burkiem na spacer.").text)
-        val (system, messages, _) = r.engine.calls[1]
-        assertEquals(EXTRACT_PROMPT, system)
-        assertEquals(listOf("Idę z Burkiem na spacer."), messages.map { it.content }) // sama wypowiedź, bez kontekstu
-        assertEquals(listOf(Triple("Masz psa o imieniu Burek", Source.INFERRED, 0.45)), r.facts())
-        r.turn("Burek dziś szczekał.")
-        assertEquals(listOf(Triple("Masz psa o imieniu Burek", Source.INFERRED, 0.65)), r.facts())
-        assertEquals(1, r.store.facts().single().reinforced)
+    fun `forget all asks first and the window closes the question`() = runTest {
+        val r = rig(withEngine = false)
+        assertEquals("Nic nie pamiętam, nie ma czego usuwać.", r.turn("zapomnij wszystko").text)
+        r.turn("zapamiętaj, że jutro mam spotkanie")
+        assertEquals("Na pewno usunąć całą pamięć (2 pojęcia)? Powiedz tak albo nie.", r.turn("zapomnij wszystko").text)
+        assertEquals("Dobrze, niczego nie usuwam.", r.turn("nie").text)
+        r.turn("zapomnij wszystko")
+        r.clock.advance(121.0)
+        assertFailsWith<ChatDisabled> { r.turn("tak") } // po oknie to zwykła wypowiedź
+        r.turn("zapomnij wszystko")
+        assertEquals("Pamięć wyczyszczona.", r.turn("Tak, usuń.").text)
+        assertEquals(0, r.store.count())
     }
 
     @Test
-    fun `a remote model only learns when the policy allows it`() = runTest {
-        for ((infer, expected) in listOf(InferPolicy.LOCAL_ONLY to 0, InferPolicy.NEVER to 0, InferPolicy.ALWAYS to 1)) {
-            val config = CoreConfig(learning = LearningConfig(infer = infer))
-            val r = rig(listOf("Ok.", burek), remote = true, config = config)
-            r.turn("Idę z Burkiem na spacer.")
-            assertEquals(expected, r.store.facts().size, infer.name)
-            assertEquals(1 + expected, r.engine.calls.size, infer.name)
-        }
-        val local = rig(listOf("Ok.", burek), remote = false)
-        local.turn("Idę z Burkiem na spacer.")
-        assertEquals(1, local.store.facts().size) // lokalny silnik: local_only wystarcza
+    fun `a local model teaches the graph in the background from the utterance alone`() = runTest {
+        val r = rig(listOf("Dobrze.", lampa))
+        assertEquals("Dobrze.", r.turn("Zapal lampę w salonie").text)
+        val (_, messages, _) = r.extractions().single()
+        assertEquals(listOf("Zapal lampę w salonie"), messages.map { it.content })
+        assertEquals(listOf("lampa", "salon"), r.labels())
+        assertEquals(mapOf("dom" to 1), r.store.concepts(listOf("lamp")).getValue("lamp").domains)
     }
 
     @Test
-    fun `an unreadable guess list is dropped without breaking the turn`() = runTest {
-        val config = CoreConfig(learning = LearningConfig(infer = InferPolicy.ALWAYS))
-        val r = rig(listOf("Ok.", "nie wiem", "Ok.", LlmUnavailable("brak")), config = config)
-        assertEquals("Ok.", r.turn("Idę z Burkiem na spacer.").text)
-        assertEquals("Ok.", r.turn("Jeszcze raz").text)
-        assertTrue(r.store.facts().isEmpty())
+    fun `a bad reply or a remote model falls back to the heuristic`() = runTest {
+        val bad = rig(listOf("Dobrze.", "nie wiem"))
+        bad.turn("Mój pies Burek lubi spacery")
+        assertEquals(listOf("burek", "lubi", "pies", "spacery"), bad.labels())
+        val remote = rig(listOf("Dobrze."), remote = true)
+        remote.turn("Zapal lampę w salonie")
+        assertTrue(remote.extractions().isEmpty())
+        assertEquals(listOf("lampę", "salonie", "zapal"), remote.labels())
+        val always = rig(listOf("Dobrze.", lampa), remote = true, config = CoreConfig(memory = MemoryConfig(infer = InferPolicy.ALWAYS)))
+        always.turn("Zapal lampę w salonie")
+        assertEquals(1, always.extractions().size)
     }
 
     @Test
-    fun `a guess is used in the context only after reinforcement and is asked about`() = runTest {
-        val config = CoreConfig(
-            learning = LearningConfig(infer = InferPolicy.ALWAYS, ask = false),
-            llm = LlmConfig(sendFacts = SendFacts.ALWAYS),
-        )
-        val r = rig(listOf("Ok.", burek, "Ok.", burek, "Ok.", "[]"), config = config)
-        r.turn("Idę z Burkiem na spacer.")
-        r.turn("Burek dziś szczekał.")
-        assertFalse("Masz psa o imieniu Burek" in r.engine.chatCalls[1].second.last().content) // 0,45: pominięty
-        r.turn("Co słychać?")
-        assertTrue("Masz psa o imieniu Burek (przypuszczenie, pewność 0.7)" in r.engine.chatCalls[2].second.last().content)
+    fun `sensitive utterances do not teach and numbers never stay`() = runTest {
+        val r = rig(listOf("Dobrze.", """{"domain": "ty", "concepts": ["tętno", "rower", "Rower 3"]}"""))
+        r.turn("Mieszkam na ulicy Polnej w Krakowie")
+        assertEquals(0, r.store.count())
+        assertTrue(r.extractions().isEmpty())
+        r.turn("Jeżdżę na rowerze")
+        assertEquals(listOf("rower"), r.labels())
     }
 
     @Test
-    fun `the question is appended to the answer and the next turn answers it`() = runTest {
-        val r = rig(listOf("Jutro będzie słonecznie."))
-        r.store.addFact("Masz psa o imieniu Burek", Source.INFERRED, 0.65)
-        val reply = r.turn("Jaka będzie pogoda?")
-        assertEquals("Jutro będzie słonecznie. Czy dobrze rozumiem: masz psa o imieniu Burek?", reply.text)
-        assertEquals(1, r.engine.chatCalls.size)
-        val yes = r.turn("Tak, zgadza się")
-        assertEquals(ChatReply("Dobrze, zapamiętane.", false, null, Usage(0, 0)), yes)
-        assertEquals(1, r.engine.chatCalls.size) // odpowiedź na pytanie nie trafia do modelu
-        assertEquals(listOf(Triple("Masz psa o imieniu Burek", Source.STATED, 1.0)), r.facts())
+    fun `the recall tool answers from the graph and praise reinforces those concepts`() = runTest {
+        val r = rig(listOf(toolCall("iris_recall", "query" to "lampa"), "Pamiętam lampę w salonie.", "{}"), tools = true)
+        r.turn("zapamiętaj, że lampa stoi w salonie")
+        val before = r.store.concepts(listOf("lamp")).getValue("lamp").strength
+        assertEquals("Pamiętam lampę w salonie.", r.turn("Co pamiętasz o lampie?").text)
+        val result = r.engine.calls[1].second.last().toolResults.single().content
+        assertTrue(result.startsWith("lampa (siła ") && "wprost" in result, result)
+        val recalled = r.store.concepts(listOf("lamp")).getValue("lamp").strength
+        assertTrue(recalled > before)
+        assertEquals("Dobrze, wzmacniam pojęcia użyte w tej odpowiedzi.", r.turn("dzięki").text)
+        assertTrue(r.store.concepts(listOf("lamp")).getValue("lamp").strength > recalled)
+        assertEquals("scripted", r.turn("dzięki").model) // lista zużyta: druga pochwała trafia do modelu
     }
 
     @Test
-    fun `no questions in quiet mode`() = runTest {
-        val r = rig(listOf("Ok."), config = CoreConfig(quiet = true))
-        r.store.addFact("Masz psa o imieniu Burek", Source.INFERRED, 0.65)
-        assertEquals("Ok.", r.turn("Hej").text)
+    fun `criticism weakens recalled concepts and forgets weak ones`() = runTest {
+        val config = CoreConfig(memory = MemoryConfig(feedbackDown = 0.9))
+        val r = rig(listOf(toolCall("iris_recall", "query" to "lampa"), "W kuchni.", "{}"), tools = true, config = config)
+        r.turn("zapamiętaj, że lampa")
+        r.store.save(listOf(r.store.concepts(listOf("lamp")).getValue("lamp").copy(strength = 0.03)))
+        r.turn("Gdzie lampa?")
+        assertEquals("Dobrze, osłabiam pojęcia użyte w tej odpowiedzi.", r.turn("to nie tak").text)
+        assertEquals(0, r.store.count())
     }
 
     @Test
-    fun `model errors map to chat errors and leave the history alone`() = runTest {
+    fun `memory reaches the model only when the policy allows`() = runTest {
+        val remote = rig(listOf("Dobrze."), remote = true, tools = true)
+        remote.turn("zapamiętaj, że lampa stoi w salonie")
+        remote.turn("Gdzie stoi lampa?")
+        assertEquals(listOf("iris_remember"), remote.engine.offered.first())
+        assertFalse("Pamięć IRIS" in remote.engine.chatCalls.first().second.last().content)
+        val local = rig(listOf("Dobrze."))
+        local.turn("zapamiętaj, że lampa stoi w salonie")
+        local.turn("Gdzie stoi lampa?")
+        assertTrue("- lampa (siła" in local.engine.chatCalls.first().second.last().content)
+    }
+
+    @Test
+    fun `the remember tool filters sensitive words`() = runTest {
+        val r = rig(listOf(toolCall("iris_remember", "text" to "biorę leki na serce i lubię jazz"), "Dobrze.", "{}"), tools = true)
+        r.turn("Proszę, pamiętaj o tym")
+        assertTrue("jazz" in r.labels() && "leki" !in r.labels())
+    }
+
+    @Test
+    fun `model errors map to chat errors`() = runTest {
         val cases = listOf(
             LlmRefusal("odmowa") to ChatErrorKind.REFUSED,
             LlmUnavailable("brak") to ChatErrorKind.UNAVAILABLE,
@@ -130,56 +158,25 @@ class ChatTest {
     }
 
     @Test
-    fun `the facts list and deleting from it`() = runTest {
+    fun `the memory view and deleting from it`() = runTest {
         val r = rig(withEngine = false)
-        r.turn("zapamiętaj, że mam psa Burka")
-        val id = r.chat.facts().single().id
-        assertTrue(r.chat.forget(id))
-        assertFalse(r.chat.forget(id))
-        assertTrue(r.chat.facts().isEmpty())
+        r.turn("zapamiętaj, że lampa stoi w salonie")
+        r.turn("zapamiętaj, że lampa")
+        val view = r.chat.memory()
+        assertEquals("lampa", view.concepts.first().concept.label)
+        assertEquals("dom", view.concepts.first().domain)
+        assertEquals(3, view.links.size)
+        assertTrue(r.chat.forget("lamp"))
+        assertFalse(r.chat.forget("lamp"))
+        assertEquals(1, r.chat.memory().links.size)
     }
 
     @Test
-    fun `old guesses fade on the first turn after a long break`() = runTest {
+    fun `old concepts fade on the first turn after a long break`() = runTest {
         val r = rig(withEngine = false)
-        r.store.addFact("Lubisz kawę", Source.INFERRED, 0.45)
-        r.clock.advance(31 * 86400.0)
-        r.turn("zapamiętaj, że gram w szachy")
-        assertEquals(listOf(Triple("Lubisz kawę", Source.INFERRED, 0.35), Triple("gram w szachy", Source.STATED, 1.0)), r.facts())
-    }
-
-    @Test
-    fun `praise and criticism act on the guesses that went to the model`() = runTest {
-        val config = CoreConfig(learning = LearningConfig(ask = false), llm = LlmConfig(sendFacts = SendFacts.ALWAYS))
-        val r = rig(listOf("Dobrze."), config = config)
-        r.store.addFact("Masz psa o imieniu Burek", Source.INFERRED, 0.65)
-        r.turn("Co słychać?")
-        val praise = r.turn("Świetnie!")
-        assertEquals(ChatReply("Dobrze, zapisuję, że to było trafne.", false, null, Usage(0, 0)), praise)
-        assertEquals(0.75, r.store.facts().single().confidence, 1e-9)
-        val calls = r.engine.chatCalls.size
-        r.turn("dzięki") // lista zużyta: zwykła rozmowa z modelem
-        assertEquals(calls + 1, r.engine.chatCalls.size)
-        r.turn("Co słychać?")
-        assertEquals("Dobrze, osłabiam przypuszczenia użyte w tej odpowiedzi.", r.turn("to nie tak").text)
-        assertEquals(0.55, r.store.facts().single().confidence, 1e-9)
-    }
-
-    @Test
-    fun `reactions need guesses in the context and the switch on`() = runTest {
-        val off = CoreConfig(learning = LearningConfig(ask = false, feedback = false), llm = LlmConfig(sendFacts = SendFacts.ALWAYS))
-        val a = rig(listOf("Dobrze."), config = off)
-        a.store.addFact("Masz psa o imieniu Burek", Source.INFERRED, 0.65)
-        a.turn("Co słychać?")
-        assertEquals("Dobrze.", a.turn("dzięki").text)
-        assertEquals(0.65, a.store.facts().single().confidence, 1e-9)
-
-        // pamięć w rozmowie wyłączona: przypuszczenie nie poszło do modelu, więc nie ma czego oceniać
-        val noMemory = CoreConfig(learning = LearningConfig(ask = false), llm = LlmConfig(sendFacts = SendFacts.NEVER))
-        val b = rig(listOf("Dobrze."), config = noMemory)
-        b.store.addFact("Masz psa o imieniu Burek", Source.INFERRED, 0.65)
-        b.turn("Co słychać?")
-        assertEquals("Dobrze.", b.turn("dzięki").text)
-        assertEquals(0.65, b.store.facts().single().confidence, 1e-9)
+        r.turn("zapamiętaj, że lampa")
+        r.clock.advance(60 * 86400.0)
+        assertTrue(r.turn("co o mnie wiesz").text.startsWith("Jeszcze nic nie pamiętam."))
+        assertEquals(1, r.store.forgotten())
     }
 }

@@ -9,39 +9,40 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Rozmowa widziana z interfejsu: tura, lista faktów i usuwanie faktu. */
+/** Rozmowa widziana z interfejsu: tura, stan pamięci i usuwanie pojęcia. */
 interface Conversation {
     suspend fun say(text: String): ChatReply
 
-    suspend fun facts(): List<Fact>
+    suspend fun memory(): MemoryView
 
-    suspend fun forget(id: Long): Boolean
+    suspend fun forget(key: String): Boolean
 }
 
 /** Odpowiedź tury rozmowy. `model` jest null dla odpowiedzi programu bez LLM (polecenia pamięci). */
 data class ChatReply(val text: String, val truncated: Boolean, val model: String?, val usage: Usage)
 
-/** Rozmowa wymaga silnika LLM, a go nie ma (brak klucza w ustawieniach). */
+/** Rozmowa wymaga silnika LLM, a go nie ma (brak klucza albo modelu w ustawieniach). */
 class ChatDisabled : Exception("model językowy jest wyłączony")
 
 enum class ChatErrorKind { REFUSED, UNAVAILABLE, CONFIG, FAILED }
 
-/** Błąd tury rozmowy. Historia i fakty zostają bez zmian. */
+/** Błąd tury rozmowy. Historia i pamięć zostają bez zmian. */
 class ChatError(val kind: ChatErrorKind, message: String) : Exception(message)
 
 /**
- * Jedna tura rozmowy (kolejność jak w HostService.chat, spec sekcje 9 i 14): odpowiedź na pytanie IRIS,
- * polecenia pamięci, LLM, pytanie o przypuszczenie, wnioski w tle. Tury są obsługiwane po kolei.
+ * Jedna tura rozmowy (kolejność jak w HostService.chat, spec sekcje 9 i 14): odpowiedź na pytanie
+ * z "zapomnij wszystko", polecenia pamięci i reakcje, LLM z narzędziami pamięci, nauka z wypowiedzi w tle
+ * (tura na nią nie czeka). Tury są obsługiwane po kolei.
  */
 class Chat(
     private val config: CoreConfig,
     private val clock: Clock,
-    private val store: FactStore,
+    store: MemoryStore,
     private val assistant: Assistant?,
     private val scope: CoroutineScope,
     private val zone: ZoneId = ZoneId.systemDefault(),
 ) : Conversation {
-    private val learner = Learner(config.learning, config.llm.minInferredConfidence, config.quiet, clock, store)
+    private val memory = MemoryKeeper(config.memory, config.llm, clock, store)
     private val lock = Mutex()
     private val background = mutableListOf<Job>()
 
@@ -49,13 +50,14 @@ class Chat(
         val utterance = pyStrip(text)
         require(utterance.isNotEmpty()) { "pusta wypowiedź" }
         lock.withLock {
-            learner.maybeDecay() // raz na dobę, przy pierwszej turze po starcie też
-            (learner.answer(utterance) ?: learner.command(utterance))?.let { return ChatReply(it, false, null, Usage(0, 0)) }
+            memory.maybePrune() // przy pierwszej turze i co memory.pruneEveryS
+            (memory.answer(utterance) ?: memory.command(utterance))?.let { return ChatReply(it, false, null, Usage(0, 0)) }
         }
         val engine = assistant ?: throw ChatDisabled()
         val reply = lock.withLock {
+            val tools = if (memory.enabled) memory.tools() else null
             val answer = try {
-                engine.ask(utterance, store.facts(), LocalDateTime.ofInstant(clock.now(), zone))
+                engine.ask(utterance, LocalDateTime.ofInstant(clock.now(), zone), tools)
             } catch (e: LlmRefusal) {
                 throw ChatError(ChatErrorKind.REFUSED, e.message.orEmpty())
             } catch (e: LlmUnavailable) {
@@ -65,33 +67,31 @@ class Chat(
             } catch (e: LlmException) {
                 throw ChatError(ChatErrorKind.FAILED, e.message.orEmpty())
             }
-            val facts = store.facts()
-            // Które przypuszczenia poszły do modelu: pochwała lub krytyka dotyczy właśnie ich (spec, sekcja 9).
-            learner.noteContext(selectFacts(facts, config.llm, engine.engine.remote).filter { it.source == Source.INFERRED }.map { it.id })
-            val question = learner.question() // pytanie o przypuszczenie (spec, sekcja 9)
-            ChatReply(if (question == null) answer.text else "${answer.text} $question", answer.truncated, answer.model, answer.usage)
+            // Pochwała lub krytyka dotyczy pojęć przypomnianych do tej odpowiedzi (spec, sekcja 9).
+            memory.noteRecalled(tools?.recalled.orEmpty())
+            ChatReply(answer.text, answer.truncated, answer.model, answer.usage)
         }
-        if (learner.infersWith(engine.engine)) {
+        if (memory.learnable(utterance)) {
             val job = scope.launch { learnFrom(engine.engine, utterance) }
             synchronized(background) { background += job }
         }
         return reply
     }
 
-    /** Usunięcie faktu z listy w aplikacji. */
-    override suspend fun forget(id: Long): Boolean = lock.withLock { learner.forget(id) }
+    /** Usunięcie pojęcia z ekranu pamięci. */
+    override suspend fun forget(key: String): Boolean = lock.withLock { memory.forget(listOf(key)).isNotEmpty() }
 
-    /** Lista faktów dla ekranu "Co IRIS o mnie wie". */
-    override suspend fun facts(): List<Fact> = lock.withLock { store.facts() }
+    /** Stan pamięci dla ekranu "Pamięć IRIS" i eksportu. */
+    override suspend fun memory(): MemoryView = lock.withLock { memory.view() }
 
-    /** Czeka na wnioski z rozmowy liczone w tle (testy, zamykanie aplikacji). */
+    /** Czeka na naukę z rozmowy liczoną w tle (testy, zamykanie aplikacji). */
     suspend fun idle() {
         val jobs = synchronized(background) { background.toList().also { background.clear() } }
         jobs.joinAll()
     }
 
     private suspend fun learnFrom(engine: LlmEngine, utterance: String) {
-        val guesses = learner.infer(engine, utterance) ?: return // błąd silnika pomijamy bez treści
-        lock.withLock { learner.merge(guesses) }
+        val ext = memory.extract(engine, utterance) // zapytanie poza blokadą: tura się nie wstrzymuje
+        lock.withLock { memory.learnConversation(ext) }
     }
 }

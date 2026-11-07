@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fakty o użytkowniku i klucz API nie trafiają do kopii zapasowej ani na nowy telefon (spec, sekcja 14). -->
+<!-- Pamięć IRIS i klucz API nie trafiają do kopii zapasowej ani na nowy telefon (spec, sekcja 14). -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" path="." />

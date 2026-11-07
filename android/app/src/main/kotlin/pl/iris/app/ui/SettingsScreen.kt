@@ -136,14 +136,14 @@ fun SettingsScreen(
 
         SwitchRow(
             "Używaj pamięci w rozmowie",
-            if (engine == EngineKind.LOCAL) "Fakty o tobie trafiają do kontekstu modelu na telefonie i nigdzie nie są wysyłane. Wyłączone: model ich nie widzi."
-            else "Fakty o tobie trafiają do kontekstu modelu, czyli są wysyłane do Anthropic. Wyłączone: model ich nie widzi.",
+            if (engine == EngineKind.LOCAL) "Pojęcia z pamięci związane z wypowiedzią trafiają do kontekstu modelu na telefonie i nigdzie nie są wysyłane. Wyłączone: model ich nie widzi."
+            else "Model sprawdza w pamięci pojęcia związane z tematem (narzędzie iris_recall), więc te pojęcia są wysyłane do Anthropic. Wyłączone: model ich nie widzi.",
             useMemory,
         ) { useMemory = it }
         SwitchRow(
             "Ucz się z rozmów",
-            "Po każdej odpowiedzi osobne zapytanie do modelu wyciąga fakty z twojej wypowiedzi (tylko z niej, bez historii). " +
-                "Przypuszczenia są słabe, dopóki się nie powtórzą, a IRIS pyta o nie. Wyłączone: zapisuje tylko to, co powiesz poleceniem „zapamiętaj”.",
+            "Po każdej odpowiedzi osobne zapytanie do modelu wyciąga pojęcia z twojej wypowiedzi (tylko z niej, bez historii). " +
+                "Wyłączone: pojęcia wyciąga prosta reguła na telefonie, bez modelu. Wypowiedzi z danymi wrażliwymi niczego nie uczą.",
             learn,
         ) { learn = it }
         SwitchRow(
@@ -179,7 +179,7 @@ fun SettingsScreen(
 
         SwitchRow(
             "Sprawdzaj aktualizacje przy starcie",
-            "Przy uruchomieniu aplikacja pyta GitHuba o nowszą wersję. Wysyła tylko zwykłe żądanie HTTPS (adres IP), bez rozmów, faktów i klucza.",
+            "Przy uruchomieniu aplikacja pyta GitHuba o nowszą wersję. Wysyła tylko zwykłe żądanie HTTPS (adres IP), bez rozmów, pamięci i klucza.",
             checkUpdates,
         ) { checkUpdates = it }
 

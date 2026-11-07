@@ -84,11 +84,9 @@ object Texts {
     const val FAILED = "Nie udało się przygotować odpowiedzi."
     const val NO_VOICE = "System nie ma polskiego głosu, więc odpowiedzi są tylko w napisach."
 
-    /** Opis faktu na liście pamięci: od ciebie albo przypuszczenie z pewnością w procentach. */
-    fun factMeta(fact: Fact): String = when (fact.source) {
-        Source.STATED -> "od ciebie"
-        Source.INFERRED -> "przypuszczenie, pewność ${Math.rint(fact.confidence * 100).toLong()}%"
-    }
+    /** Opis pojęcia na liście pamięci: siła bieżąca w procentach, liczba użyć i główna domena. */
+    fun conceptMeta(view: ConceptView): String =
+        "siła ${Math.rint(view.effective * 100).toLong()}%, użyć ${view.concept.hits}, kontekst: ${view.domain}"
 
     fun state(phase: Phase, ready: Boolean): String = when (phase) {
         Phase.IDLE -> if (ready) STATE_IDLE else STATE_IDLE_NO_MODEL
@@ -222,7 +220,7 @@ class IrisController(
                 val note = if (e.kind == ChatErrorKind.CONFIG) Texts.config(e.message.orEmpty()) else Texts.chat(e.kind)
                 failTurn(id, note, warn = true)
             } catch (_: Exception) {
-                failTurn(id, Texts.FAILED, warn = true) // np. baza faktów; treść wyjątku może zawierać dane
+                failTurn(id, Texts.FAILED, warn = true) // np. baza pamięci; treść wyjątku może zawierać dane
             }
         }
     }

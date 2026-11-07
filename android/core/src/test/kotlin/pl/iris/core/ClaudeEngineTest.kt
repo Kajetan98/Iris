@@ -102,7 +102,43 @@ class ClaudeEngineTest {
     fun `stop reasons`() = runTest {
         assertEquals(Finish.LENGTH, engine(FakeTransport(listOf(HttpResponse(200, okBody(stop = "max_tokens"))))).complete("S", hello, 10).finish)
         assertEquals(Finish.REFUSAL, engine(FakeTransport(listOf(HttpResponse(200, okBody(stop = "refusal"))))).complete("S", hello, 10).finish)
-        assertEquals(Finish.OTHER, engine(FakeTransport(listOf(HttpResponse(200, okBody(stop = "tool_use"))))).complete("S", hello, 10).finish)
+        assertEquals(Finish.TOOL_USE, engine(FakeTransport(listOf(HttpResponse(200, okBody(stop = "tool_use"))))).complete("S", hello, 10).finish)
+        assertEquals(Finish.OTHER, engine(FakeTransport(listOf(HttpResponse(200, okBody(stop = "pause_turn"))))).complete("S", hello, 10).finish)
+    }
+
+    @Test
+    fun `tools go in the request, tool_use comes back and the reply is echoed unchanged`() = runTest {
+        val toolReply = """{"id":"msg_2","type":"message","role":"assistant","model":"claude-opus-5-5","stop_reason":"tool_use",
+           "content":[{"type":"thinking","thinking":"","signature":"sig-123"},
+                      {"type":"tool_use","id":"toolu_1","name":"iris_recall","input":{"query":"lampa"}}],
+           "usage":{"input_tokens":5,"output_tokens":3}}"""
+        val transport = FakeTransport(listOf(HttpResponse(200, toolReply), HttpResponse(200, okBody("Pamiętam lampę."))))
+        val eng = engine(transport)
+        val first = eng.complete("S", hello, 10, listOf(RECALL_TOOL, REMEMBER_TOOL), true)
+        assertEquals(Finish.TOOL_USE, first.finish)
+        assertEquals("lampa", first.toolCalls.single().arguments.stringArg("query"))
+        val body1 = Json.parseToJsonElement(transport.requests[0].body).jsonObject
+        val tools = body1.getValue("tools").jsonArray.map { it.jsonObject }
+        assertEquals(listOf("iris_recall", "iris_remember"), tools.map { it.getValue("name").jsonPrimitive.content })
+        assertEquals(RECALL_TOOL.parameters, tools[0].getValue("input_schema"))
+        assertFalse("tool_choice" in body1)
+
+        val history = hello + Message(Role.ASSISTANT, "", first.toolCalls, raw = first.raw) +
+            Message(Role.USER, "", toolResults = listOf(ToolResult("toolu_1", "iris_recall", "lampa (siła 0,62, wprost)")))
+        val final = eng.complete("S", history, 10, listOf(RECALL_TOOL), false)
+        assertEquals("Pamiętam lampę.", final.text)
+        val body2 = Json.parseToJsonElement(transport.requests[1].body).jsonObject
+        assertEquals("none", body2.getValue("tool_choice").jsonObject.getValue("type").jsonPrimitive.content)
+        val messages = body2.getValue("messages").jsonArray.map { it.jsonObject }
+        val echoed = messages[1].getValue("content").jsonArray.map { it.jsonObject }
+        assertEquals("sig-123", echoed[0].getValue("signature").jsonPrimitive.content) // blok myślenia bez zmian
+        assertEquals("toolu_1", echoed[1].getValue("id").jsonPrimitive.content)
+        val result = messages[2].getValue("content").jsonArray.single().jsonObject
+        assertEquals("tool_result", result.getValue("type").jsonPrimitive.content)
+        assertEquals("toolu_1", result.getValue("tool_use_id").jsonPrimitive.content)
+        assertEquals("lampa (siła 0,62, wprost)", result.getValue("content").jsonPrimitive.content)
+        assertEquals("false", result.getValue("is_error").jsonPrimitive.content)
+        assertTrue(eng.supportsTools)
     }
 
     @Test

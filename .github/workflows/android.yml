@@ -1,5 +1,5 @@
 # Aplikacja Android (docs/spec.md, sekcja 14): testy rdzenia (android/core, Kotlin/JVM) i budowanie APK (android/app).
-# Zgodność reguł z hostem pilnuje wspólny plik android/core/src/test/resources/learning_vectors.json.
+# Zgodność reguł z hostem pilnuje wspólny plik android/core/src/test/resources/memory_vectors.json.
 # APK debug jest podpisany kluczem z repozytorium (android/app/debug.keystore), więc kolejne wersje instalują się na poprzednie.
 name: android
 

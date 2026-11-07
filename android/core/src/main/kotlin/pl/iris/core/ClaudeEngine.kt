@@ -51,7 +51,18 @@ class ClaudeEngine(
     override val remote: Boolean
         get() = (runCatching { URI(baseUrl).host }.getOrNull() ?: "") !in LOOPBACK_HOSTS
 
-    override suspend fun complete(system: String, messages: List<Message>, maxTokens: Int): LlmReply {
+    override val supportsTools: Boolean = true
+
+    override suspend fun complete(system: String, messages: List<Message>, maxTokens: Int): LlmReply =
+        complete(system, messages, maxTokens, emptyList(), true)
+
+    override suspend fun complete(
+        system: String,
+        messages: List<Message>,
+        maxTokens: Int,
+        tools: List<ToolSpec>,
+        allowCalls: Boolean,
+    ): LlmReply {
         val key = apiKey()?.trim().orEmpty()
         if (key.isEmpty()) throw LlmConfigError("brak klucza Claude API (wpisz go w ustawieniach)")
         val url = baseUrl.trimEnd('/') + if (useFallbacks) "/v1/messages?beta=true" else "/v1/messages"
@@ -63,23 +74,63 @@ class ClaudeEngine(
             // Klucz niepowiązany z workspace wymaga jego identyfikatora w każdym żądaniu.
             if (workspaceId.isNotBlank()) put("anthropic-workspace-id", workspaceId.trim())
         }
-        val body = requestBody(system, messages, maxTokens).toString()
+        val body = requestBody(system, messages, maxTokens, tools, allowCalls).toString()
         return withRetries(config.retries) { attempt(url, headers, body) }
     }
 
     /** Treść żądania. Tokeny myślenia liczą się do max_tokens, więc odpowiedź dostaje zapas ponad swój limit. */
-    internal fun requestBody(system: String, messages: List<Message>, maxTokens: Int): JsonObject = buildJsonObject {
+    internal fun requestBody(
+        system: String,
+        messages: List<Message>,
+        maxTokens: Int,
+        tools: List<ToolSpec> = emptyList(),
+        allowCalls: Boolean = true,
+    ): JsonObject = buildJsonObject {
         put("model", config.model)
         put("max_tokens", maxTokens + config.thinkingHeadroomTokens)
         put("system", system)
         putJsonArray("messages") {
-            for (m in messages) addJsonObject {
+            for (m in messages) add(messageParam(m))
+        }
+        if (tools.isNotEmpty()) {
+            // tool_choice zostaje domyślne (auto): wymuszanie narzędzia daje 400 na nowszych modelach. Po ostatniej
+            // rundzie definicje zostają (API wymaga ich przy blokach narzędzi w historii), ale z zakazem wywołań.
+            putJsonArray("tools") {
+                for (t in tools) addJsonObject {
+                    put("name", t.name)
+                    put("description", t.description)
+                    put("input_schema", t.parameters)
+                }
+            }
+            if (!allowCalls) putJsonObject("tool_choice") { put("type", "none") }
+        }
+        if (config.effort != "off") putJsonObject("output_config") { put("effort", config.effort) }
+        if (useFallbacks) put("fallbacks", "default")
+    }
+
+    /** Odpowiedź z narzędziami wraca bez zmian (`raw`), wyniki narzędzi jako bloki `tool_result`. */
+    private fun messageParam(m: Message): JsonObject = buildJsonObject {
+        when {
+            m.role == Role.ASSISTANT && m.raw != null -> {
+                put("role", "assistant")
+                put("content", m.raw)
+            }
+            m.toolResults.isNotEmpty() -> {
+                put("role", "user")
+                putJsonArray("content") {
+                    for (r in m.toolResults) addJsonObject {
+                        put("type", "tool_result")
+                        put("tool_use_id", r.callId)
+                        put("content", r.content)
+                        put("is_error", r.isError)
+                    }
+                }
+            }
+            else -> {
                 put("role", m.role.wire)
                 put("content", m.content)
             }
         }
-        if (config.effort != "off") putJsonObject("output_config") { put("effort", config.effort) }
-        if (useFallbacks) put("fallbacks", "default")
     }
 
     private suspend fun attempt(url: String, headers: Map<String, String>, body: String): LlmReply {
@@ -109,17 +160,23 @@ class ClaudeEngine(
             "end_turn", "stop_sequence" -> Finish.STOP
             "max_tokens" -> Finish.LENGTH
             "refusal" -> Finish.REFUSAL
+            "tool_use" -> Finish.TOOL_USE
             else -> Finish.OTHER
         }
-        val text = ((root["content"] as? JsonArray) ?: JsonArray(emptyList()))
-            .filterIsInstance<JsonObject>()
-            .filter { it.str("type") == "text" }
-            .joinToString("") { it.str("text").orEmpty() }
+        val content = (root["content"] as? JsonArray) ?: JsonArray(emptyList())
+        val blocks = content.filterIsInstance<JsonObject>()
+        val text = blocks.filter { it.str("type") == "text" }.joinToString("") { it.str("text").orEmpty() }
+        val calls = blocks.filter { it.str("type") == "tool_use" }.mapNotNull { b ->
+            val id = b.str("id") ?: return@mapNotNull null
+            val name = b.str("name") ?: return@mapNotNull null
+            ToolCall(id, name, b["input"] as? JsonObject ?: JsonObject(emptyMap()))
+        }
         val usage = root["usage"] as? JsonObject
         val input = listOf("input_tokens", "cache_creation_input_tokens", "cache_read_input_tokens")
             .sumOf { (usage?.get(it) as? JsonPrimitive)?.intOrNull ?: 0 }
         val output = (usage?.get("output_tokens") as? JsonPrimitive)?.intOrNull
-        return LlmReply(text, finish, root.str("model") ?: config.model, Usage(input, output))
+        // Cała treść (także bloki myślenia) wraca w następnym zapytaniu tej tury bez zmian.
+        return LlmReply(text, finish, root.str("model") ?: config.model, Usage(input, output), calls, if (calls.isEmpty()) null else content)
     }
 
     private fun JsonObject.str(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull

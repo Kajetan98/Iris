@@ -4,8 +4,8 @@ import java.time.ZoneId
 import kotlinx.coroutines.CoroutineScope
 
 /**
- * Ustawienia aplikacji (docs/spec.md, sekcja 14). Pamięć w rozmowie i uczenie się są domyślnie wyłączone:
- * przy silniku Claude ich włączenie oznacza, że fakty i wypowiedzi trafiają do Anthropic.
+ * Ustawienia aplikacji (docs/spec.md, sekcja 14). Pamięć w rozmowie i uczenie się z modelu są domyślnie
+ * wyłączone: przy silniku Claude ich włączenie oznacza, że pojęcia i wypowiedzi trafiają do Anthropic.
  */
 enum class EngineKind { CLAUDE, LOCAL }
 
@@ -18,9 +18,9 @@ data class Settings(
     /** Identyfikator workspace (`wrkspc_...`); potrzebny tylko dla klucza niepowiązanego z workspace. */
     val workspaceId: String = "",
     val model: String = DEFAULT_CLAUDE_MODEL,
-    /** Fakty trafiają do kontekstu modelu (`send_facts = always`), inaczej `never`. */
+    /** Pamięć trafia do modelu (`send_memory = always`), inaczej `never`. */
     val useMemory: Boolean = false,
-    /** Wnioski z rozmów (`infer = always`), inaczej `never`. */
+    /** Pojęcia z rozmów wyciąga model (`infer = always`), inaczej tylko heurystyka (`never`). */
     val learn: Boolean = false,
     val preferOffline: Boolean = false,
     /** Sprawdzanie aktualizacji aplikacji przy starcie (żądanie do GitHuba). */
@@ -37,10 +37,10 @@ data class Settings(
 }
 
 fun Settings.toCoreConfig(): CoreConfig = CoreConfig(
-    learning = LearningConfig(infer = if (learn) InferPolicy.ALWAYS else InferPolicy.NEVER),
+    memory = MemoryConfig(infer = if (learn) InferPolicy.ALWAYS else InferPolicy.NEVER),
     llm = LlmConfig(
         model = if (engine == EngineKind.LOCAL) localModel.trim() else model.trim().ifEmpty { DEFAULT_CLAUDE_MODEL },
-        sendFacts = if (useMemory) SendFacts.ALWAYS else SendFacts.NEVER,
+        sendMemory = if (useMemory) SendMemory.ALWAYS else SendMemory.NEVER,
     ),
 )
 
@@ -56,7 +56,7 @@ interface SettingsStore {
  * Bez klucza (albo bez wybranego modelu lokalnego) działają polecenia pamięci, a rozmowa kończy się [ChatDisabled].
  */
 class ConversationHost(
-    private val store: FactStore,
+    private val store: MemoryStore,
     private val clock: Clock,
     private val transport: HttpTransport,
     private val scope: CoroutineScope,
@@ -84,7 +84,7 @@ class ConversationHost(
 
     override suspend fun say(text: String): ChatReply = chat.say(text)
 
-    override suspend fun facts(): List<Fact> = chat.facts()
+    override suspend fun memory(): MemoryView = chat.memory()
 
-    override suspend fun forget(id: Long): Boolean = chat.forget(id)
+    override suspend fun forget(key: String): Boolean = chat.forget(key)
 }

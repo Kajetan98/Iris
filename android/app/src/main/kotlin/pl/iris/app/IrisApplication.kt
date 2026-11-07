@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import pl.iris.core.exportFacts as buildFactsExport
+import pl.iris.core.conceptsCount
+import pl.iris.core.exportMemory as buildMemoryExport
 import pl.iris.core.wakeListening
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -18,7 +19,6 @@ import android.net.Uri
 import pl.iris.core.EngineKind
 import pl.iris.core.ConversationHost
 import pl.iris.core.IrisController
-import pl.iris.core.RowFactStore
 import pl.iris.core.Settings
 import pl.iris.core.SettingsStore
 import pl.iris.core.SystemClock
@@ -51,7 +51,7 @@ class AppContainer(private val app: Application) {
     val modelNotice = MutableStateFlow<String?>(null)
 
     val conversation = ConversationHost(
-        store = RowFactStore(SystemClock, SqliteFactRows(app)),
+        store = SqliteMemoryStore(app),
         clock = SystemClock,
         transport = transport,
         scope = scope,
@@ -124,20 +124,20 @@ class AppContainer(private val app: Application) {
 
     fun importWakeModel(uri: Uri) = runWakeModel { wakeModel.importZip(uri) }
 
-    /** Komunikat po eksporcie faktów (liczba zapisanych albo błąd); null, gdy nic do pokazania. */
+    /** Komunikat po eksporcie pamięci (liczba zapisanych pojęć albo błąd); null, gdy nic do pokazania. */
     val exportNotice = MutableStateFlow<String?>(null)
 
-    /** Zapisuje wszystkie fakty jako JSON do pliku wskazanego przez użytkownika (spec, sekcja 14, "Eksport faktów"). */
-    fun exportFacts(uri: Uri) {
+    /** Zapisuje całą pamięć jako JSON do pliku wskazanego przez użytkownika (spec, sekcja 14, "Eksport pamięci"). */
+    fun exportMemory(uri: Uri) {
         exportNotice.value = null
         scope.launch {
             exportNotice.value = try {
                 withContext(Dispatchers.IO) {
-                    val facts = conversation.facts()
-                    val json = buildFactsExport(facts, java.time.Instant.now())
+                    val view = conversation.memory()
+                    val json = buildMemoryExport(view, java.time.Instant.now())
                     val out = app.contentResolver.openOutputStream(uri, "wt") ?: throw java.io.IOException("brak strumienia")
                     out.use { it.write(json.toByteArray(Charsets.UTF_8)) }
-                    "Zapisano ${facts.size} faktów do pliku."
+                    "Zapisano do pliku: ${conceptsCount(view.concepts.size)}."
                 }
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e

@@ -7,6 +7,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
@@ -17,16 +18,16 @@ class SettingsTest {
         assertFalse(s.hasKey)
         assertFalse(s.useMemory || s.learn || s.preferOffline)
         val c = s.toCoreConfig()
-        assertEquals(SendFacts.NEVER, c.llm.sendFacts)
-        assertEquals(InferPolicy.NEVER, c.learning.infer)
+        assertEquals(SendMemory.NEVER, c.llm.sendMemory)
+        assertEquals(InferPolicy.NEVER, c.memory.infer)
         assertEquals(DEFAULT_CLAUDE_MODEL, c.llm.model)
     }
 
     @Test
     fun `the switches map to the host policies and a blank model falls back to the default`() {
         val c = Settings(apiKey = "k", model = "  ", useMemory = true, learn = true).toCoreConfig()
-        assertEquals(SendFacts.ALWAYS, c.llm.sendFacts)
-        assertEquals(InferPolicy.ALWAYS, c.learning.infer)
+        assertEquals(SendMemory.ALWAYS, c.llm.sendMemory)
+        assertEquals(InferPolicy.ALWAYS, c.memory.infer)
         assertEquals(DEFAULT_CLAUDE_MODEL, c.llm.model)
         assertEquals("claude-sonnet-5-5", Settings(model = " claude-sonnet-5-5 ").toCoreConfig().llm.model)
         assertTrue(Settings(apiKey = " x ").hasKey)
@@ -36,17 +37,17 @@ class SettingsTest {
     @Test
     fun `without a key memory commands work and the model is disabled`() = runTest {
         val clock = ManualClock()
-        val host = ConversationHost(InMemoryFactStore(clock), clock, FakeTransport(emptyList()), this)
-        assertEquals("Zapamiętane: \"mam psa Burka\".", host.say("zapamiętaj, że mam psa Burka").text)
-        assertEquals(1, host.facts().size)
+        val host = ConversationHost(InMemoryMemoryStore(), clock, FakeTransport(emptyList()), this)
+        assertEquals("Zapamiętane: psa, burka.", host.say("zapamiętaj, że mam psa Burka").text)
+        assertEquals(2, host.memory().concepts.size)
         assertFailsWith<ChatDisabled> { host.say("Jaka jest pogoda?") }
-        assertTrue(host.forget(host.facts().single().id))
+        assertTrue(host.forget("psa"))
     }
 
     @Test
     fun `updating the settings switches the model on and respects the memory switch`() = runTest {
         val clock = ManualClock()
-        val store = InMemoryFactStore(clock)
+        val store = InMemoryMemoryStore()
         val transport = FakeTransport(listOf(HttpResponse(200, okBody("Dobrze."))))
         val host = ConversationHost(store, clock, transport, this)
         host.say("zapamiętaj, że mam psa Burka")
@@ -54,45 +55,49 @@ class SettingsTest {
         host.update(Settings(apiKey = "sk-ant-test"))
         assertEquals("Dobrze.", host.say("Cześć").text)
         val first = Json.parseToJsonElement(transport.requests.last().body).jsonObject
-        assertFalse("Burka" in first.toString()) // pamięć wyłączona: fakty nie wychodzą do chmury
+        assertFalse("burka" in first.toString()) // pamięć wyłączona: pojęcia nie wychodzą do chmury
+        assertEquals(listOf("iris_remember"), first.getValue("tools").jsonArray.map { it.jsonObject.getValue("name").jsonPrimitive.content })
 
         assertFalse("anthropic-workspace-id" in transport.requests.last().headers)
         host.update(Settings(apiKey = "sk-ant-test", workspaceId = "wrkspc_01ABC", useMemory = true))
         host.say("Cześć jeszcze raz")
         val second = Json.parseToJsonElement(transport.requests.last().body).jsonObject
-        assertTrue("mam psa Burka" in second.getValue("messages").toString())
+        assertEquals(listOf("iris_recall", "iris_remember"), second.getValue("tools").jsonArray.map { it.jsonObject.getValue("name").jsonPrimitive.content })
         assertEquals("sk-ant-test", transport.requests.last().headers["x-api-key"])
         assertEquals("wrkspc_01ABC", transport.requests.last().headers["anthropic-workspace-id"])
         assertEquals(DEFAULT_CLAUDE_MODEL, second.getValue("model").jsonPrimitive.content)
     }
 
     @Test
-    fun `learning from conversations is off until switched on and then uses the remote model`() = runTest {
+    fun `the remote model extracts concepts only when learning is switched on`() = runTest {
         val clock = ManualClock()
-        val store = InMemoryFactStore(clock)
-        val extract = """[{"fakt": "Masz psa o imieniu Burek.", "pewnosc": 0.9}]"""
+        val store = InMemoryMemoryStore()
+        val extract = """{"domain": "ty", "concepts": ["pies", "Burek", "spacer"]}"""
         val transport = FakeTransport(listOf(HttpResponse(200, okBody("Miłego spaceru.")), HttpResponse(200, okBody(extract))))
         val chat = ConversationHost(store, clock, transport, this, initial = Settings(apiKey = "k", learn = true))
         chat.say("Idę z Burkiem na spacer.")
         testScheduler.advanceUntilIdle()
-        assertEquals(2, transport.requests.size) // rozmowa i zapytanie o wnioski
-        assertEquals(listOf("Masz psa o imieniu Burek"), store.facts().map { it.text })
+        assertEquals(2, transport.requests.size) // rozmowa i zapytanie o pojęcia
+        assertEquals(listOf("Burek", "pies", "spacer"), store.concepts().values.map { it.label }.sorted())
 
-        val off = ConversationHost(InMemoryFactStore(clock), clock, FakeTransport(listOf(HttpResponse(200, okBody("Ok.")))), this, initial = Settings(apiKey = "k"))
+        val offStore = InMemoryMemoryStore()
+        val offTransport = FakeTransport(listOf(HttpResponse(200, okBody("Ok."))))
+        val off = ConversationHost(offStore, clock, offTransport, this, initial = Settings(apiKey = "k"))
         off.say("Idę z Burkiem na spacer.")
         testScheduler.advanceUntilIdle()
-        assertTrue(off.facts().isEmpty())
+        assertEquals(1, offTransport.requests.size) // bez zapytania o pojęcia: tylko heurystyka na telefonie
+        assertEquals(listOf("burkiem", "idę", "spacer"), offStore.concepts().values.map { it.label }.sorted())
     }
 
     @Test
-    fun `the local engine needs a chosen model, not a key, and keeps facts on the phone`() = runTest {
+    fun `the local engine needs a chosen model, not a key, and keeps memory on the phone`() = runTest {
         assertFalse(Settings(engine = EngineKind.LOCAL, apiKey = "sk").ready)
         assertTrue(Settings(engine = EngineKind.LOCAL, localModel = "gemma.litertlm").ready)
         assertTrue(Settings(apiKey = "sk").ready)
         assertEquals("gemma.litertlm", Settings(engine = EngineKind.LOCAL, localModel = " gemma.litertlm ").toCoreConfig().llm.model)
 
         val clock = ManualClock()
-        val store = InMemoryFactStore(clock)
+        val store = InMemoryMemoryStore()
         val gen = object : LocalGenerator {
             var last = ""
             override suspend fun generate(system: String, message: String): String {
@@ -107,9 +112,9 @@ class SettingsTest {
         assertFailsWith<ChatDisabled> { host.say("Cześć") } // brak wybranego modelu
 
         host.update(Settings(engine = EngineKind.LOCAL, localModel = "m.litertlm", useMemory = true))
-        val reply = host.say("Jak się wabi mój pies?")
+        val reply = host.say("Co słychać u psa Burka?")
         assertEquals("Dobrze.", reply.text)
         assertEquals("m.litertlm", reply.model)
-        assertTrue("Burka" in gen.last) // silnik lokalny: pamięć nie wychodzi poza telefon, przełącznik ją włącza
+        assertTrue("- burka (siła" in gen.last, gen.last) // silnik lokalny bez narzędzi: pojęcia w bloku kontekstu
     }
 }
