@@ -500,3 +500,32 @@ Podpis. Klucz debug (`android/app/debug.keystore`, hasło `android`) jest w publ
 Zgodność z hostem. Reguły z sekcji 9 i 12 muszą dawać w Kotlinie te same wyniki co w Pythonie: wyciąganie pojęć i filtr, siła, zanik, połączenia, przypomnienie, zapominanie, polecenia i odpowiedź tak/nie, reakcje, "co o mnie wiesz", wybór pamięci do kontekstu i oczyszczanie odpowiedzi. Plik `android/core/src/test/resources/memory_vectors.json` generuje kod hosta (`python -m host.tests.make_android_vectors`), test w Pythonie sprawdza, że plik jest aktualny, a testy Kotlina odtwarzają każdy przypadek. Zmiana reguły w Pythonie wymaga więc regeneracji pliku i dopasowania Kotlina.
 
 Budowanie: Gradle w `android/`, moduł `core` (Kotlin/JVM, bez Androida, testowany na JVM) i moduł `app` (Android). APK buduje CI.
+
+## 15. Model IRIS (dostrajanie)
+
+Decyzja i uzasadnienie: `docs/adr/0002-wlasny-model-iris.md`. Model IRIS to otwarty model bazowy dostrojony metodą LoRA, uruchamiany w Ollama jak każdy inny (`[brain.llm]`: `engine = "ollama"`, `model = "iris"`). Protokół, stan, potrzeby i pamięć się nie zmieniają. Kod jest w katalogu `train/`; host go nie importuje, a biblioteki treningowe (`train/requirements.txt`) są potrzebne tylko do samego treningu.
+
+Zbiór danych (`python -m train.dataset`):
+
+- Scenariusz (`train/scenarios.py`) to zdania, których pamięć uczy się przed rozmową, wycinek stanu (sekcja 7), czas i tury. Scenariusze są syntetyczne. Rozmowy i pamięć użytkownika nie trafiają do zbioru.
+- Scenariusz przechodzi przez te same części co `POST /chat`: polecenia pamięci obsługuje host (taka wypowiedź nie może być turą scenariusza), reszta trafia do `Assistant` z narzędziami pamięci i blokiem kontekstu (sekcja 12). Silnik pośredni zapisuje każde zapytanie do modelu: prompt systemowy, wiadomości, narzędzia, które model mógł wywołać, i odpowiedź. Zapytanie o pojęcia z wypowiedzi (sekcja 9) jest zapisywane tak samo, jako osobne zadanie.
+- Każdy scenariusz biegnie w dwóch trybach: `tools` (model dostaje `iris_recall` i `iris_remember`) i `context` (bez narzędzi, przypomniane pojęcia w bloku kontekstu).
+- Przykład to wiersz JSONL: `id`, `task` (`chat` albo `concepts`), `source` (`gold` albo `teacher`), `mode`, `tools` (definicje w postaci `{"type": "function", "function": {...}}`) i `messages`. Wiadomości mają role `system`, `user`, `assistant` (z `tool_calls`, gdy model wywołuje narzędzie) i `tool` (`name`, `content`). Ostatnia wiadomość to odpowiedź, której model się uczy; tura z narzędziem daje dwa przykłady (wywołanie i odpowiedź końcowa).
+- Źródła odpowiedzi: przykłady wzorcowe napisane ręcznie (`GOLD`) i odpowiedzi modelu-nauczyciela (`--teacher-config plik.toml`, sekcja `[brain.llm]`) na scenariusze losowane z ziarnem. Tura nauczyciela z naruszeniem kontroli odpada w całości.
+
+Kontrole (`train/checks.py`), wspólne dla filtra zbioru i oceny:
+
+- odpowiedź: `empty`, `markdown` (listy, pogrubienia, tabele), `emoji`, `long` (ponad 4 zdania albo 600 znaków), `feelings` (twierdzenie o odczuwaniu w pierwszej osobie bez zaprzeczenia w tym samym zdaniu), `own_body` (stan urządzenia opisany jako własny), `not_polish`;
+- narzędzia: `unknown_tool`, `bad_args` (argumenty niezgodne ze schematem), `remember_unasked` (`iris_remember` bez prośby o zapis w wypowiedzi);
+- oczekiwania scenariusza: `tool_missing` (model nie użył narzędzia, którego tura wymaga; tylko w trybie `tools`), `mention_missing` (w odpowiedzi brakuje wymaganego słowa, porównanie rdzeni), `error` (błąd silnika);
+- pojęcia: odpowiedź musi przejść parser hosta (`parse_llm`).
+
+Kontrole wykrywają naruszenia zasad z promptu. Nie oceniają poprawności merytorycznej ani jakości języka.
+
+Ocena (`python -m train.evaluate --config plik.toml [--no-tools]`): tury `EVAL`, których pytań nie ma w zbiorze treningowym, przechodzą tę samą ścieżkę z ocenianym silnikiem. Wynik to odsetek tur bez naruszeń, z podziałem na rodzaje tur i reguły. Model dostrojony zastępuje bazowy tylko przy wyraźnie lepszym wyniku.
+
+Dostrajanie (`python -m train.finetune --base <model> --data <zbiór> --out <katalog> [--merge]`): każdy przykład jest składany szablonem rozmowy modelu bazowego, a strata liczy się tylko na odpowiedzi. Gdy szablon nie wstawia definicji narzędzi, przykłady trybu `tools` są pomijane z ostrzeżeniem i model uczy się tylko trybu `context` (w hoście `brain.llm.tools = false`). Wartości początkowe: rząd LoRA 16, 3 epoki, krok uczenia 2e-4.
+
+Eksport: model scalony (`--merge`) jest konwertowany do GGUF narzędziami llama.cpp i rejestrowany w Ollama z `train/Modelfile`. Szablon rozmowy w Modelfile musi być ten sam co w modelu bazowym. Prompt systemowy wysyła host, więc Modelfile go nie zawiera. Kroki: `train/README.md`.
+
+Po zmianie promptu systemowego, narzędzi albo bloku kontekstu zbiór trzeba zbudować od nowa, a model dostroić ponownie.

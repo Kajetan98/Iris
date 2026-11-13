@@ -48,6 +48,7 @@ firmware/        STM32L476
 sim/             symulator ciała
 client/          program na komputer i Raspberry Pi
 android/         aplikacja Android bez hosta (Kotlin: core, app)
+train/           dostrajanie własnego modelu IRIS (zbiór danych, ocena, LoRA)
 ```
 
 ## Komendy
@@ -68,6 +69,7 @@ android/         aplikacja Android bez hosta (Kotlin: core, app)
 - przełączanie głosem albo przez `/chat`: "przełącz na laptop" (host rozpoznaje bez LLM; odmiany nazw w `[devices.aliases]`, np. `pi-kuchnia = ["kuchnię"]`)
 - program na komputer i Raspberry Pi: `python -m client.desktop --url ws://<host>:8000/ws --device laptop` (Enter zaczyna i kończy wypowiedź; `--vad` bez rąk, po głośności i bez słowa wybudzającego; `--list-devices`, `--input-device`, `--output-device`; token z `IRIS_TOKEN`)
 - aplikacja Android: testy rdzenia `cd android && ./gradlew :core:test` (JDK 17+, Maven Central; Android SDK nie jest potrzebny do `core`). Pamięć to ten sam graf pojęć co na hoście (`MemoryKeeper`, `SqliteMemoryStore` z migracją tabeli `facts`); zgodność z Pythonem pilnują wektory `android/core/src/test/resources/memory_vectors.json`, po zmianie reguł w `host/core/memory.py` regeneruj je: `python -m host.tests.make_android_vectors`. APK: workflow `android` buduje `:app:assembleDebug` i publikuje wydanie `android-latest`; `:app` jest włączany tylko tam, gdzie jest Android SDK (`ANDROID_HOME` albo `android/local.properties`), podpis kluczem prywatnym z rotacją z klucza debug, gdy są sekrety `IRIS_RELEASE_KEYSTORE` i `IRIS_RELEASE_PASSWORD` (spec, sekcja 14, "Podpis"; bez nich tylko publiczny klucz debug i ostrzeżenie), a logi CI są dostępne przez adnotacje (`gh api repos/<repo>/check-runs/<id>/annotations`)
+- model IRIS (spec, sekcja 15; ADR-0002): `python -m train.dataset --out train/data/iris.jsonl [--teacher-config plik.toml --n 300]` buduje zbiór prawdziwą ścieżką hosta (`train/run.py`; przykłady wzorcowe w `train/scenarios.py`), `python -m train.evaluate --config plik.toml [--no-tools]` ocenia silnik z `[brain.llm]` regułami z `train/checks.py`, `python -m train.finetune --base <model> --data ... --out ... --merge` dostraja LoRA (wymaga GPU i `pip install -r train/requirements.txt`; host tych bibliotek nie używa). Dane tylko syntetyczne, nigdy rozmowy ani pamięć użytkownika. Po zmianie `SYSTEM_PROMPT`, narzędzi albo bloku kontekstu zbiór i model trzeba zbudować od nowa. Testy: `host/tests/test_train.py`
 - symulator ciała: `python -m sim.body --url ws://localhost:8000/ws [--device laptop]` (komendy na stdin, `help` je wypisuje; `say [ms]` wysyła ton 440 Hz, `sayfile plik.wav` nagranie, obie jako Opus (wymagają `av` i `numpy`); scenariusze: `--script sim/scenarios/low_battery.txt`)
 
 ## Kolejność prac

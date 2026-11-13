@@ -1,0 +1,8 @@
+# Model IRIS w Ollama (docs/spec.md, sekcja 15, "Eksport"). Użycie: train/README.md.
+# Prompt systemowy wysyła host przy każdej rozmowie, więc nie ma tu instrukcji SYSTEM.
+FROM ./iris.gguf
+# Szablon rozmowy (TEMPLATE) i znaczniki końca (PARAMETER stop) skopiuj z modelu bazowego:
+#   ollama show --modelfile <model bazowy w Ollama>
+# Bez tego samego szablonu co w treningu model dostaje rozmowę w innej postaci, niż się uczył.
+PARAMETER temperature 0.4
+PARAMETER num_ctx 4096

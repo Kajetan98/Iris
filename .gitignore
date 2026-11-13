@@ -25,3 +25,7 @@ local.properties
 # RobotAI: model Gemma (kilka GB, kopiowany ręcznie) i wyniki treningu
 *.litertlm
 RobotAI/models/
+# model IRIS: zbiory danych i wyniki treningu (train/)
+train/data/
+train/out/
+*.gguf
